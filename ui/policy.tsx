@@ -8,8 +8,8 @@ export default function PolicyPageUi() {
     });
 
     return (
-        <div className="min-h-screen bg-gray-50 py-10 px-6 flex justify-center">
-            <div className="w-full max-w-4xl bg-white shadow-lg rounded-2xl p-8 border border-gray-200 animate-fadeIn">
+        <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 flex justify-center">
+            <div className="w-full max-w-4xl bg-white shadow-lg rounded-2xl p-8 px-4 sm:px-8 border border-gray-200 animate-fadeIn">
                 
                 {/* HEADER */}
                 <h1 className="text-4xl font-extrabold text-gray-800 mb-3 text-center">

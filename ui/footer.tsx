@@ -58,7 +58,7 @@ export default function Footer() {
             </div>
 
             {/* Account */}
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-start sm:items-end">
                 <h3 className="p-2 text-lg font-semibold text-gray-900 mb-4">Account</h3>
 
                 {user ? (
@@ -77,7 +77,7 @@ export default function Footer() {
                 </Link>
                 )}
 
-                {user && <div className="p-2 mt-20 underline text-gray-700"><Link href={"/delete-account"}>Delete Account</Link></div>}
+                {user && <div className="p-2 mt-12 sm:mt-20 underline text-gray-700"><Link href={"/delete-account"}>Delete Account</Link></div>}
             </div>
         </div>
 
