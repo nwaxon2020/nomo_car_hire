@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import Link from "next/link";
+//import Link from "next/link";
 
 // ⬇️ Your new loader component
 import LoadingRound from "@/ui/re-useable-loading";
@@ -113,12 +113,21 @@ export default function DriverRegisterPageUi() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4 pb-8">
-      <div className="bg-gray-50 shadow-2xl rounded-2xl p-8 max-w-md w-full">
+      <div className="relatve bg-gray-50 shadow-2xl rounded-2xl p-8 max-w-md w-full">
+
+        {/* Close window button */}
+        <div 
+          onClick={() => router.back()}
+          className="border rounded-md py-1 px-3 cursor-pointer text-xl sm:text-2xl text-center mt-4 absolute top-24 sm:top-18 right-8 sm:right-8 text-gray-900 font-bold">     
+          x
+        </div>
+
+
         <h1 className="text-4xl font-extrabold text-center mb-6 text-gray-800">
           Driver Registration
         </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col items-center sm:items-start space-y-4">
           <input
             type="text"
             placeholder="First Name"
@@ -217,11 +226,6 @@ export default function DriverRegisterPageUi() {
             {submitting ? <LoadingRound /> : "Submit"}
           </button>
 
-          <div className="text-center mt-4">
-            <Link href="/" className="text-blue-700 font-semibold">
-              Home
-            </Link>
-          </div>
         </form>
       </div>
     </div>
