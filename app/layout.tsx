@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import Nav from "@/ui/nav";
+import Footer from "@/ui/footer";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -24,10 +27,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <title>My Car Hire App</title>
+        <meta name="description" content="Hire cars easily and safely" />
+        <link rel="icon" href="/favicon.ico" />
+        
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"></link>
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <Nav /><hr className="text-white"/>
+        <main>
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );
