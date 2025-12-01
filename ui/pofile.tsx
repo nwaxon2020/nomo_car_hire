@@ -69,7 +69,7 @@ export default function UserProfilePageUi() {
   }
 
     return (
-        <div className="relative p-6 max-w-5xl mx-auto">
+        <div className="relative p-3 sm:p-6 max-w-5xl mx-auto">
             {/* Header */}
             <div className="bg-white shadow-xl rounded-2xl p-6 mb-8">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">
