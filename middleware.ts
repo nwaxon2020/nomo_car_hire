@@ -2,12 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
-  // Read server session cookie
   const session = req.cookies.get("session")?.value || null;
-
   const pathname = req.nextUrl.pathname;
 
-  // PUBLIC ROUTES (no login required)
+  // Public pages
   const publicRoutes = [
     "/login",
     "/signup",
@@ -15,35 +13,28 @@ export function middleware(req: NextRequest) {
     "/about",
   ];
 
-  // If the route is public → allow access
-  if (publicRoutes.some((p) => pathname.startsWith(p))) {
+  // Allow public pages
+  if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 
-  // PROTECTED ROUTES (must be logged in)
-  const protectedRoutes = [
-    "/",                     
-    "/user",
-    "/user/register",
-    "/user/profile",
-    "/user/driver-profile",
-  ];
-
-  const isProtected = protectedRoutes.some((p) => pathname.startsWith(p));
-
-  // If route is protected AND user is NOT logged in → redirect to login
-  if (isProtected && !session) {
+  // Protect everything under /user
+  if (pathname.startsWith("/user") && !session) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Otherwise allow the request
+  // Protect the home page "/" only when NOT logged in
+  if (pathname === "/" && !session) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    "/",                     // Home protected
-    "/user/:path*",          // All user pages protected
+    "/user/:path*",
+    "/",
     "/login",
     "/signup",
     "/forgot-password",

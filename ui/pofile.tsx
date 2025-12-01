@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import TransportNewsPageUi from "./news";
 import WordGuessGame from "./game";
 
+
 // ⭐ Capitalize full name function
 function capitalizeFullName(name: string) {
     return name
@@ -84,17 +85,18 @@ export default function UserProfilePageUi() {
                 Play Word Guess
                 </p>
 
+                {/* Word guessing game section div */}
                 {game && (
-                <div className="p-10 bg-black rounded-md absolute top-0 right-65 z-20">
-                    {/* close Game Button */}
-                    <p
-                    onClick={() => setGame(false)}
-                    className="cursor-pointer text-white text-right text-2xl font-black"
-                    >
-                    x
-                    </p>
-                    <WordGuessGame />
-                </div>
+                    <div className="p-10 bg-black rounded-md absolute top-0 right-[-12px] sm:right-1 lg:right-65 z-20">
+                        {/* close Game Button */}
+                        <p
+                        onClick={() => setGame(false)}
+                        className="cursor-pointer text-white text-right text-2xl font-black"
+                        >
+                        x
+                        </p>
+                        <WordGuessGame />
+                    </div>
                 )}
             </div>
 

@@ -19,25 +19,55 @@ export default function TransportNewsPageUi() {
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_NEWSAPI_KEY;
-
         // Keywords for transport, tickets, flights, shipping, logistics, buses, rails, accidents
         const query = `
           transport OR road OR traffic OR bus OR train OR car OR rail OR accident 
           OR flight OR airline OR ticket OR airfare OR shipping OR logistics OR cargo
         `;
 
-        const res = await fetch(
-          `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&pageSize=20&language=en&apiKey=${apiKey}`
-        );
-
+        // Clean up the query (remove extra whitespace/newlines for encoding)
+        const cleanQuery = query.replace(/\s+/g, ' ').trim();
+        
+        // Determine which endpoint to use
+        const isProduction = process.env.NODE_ENV === 'production';
+        const apiKey = process.env.NEXT_PUBLIC_NEWSAPI_KEY;
+        
+        let url: string;
+        
+        if (isProduction || !apiKey) {
+          // Always use proxy in production OR if no API key
+          url = `/api/news?q=${encodeURIComponent(cleanQuery)}`;
+        } else {
+          // Use direct NewsAPI in development with API key
+          url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(cleanQuery)}&sortBy=publishedAt&pageSize=20&language=en&apiKey=${apiKey}`;
+        }
+        
+        const res = await fetch(url);
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error(`HTTP ${res.status}:`, errorText);
+          throw new Error(`Failed to fetch news (HTTP ${res.status})`);
+        }
+        
         const data = await res.json();
-        if (!data.articles) throw new Error("Invalid response from news API");
-
-        setArticles(data.articles);
+        
+        // Check for NewsAPI errors (whether direct or via proxy)
+        if (data.status === "error") {
+          console.error("NewsAPI error:", data.message, data.code);
+          setError("News service temporarily unavailable. Please try again later.");
+          setArticles([]);
+        } else if (!data.articles || !Array.isArray(data.articles)) {
+          throw new Error("Invalid response format from news service");
+        } else {
+          setArticles(data.articles);
+          setError(null); // Clear any previous errors
+        }
+        
       } catch (err: any) {
         console.error("News fetch error:", err);
         setError("Could not load news. Try again later.");
+        setArticles([]); // Clear articles on error
       } finally {
         setLoading(false);
       }
@@ -51,16 +81,52 @@ export default function TransportNewsPageUi() {
   }
 
   if (error) {
-    return <div className="text-red-500 text-center mt-10">{error}</div>;
+    return (
+      <div className="max-w-5xl mx-auto py-4 sm:px-4">
+        <div className="text-red-500 text-center p-6 bg-red-50 rounded-lg border border-red-200">
+          <p className="text-lg font-semibold mb-2">{error}</p>
+          <button 
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+              // Re-fetch news
+              const fetchNews = async () => {
+                try {
+                  const query = `
+                    transport OR road OR traffic OR bus OR train OR car OR rail OR accident 
+                    OR flight OR airline OR ticket OR airfare OR shipping OR logistics OR cargo
+                  `;
+                  const cleanQuery = query.replace(/\s+/g, ' ').trim();
+                  const res = await fetch(`/api/news?q=${encodeURIComponent(cleanQuery)}`);
+                  const data = await res.json();
+                  
+                  if (data.articles) {
+                    setArticles(data.articles);
+                    setError(null);
+                  }
+                } catch (err) {
+                  console.error("Retry failed:", err);
+                } finally {
+                  setLoading(false);
+                }
+              };
+              fetchNews();
+            }}
+            className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  if (articles.length === 0) {
+  if (articles.length === 0 && !error) {
     return <div className="text-center mt-10">No transport news found at the moment.</div>;
   }
 
   return (
     <div className="max-w-5xl mx-auto py-4 sm:px-4 space-y-6">
-
       <div className="grid grid-cols-1 gap-6">
         {articles.map((art, i) => (
           <a

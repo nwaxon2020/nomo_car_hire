@@ -127,7 +127,7 @@ export default function DriverRegisterPageUi() {
           Driver Registration
         </h1>
 
-        <form onSubmit={handleSubmit} className="flex flex-col items-center sm:items-start space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
           <input
             type="text"
             placeholder="First Name"
@@ -186,7 +186,7 @@ export default function DriverRegisterPageUi() {
             onChange={(e) => setIdNumber(e.target.value)}
           />
 
-          <label className="w-24 h-24 rounded-xl overflow-hidden border-2 border-purple-600 flex items-center justify-center bg-gray-100 cursor-pointer">
+          <label className="mx-auto w-24 h-24 rounded-xl overflow-hidden border-2 border-purple-600 flex items-center justify-center bg-gray-100 cursor-pointer">
             {idPhoto ? (
               <img
                 src={URL.createObjectURL(idPhoto)}

@@ -19,7 +19,7 @@ import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
 
-export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
+export default function SidebarPageUi() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [isDriver, setIsDriver] = useState(false);
@@ -85,9 +85,13 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsub();
   }, [router]);
 
-  const dashboardRoute = isDriver? "/user/driver-profile" : userId ? `/user/profile/${userId}` : "/user/profile";
+  const dashboardRoute = isDriver
+    ? "/user/driver-profile"
+    : userId
+    ? `/user/profile/${userId}`
+    : "/user/profile";
 
-  const menuItems = [ 
+  const menuItems = [
     { name: "Home", href: "/", icon: <FaHome /> },
     { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
     !isDriver && { name: "Register as Driver", href: "/user/register", icon: <FaUserPlus /> },
@@ -168,15 +172,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         </aside>
       )}
 
-      <main className="flex-1 p-4 px-2">
-        {msg && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4 text-center">
-            {msg}
-          </div>
-        )}
-
-        {children}
-      </main>
     </div>
   );
 }
