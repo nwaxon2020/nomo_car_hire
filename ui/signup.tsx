@@ -1,20 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth, googleProvider, db, storage } from "@/lib/firebaseConfig";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   signInWithPopup,
 } from "firebase/auth";
-import { setDoc, doc, getDoc } from "firebase/firestore";
+import { 
+  setDoc, 
+  doc, 
+  getDoc, 
+  updateDoc, 
+  arrayUnion, 
+  increment,
+  collection,
+  getDocs
+} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
 import LoadingRound from "@/ui/re-useable-loading";
 
 export default function SignUpUi() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const referralShortId = searchParams.get("ref"); // Last 8 chars of referrer's UID
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,6 +37,41 @@ export default function SignUpUi() {
   const [message, setMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [referrerData, setReferrerData] = useState<any>(null);
+  const [referrerId, setReferrerId] = useState<string | null>(null);
+
+  // Find referrer by short ID (last 8 chars of their UID)
+  useEffect(() => {
+    if (referralShortId && referralShortId.length === 8) {
+      findReferrerByShortId(referralShortId);
+    }
+  }, [referralShortId]);
+
+  // ✅ FIXED: Accept referralShortId as parameter to avoid TypeScript issues
+  const findReferrerByShortId = async (shortId: string) => {
+    try {
+      console.log(`🔍 Looking for referrer with short ID: ${shortId}`);
+      
+      const usersRef = collection(db, "users");
+      const querySnapshot = await getDocs(usersRef);
+      
+      // Find user whose UID ends with the short ID
+      const referrerDoc = querySnapshot.docs.find(doc => 
+        doc.id.endsWith(shortId)
+      );
+      
+      if (referrerDoc) {
+        const data = referrerDoc.data();
+        setReferrerData(data);
+        setReferrerId(referrerDoc.id); // Store the full referrer UID
+        console.log(`✅ Found referrer: ${data.fullName} (UID: ${referrerDoc.id})`);
+      } else {
+        console.log(`❌ No user found ending with: ${shortId}`);
+      }
+    } catch (error) {
+      console.error("Error finding referrer:", error);
+    }
+  };
 
   const validatePassword = (pwd: string) => /^(?=.*[0-9]).{8,}$/.test(pwd);
 
@@ -37,6 +83,88 @@ export default function SignUpUi() {
     if (msg.includes("auth/weak-password"))
       return "Password should be at least 8 characters and include a number.";
     return "Something went wrong. Please try again.";
+  };
+
+  // ✅ Award referral points using referrer's FULL UID
+  const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
+    try {
+      console.log(`🎯 Awarding 2 points to: ${referrerFullId} from new user: ${newUserId}`);
+      
+      // Update referrer's document
+      await updateDoc(doc(db, "users", referrerFullId), {
+        referrals: arrayUnion({
+          userId: newUserId,
+          date: new Date(),
+          points: 2,
+          status: "completed"
+        }),
+        referralPoints: increment(2),
+        referralCount: increment(1),
+      });
+
+      // Check if referrer earned a free ride
+      const referrerRef = doc(db, "users", referrerFullId);
+      const referrerSnap = await getDoc(referrerRef);
+      
+      if (referrerSnap.exists()) {
+        const referrerData = referrerSnap.data();
+        const currentPoints = (referrerData.referralPoints || 0) + 2;
+        const freeRides = Math.floor(currentPoints / 10);
+        
+        if (currentPoints >= 10 && currentPoints % 10 === 0) {
+          await updateDoc(doc(db, "users", referrerFullId), {
+            freeRides: freeRides,
+            lastFreeRideEarned: new Date(),
+          });
+          
+          // Optional: Add notification
+          await updateDoc(doc(db, "users", referrerFullId), {
+            notifications: arrayUnion({
+              type: "free_ride_earned",
+              message: `🎉 You earned a free ride! You now have ${freeRides} free ride(s).`,
+              timestamp: new Date(),
+              read: false
+            })
+          });
+          
+          console.log(`🏆 ${referrerData.fullName} earned a free ride! Total: ${freeRides}`);
+        }
+      }
+      
+      console.log(`✅ Points awarded successfully`);
+      return true;
+    } catch (error) {
+      console.error("❌ Error awarding points:", error);
+      return false;
+    }
+  };
+
+  // ✅ Get last 8 chars of UID for user's referral short ID
+  const getReferralShortId = (userId: string) => {
+    return userId.slice(-8); // Last 8 characters are usually unique
+  };
+
+  // ✅ Common user data structure
+  const createUserData = (baseData: any, authType: string, referrerFullId: string | null) => {
+    const userShortId = getReferralShortId(baseData.uid || '');
+    
+    return {
+      ...baseData,
+      authType,
+      createdAt: new Date(),
+      hiredCars: [],
+      contactedDrivers: [],
+      
+      // REFERRAL FIELDS
+      referralShortId: userShortId, // Their own short ID for sharing
+      referredBy: referrerFullId, // Who referred them (full UID)
+      referralPoints: 0, // Points THEY earn from THEIR referrals
+      referrals: [], // People THEY refer
+      referralCount: 0,
+      freeRides: 0,
+      lastFreeRideEarned: null,
+      totalPointsEarned: 0,
+    };
   };
 
   const handleRegister = async (e: any) => {
@@ -57,6 +185,7 @@ export default function SignUpUi() {
     setLoading(true);
 
     try {
+      // 1. Create auth user
       const userCred = await createUserWithEmailAndPassword(
         auth,
         email,
@@ -64,20 +193,34 @@ export default function SignUpUi() {
       );
       await sendEmailVerification(userCred.user);
 
+      // 2. Upload profile image
       const storageRef = ref(storage, `profileImages/${userCred.user.uid}`);
       await uploadBytes(storageRef, profileImage);
       const photoURL = await getDownloadURL(storageRef);
 
-      await setDoc(doc(db, "users", userCred.user.uid), {
+      // 3. Create user data
+      const baseData = {
+        uid: userCred.user.uid,
         fullName,
         email,
         profileImage: photoURL,
         isDriver: false,
-        createdAt: new Date(),
-        authType: "email",
-        hiredCars: [],
-        contactedDrivers: [],
-      });
+      };
+
+      const completeUserData = createUserData(baseData, "email", referrerId);
+
+      // 4. Save user to Firestore
+      const userRef = doc(db, "users", userCred.user.uid);
+      await setDoc(userRef, completeUserData);
+
+      // 5. Award points to referrer if exists
+      if (referrerId) {
+        await awardReferralPoints(referrerId, userCred.user.uid);
+      }
+
+      console.log(`✅ Email user created: ${userCred.user.uid}`);
+      console.log(`   - Referred by: ${referrerId || 'None'}`);
+      console.log(`   - Their referral short ID: ${completeUserData.referralShortId}`);
 
       setMessage("✅ Account created! Check your email for verification.");
       setLoading(false);
@@ -91,6 +234,7 @@ export default function SignUpUi() {
 
   const googleSignup = async () => {
     setGoogleLoading(true);
+    setMessage("");
 
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -100,22 +244,37 @@ export default function SignUpUi() {
       const snap = await getDoc(userRef);
 
       if (!snap.exists()) {
-        await setDoc(userRef, {
-          fullName: user.displayName || "",
+        // 1. Create user data
+        const baseData = {
+          uid: user.uid,
+          fullName: user.displayName || "Google User",
           email: user.email,
           profileImage: user.photoURL || "/profile.png",
           isDriver: false,
-          createdAt: new Date(),
-          authType: "google",
-          hiredCars: [],
-          contactedDrivers: [],
-        });
+        };
+
+        const completeUserData = createUserData(baseData, "google", referrerId);
+
+        // 2. Save user to Firestore
+        await setDoc(userRef, completeUserData);
+
+        // 3. Award points to referrer if exists
+        if (referrerId) {
+          await awardReferralPoints(referrerId, user.uid);
+        }
+
+        console.log(`✅ Google user created: ${user.uid}`);
+        console.log(`   - Referred by: ${referrerId || 'None'}`);
+        console.log(`   - Their referral short ID: ${completeUserData.referralShortId}`);
+      } else {
+        console.log("ℹ️ Google user already exists, logging in...");
       }
 
       setGoogleLoading(false);
       router.push("/");
     } catch (err: any) {
-      setMessage("Google login failed. Try again.");
+      console.error("❌ Google signup error:", err);
+      setMessage("Google signup failed. Please try again.");
       setGoogleLoading(false);
     }
   };
@@ -126,6 +285,37 @@ export default function SignUpUi() {
         <h1 className="text-4xl font-extrabold text-center mb-6 text-gray-800">
           Create Account
         </h1>
+
+        {/* Referral Banner */}
+        {referralShortId && referrerData && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="bg-green-100 p-2 rounded-lg">
+                <span className="text-green-600 font-bold text-lg">🎁</span>
+              </div>
+              <div>
+                <p className="font-semibold text-green-800">
+                  Signing up through {referrerData.fullName}'s referral!
+                </p>
+                <p className="text-sm text-green-700">
+                  You'll get ₦1,000 credit on your first ride!
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  They earn 2 points for your signup. 10 points = 1 free ride!
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Debug info - remove in production */}
+        {process.env.NODE_ENV === 'development' && referralShortId && (
+          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+            <p>Debug: Referral short ID: {referralShortId}</p>
+            <p>Referrer found: {referrerData ? "Yes" : "No"}</p>
+            {referrerId && <p>Referrer full UID: {referrerId.slice(0, 12)}...</p>}
+          </div>
+        )}
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="flex flex-col items-center">
@@ -239,9 +429,14 @@ export default function SignUpUi() {
           <button
             onClick={googleSignup}
             disabled={googleLoading}
-            className="cursor-pointer w-full bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition-all"
+            className="cursor-pointer w-full bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition-all flex items-center justify-center gap-2"
           >
-            {googleLoading ? <LoadingRound /> : "Continue with Google"}
+            {googleLoading ? <LoadingRound /> : (
+              <>
+                <i className="fa fa-google"></i>
+                Continue with Google
+              </>
+            )}
           </button>
         </div>
 
@@ -254,6 +449,19 @@ export default function SignUpUi() {
             Login
           </Link>
         </p>
+
+        {/* Referral System Explanation */}
+        <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800 text-center">
+            <span className="font-bold">🎯 Referral System:</span><br />
+            <span className="text-xs">
+              • Share your profile link → Friends sign up<br />
+              • You earn 2 points per referral<br />
+              • 10 points = FREE ₦5,000 ride!<br />
+              • Get started by signing up
+            </span>
+          </p>
+        </div>
       </div>
     </div>
   );
