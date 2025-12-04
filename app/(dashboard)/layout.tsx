@@ -68,8 +68,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           finalName = getFirstName(full);
         }
 
-        // PHOTO
-        photo = data.photoURL || user.photoURL || "/profile.png";
+        // PHOTO - FIXED: Changed from data.photoURL to data.profileImage
+        photo = data.profileImage || user.photoURL || "/profile.png";
       } else {
         // No Firestore doc → Google or Email user
         finalName = getFirstName(user.displayName);
@@ -129,7 +129,14 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           {/* PROFILE */}
           <div className="p-6 bg-gray-900 flex flex-col items-center">
             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white mb-4">
-              <img src={photoURL} alt="Profile" className="w-full h-full object-cover" />
+              <img 
+                src={photoURL} 
+                alt="Profile" 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/profile.png";
+                }}
+              />
             </div>
 
             {displayName === "fetching..." ? (
