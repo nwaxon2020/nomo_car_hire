@@ -162,7 +162,7 @@ export default function ShareButton({
               <p className="text-xs text-gray-600 mb-1">Your referral ID:</p>
               <p className="font-bold text-gray-800 font-mono">{displayId}</p>
               <p className="text-xs text-gray-600 mt-2">
-                2 points per referral • 10 points = 1 free ride
+                2 points per referral • 20 points = 1 free ride
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Link: <span className="font-mono text-xs truncate block">{referralUrl}</span>

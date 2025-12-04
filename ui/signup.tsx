@@ -40,6 +40,10 @@ export default function SignUpUi() {
   const [referrerData, setReferrerData] = useState<any>(null);
   const [referrerId, setReferrerId] = useState<string | null>(null);
 
+  // Constants for referral system
+  const POINTS_PER_REFERRAL = 2;
+  const POINTS_REQUIRED_PER_FREE_RIDE = 20; // Changed from 10 to 20
+
   // Find referrer by short ID (last 8 chars of their UID)
   useEffect(() => {
     if (referralShortId && referralShortId.length === 8) {
@@ -85,33 +89,36 @@ export default function SignUpUi() {
     return "Something went wrong. Please try again.";
   };
 
-  // ✅ Award referral points using referrer's FULL UID
+  // ✅ Award referral points using referrer's FULL UID - UPDATED FOR 20 POINTS PER FREE RIDE
   const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
     try {
-      console.log(`🎯 Awarding 2 points to: ${referrerFullId} from new user: ${newUserId}`);
+      console.log(`🎯 Awarding ${POINTS_PER_REFERRAL} points to: ${referrerFullId} from new user: ${newUserId}`);
       
       // Update referrer's document
       await updateDoc(doc(db, "users", referrerFullId), {
         referrals: arrayUnion({
           userId: newUserId,
           date: new Date(),
-          points: 2,
+          points: POINTS_PER_REFERRAL,
           status: "completed"
         }),
-        referralPoints: increment(2),
+        referralPoints: increment(POINTS_PER_REFERRAL),
         referralCount: increment(1),
       });
 
-      // Check if referrer earned a free ride
+      // Check if referrer earned a free ride (20 points required)
       const referrerRef = doc(db, "users", referrerFullId);
       const referrerSnap = await getDoc(referrerRef);
       
       if (referrerSnap.exists()) {
         const referrerData = referrerSnap.data();
-        const currentPoints = (referrerData.referralPoints || 0) + 2;
-        const freeRides = Math.floor(currentPoints / 10);
+        const currentPoints = (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
+        // CHANGED: Now requires 20 points per free ride instead of 10
+        const freeRides = Math.floor(currentPoints / POINTS_REQUIRED_PER_FREE_RIDE);
         
-        if (currentPoints >= 10 && currentPoints % 10 === 0) {
+        // CHANGED: Check for 20 points threshold instead of 10
+        if (currentPoints >= POINTS_REQUIRED_PER_FREE_RIDE && 
+            currentPoints % POINTS_REQUIRED_PER_FREE_RIDE === 0) {
           await updateDoc(doc(db, "users", referrerFullId), {
             freeRides: freeRides,
             lastFreeRideEarned: new Date(),
@@ -127,7 +134,9 @@ export default function SignUpUi() {
             })
           });
           
-          console.log(`🏆 ${referrerData.fullName} earned a free ride! Total: ${freeRides}`);
+          console.log(`🏆 ${referrerData.fullName} earned a free ride at ${currentPoints} points! Total free rides: ${freeRides}`);
+        } else {
+          console.log(`📊 ${referrerData.fullName} now has ${currentPoints} points. Need ${POINTS_REQUIRED_PER_FREE_RIDE - (currentPoints % POINTS_REQUIRED_PER_FREE_RIDE)} more for next free ride.`);
         }
       }
       
@@ -221,6 +230,7 @@ export default function SignUpUi() {
       console.log(`✅ Email user created: ${userCred.user.uid}`);
       console.log(`   - Referred by: ${referrerId || 'None'}`);
       console.log(`   - Their referral short ID: ${completeUserData.referralShortId}`);
+      console.log(`   - Referral goal: ${POINTS_REQUIRED_PER_FREE_RIDE} points per free ride`);
 
       setMessage("✅ Account created! Check your email for verification.");
       setLoading(false);
@@ -266,6 +276,7 @@ export default function SignUpUi() {
         console.log(`✅ Google user created: ${user.uid}`);
         console.log(`   - Referred by: ${referrerId || 'None'}`);
         console.log(`   - Their referral short ID: ${completeUserData.referralShortId}`);
+        console.log(`   - Referral goal: ${POINTS_REQUIRED_PER_FREE_RIDE} points per free ride`);
       } else {
         console.log("ℹ️ Google user already exists, logging in...");
       }
@@ -301,7 +312,9 @@ export default function SignUpUi() {
                   You'll get ₦1,000 credit on your first ride!
                 </p>
                 <p className="text-xs text-green-600 mt-1">
-                  They earn 2 points for your signup. 10 points = 1 free ride!
+                  They earn {POINTS_PER_REFERRAL} points for your signup. 
+                  {POINTS_REQUIRED_PER_FREE_RIDE} points = 1 free ride!
+                  {/* CHANGED: 20 points = 1 free ride! */}
                 </p>
               </div>
             </div>
@@ -314,6 +327,8 @@ export default function SignUpUi() {
             <p>Debug: Referral short ID: {referralShortId}</p>
             <p>Referrer found: {referrerData ? "Yes" : "No"}</p>
             {referrerId && <p>Referrer full UID: {referrerId.slice(0, 12)}...</p>}
+            <p>Points per referral: {POINTS_PER_REFERRAL}</p>
+            <p>Points needed per free ride: {POINTS_REQUIRED_PER_FREE_RIDE}</p>
           </div>
         )}
 
@@ -450,14 +465,14 @@ export default function SignUpUi() {
           </Link>
         </p>
 
-        {/* Referral System Explanation */}
+        {/* Referral System Explanation - UPDATED FOR 20 POINTS */}
         <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800 text-center">
             <span className="font-bold">🎯 Referral System:</span><br />
             <span className="text-xs">
               • Share your profile link → Friends sign up<br />
-              • You earn 2 points per referral<br />
-              • 10 points = FREE ₦5,000 ride!<br />
+              • You earn {POINTS_PER_REFERRAL} points per referral<br />
+              • {POINTS_REQUIRED_PER_FREE_RIDE} points = FREE ₦5,000 ride!<br />
               • Get started by signing up
             </span>
           </p>
