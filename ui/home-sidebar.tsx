@@ -85,7 +85,7 @@ export default function SidebarPageUi() {
     return () => unsub();
   }, [router]);
 
-  const dashboardRoute = isDriver? "/user/driver-profile" : userId ? `/user/profile/${userId}` : "/user/profile";
+  const dashboardRoute = isDriver? `/user/driver-profile/${userId}` : `/user/profile/${userId}`;
 
   const menuItems = [ 
     { name: "Home", href: "/", icon: <FaHome /> },

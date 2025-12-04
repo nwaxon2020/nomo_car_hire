@@ -83,6 +83,7 @@ export default function LoginPageUi() {
           email: user.email,
           profileImage: user.photoURL || "/profile.png",
           isDriver: false,
+          vip: false,
           createdAt: new Date(),
           authType: "google",
           hiredCars: [],

@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-//import Link from "next/link";
-
-// ⬇️ Your new loader component
 import LoadingRound from "@/ui/re-useable-loading";
 
 export default function DriverRegisterPageUi() {
@@ -21,10 +18,11 @@ export default function DriverRegisterPageUi() {
   const [idNumber, setIdNumber] = useState("");
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
 
-  const [loading, setLoading] = useState(true); 
-  const [submitting, setSubmitting] = useState(false); 
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
+  // 🔢 Calculate Age
   const calculateAge = (birthDate: string): number => {
     const today = new Date();
     const birth = new Date(birthDate);
@@ -35,7 +33,7 @@ export default function DriverRegisterPageUi() {
     return age;
   };
 
-  // 🔐 Auth check
+  // 🔐 Auth Check
   useEffect(() => {
     const checkAuth = async () => {
       const user = auth.currentUser;
@@ -52,6 +50,7 @@ export default function DriverRegisterPageUi() {
     checkAuth();
   }, [router]);
 
+  // 📝 Submit Handler
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     setMessage("");
@@ -62,22 +61,27 @@ export default function DriverRegisterPageUi() {
 
     if (!idPhoto) return setMessage("ID photo is required.");
 
+    // 🎯 Age Validation (19–75 years old)
     const age = calculateAge(dateOfBirth);
-    if (age < 18) return setMessage("Must be at least 18.");
-    if (age > 80) return setMessage("Must be below 80.");
+
+    if (age < 19)
+      return setMessage("❌ You must be at least 19 years old to register.");
+    if (age > 75)
+      return setMessage("❌ Maximum age allowed is 75 years.");
 
     const user = auth.currentUser;
     if (!user) return setMessage("You must be logged in.");
 
     try {
       setSubmitting(true);
-
       const userId = user.uid;
 
+      // Upload ID Photo
       const storageRef = ref(storage, `driverIDs/${userId}`);
       await uploadBytes(storageRef, idPhoto);
       const idPhotoURL = await getDownloadURL(storageRef);
 
+      // Update Firestore
       await updateDoc(doc(db, "users", userId), {
         firstName,
         lastName,
@@ -91,6 +95,8 @@ export default function DriverRegisterPageUi() {
         verified: false,
         vehicleLog: [],
         comments: [],
+        customersCarried: [],
+        driverVip: false,
       });
 
       setMessage("✅ Driver registration submitted!");
@@ -112,16 +118,16 @@ export default function DriverRegisterPageUi() {
     );
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-4 pb-8">
-      <div className="relatve bg-gray-50 shadow-2xl rounded-2xl p-8 max-w-md w-full">
+    <div className="relative min-h-screen flex items-center justify-center bg-white p-4 pb-8">
+      <div className="bg-gray-50 shadow-2xl rounded-2xl p-8 max-w-md w-full">
 
-        {/* Close window button */}
-        <div 
+        {/* Close button */}
+        <div
           onClick={() => router.back()}
-          className="border rounded-md py-1 px-3 cursor-pointer text-xl sm:text-2xl text-center mt-4 absolute top-24 sm:top-18 right-8 sm:right-8 text-gray-900 font-bold">     
+          className="border rounded-md py-1 px-3 cursor-pointer text-xl sm:text-2xl text-center mt-4 absolute top-0 right-4 sm:right-8 text-gray-900 font-bold"
+        >
           x
         </div>
-
 
         <h1 className="text-4xl font-extrabold text-center mb-6 text-gray-800">
           Driver Registration
@@ -225,7 +231,6 @@ export default function DriverRegisterPageUi() {
           >
             {submitting ? <LoadingRound /> : "Submit"}
           </button>
-
         </form>
       </div>
     </div>

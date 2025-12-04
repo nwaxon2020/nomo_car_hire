@@ -310,11 +310,22 @@ export default function UserProfilePageUi() {
                 
             </section>
 
-            <div className="my-16 bg-gray-300 rounded p-1 flex items-center justify-center flex-col sm:flex-row text-center">
-                <p>For complains, enquiries, report and much more:</p>
-                <span className="m-3 p-2 rounded-lg bg-red-800 text-white hover:bg-red-600 font-semibold">
-                    <a href="mailto:@nomopoventures@yahoo.com">Contact Us Today!</a>
-                </span>
+            <div className="my-10 bg-gradient-to-br from-gray-900 to-black rounded-2xl p-6 sm:p-8 text-center shadow-xl border border-gray-700">
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-2">
+                    We're Here to Help
+                </h2>
+
+                <p className="text-sm sm:text-base lg:text-lg text-gray-300 mb-4 leading-relaxed">
+                    For complaints, enquiries, reports and much more — our team is available 
+                    <span className="text-white font-semibold"> 24/7</span>.
+                </p>
+
+                <a
+                    href="mailto:nomopoventures@yahoo.com"
+                    className="inline-block bg-red-700 hover:bg-red-600 px-4 py-2 sm:px-6 sm:py-3 rounded-xl text-white font-semibold text-sm sm:text-base transition-all"
+                >
+                    Contact Us Today!
+                </a>
             </div>
 
             {/* Transport News Section */}

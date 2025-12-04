@@ -214,6 +214,7 @@ export default function SignUpUi() {
         email,
         profileImage: photoURL,
         isDriver: false,
+        vip: false,
       };
 
       const completeUserData = createUserData(baseData, "email", referrerId);
@@ -261,6 +262,7 @@ export default function SignUpUi() {
           email: user.email,
           profileImage: user.photoURL || "/profile.png",
           isDriver: false,
+          vip: false,
         };
 
         const completeUserData = createUserData(baseData, "google", referrerId);

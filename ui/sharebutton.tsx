@@ -16,6 +16,8 @@ interface ShareButtonProps {
   text?: string;
 }
 
+import { usePathname } from "next/navigation";
+
 export default function ShareButton({ 
   userId = "",
   title = "Get a Free Ride on Nomopoventures!",
@@ -23,6 +25,8 @@ export default function ShareButton({
 }: ShareButtonProps) {
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const pathname = usePathname();
 
   // ✅ Get last 8 characters of user ID for referral link
   const getShortId = () => {
@@ -120,13 +124,24 @@ export default function ShareButton({
   return (
     <>
       {/* Text link style */}
-      <button
-        onClick={handleNativeShare}
-        className="mx-auto text-green-800 font-semibold hover:underline hover:text-green-900 transition-colors flex items-center gap-1"
-      >
-        <Share2 size={14} />
-        Share Link to get Free Ride
-      </button>
+      {
+        pathname.startsWith ("/user/driver-profile/")? <button
+          onClick={handleNativeShare}
+          className="mx-auto text-white hover:text-white transition-colors flex items-center gap-1"
+        >
+          <Share2 size={14} />
+          Share Link to earn ₦5000
+        </button> :
+
+        <button
+          onClick={handleNativeShare}
+          className="mx-auto text-green-800 font-semibold hover:underline hover:text-green-900 transition-colors flex items-center gap-1"
+        >
+          <Share2 size={14} />
+          Share Link to get Free Ride
+        </button> 
+      
+      }
 
       {/* Simple modal */}
       {showShareOptions && (

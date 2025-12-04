@@ -54,3 +54,17 @@ html, body, :root {
   background-color: #083252;   /* darker blue on hover */
 }
 
+
+
+
+/* hide scrollbar ONLY for elements with .scrollbar-hide */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE + Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+
