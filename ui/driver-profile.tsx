@@ -13,7 +13,6 @@ import {
   where,
   onSnapshot,
   Timestamp,
-  orderBy,
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore";
@@ -474,21 +473,25 @@ export default function DriverProfilePage() {
               </div>
               
               {/* Verification Status Badge */}
-              <div className={`absolute left-50 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold ${isVerified 
-                ? 'bg-green-100 text-green-800 border border-green-200' 
-                : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                {isVerified ? (
-                  <>
-                    <span className="text-green-600">✓</span>
-                    Verified Driver
-                  </>
-                ) : (
-                  <>
-                    <span className="text-gray-500">○</span>
-                    Unverified
-                  </>
-                )}
-              </div>
+              <div className="absolute left-50 flex flex-col gap-1">
+                <div className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold ${isVerified 
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                  {isVerified ? (
+                    <>
+                      <span className="text-green-600">✓</span>
+                      Verified Driver
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-gray-500">○</span>
+                      Unverified
+                    </>
+                  )}
+                </div>
+                {/* location of driver */}
+                <p className="text-center p-1 text-xs">📍{driverData.city} {driverData.state} {driverData.country}</p>
+              </div>            
             </div>
 
             {isVIP && (
