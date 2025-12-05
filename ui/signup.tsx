@@ -228,15 +228,11 @@ export default function SignUpUi() {
         await awardReferralPoints(referrerId, userCred.user.uid);
       }
 
-      console.log(`✅ Email user created: ${userCred.user.uid}`);
-      console.log(`   - Referred by: ${referrerId || 'None'}`);
-      console.log(`   - Their referral short ID: ${completeUserData.referralShortId}`);
-      console.log(`   - Referral goal: ${POINTS_REQUIRED_PER_FREE_RIDE} points per free ride`);
-
       setMessage("✅ Account created! Check your email for verification.");
       setLoading(false);
 
-      setTimeout(() => router.push("/login"), 1500);
+      setTimeout(() => router.push("/login"), 2500);
+
     } catch (err: any) {
       setMessage(mapFirebaseError(err.message));
       setLoading(false);
@@ -275,13 +271,7 @@ export default function SignUpUi() {
           await awardReferralPoints(referrerId, user.uid);
         }
 
-        console.log(`✅ Google user created: ${user.uid}`);
-        console.log(`   - Referred by: ${referrerId || 'None'}`);
-        console.log(`   - Their referral short ID: ${completeUserData.referralShortId}`);
-        console.log(`   - Referral goal: ${POINTS_REQUIRED_PER_FREE_RIDE} points per free ride`);
-      } else {
-        console.log("ℹ️ Google user already exists, logging in...");
-      }
+      } 
 
       setGoogleLoading(false);
       router.push("/");
@@ -308,13 +298,14 @@ export default function SignUpUi() {
               </div>
               <div>
                 <p className="font-semibold text-green-800">
-                  Signing up through {referrerData.fullName}'s referral!
+                  Signing up through {referrerData.fullName.toUpperCase()}'s referral!
                 </p>
                 <p className="text-sm text-green-700">
-                  You'll get ₦1,000 credit on your first ride!
+                  We'll make your first ride an experience to remember!
                 </p>
                 <p className="text-xs text-green-600 mt-1">
-                  They earn {POINTS_PER_REFERRAL} points for your signup. 
+                  Plus they earn {POINTS_PER_REFERRAL} points for your signup. 
+                  <br />
                   {POINTS_REQUIRED_PER_FREE_RIDE} points = 1 free ride!
                   {/* CHANGED: 20 points = 1 free ride! */}
                 </p>
@@ -323,17 +314,7 @@ export default function SignUpUi() {
           </div>
         )}
 
-        {/* Debug info - remove in production */}
-        {process.env.NODE_ENV === 'development' && referralShortId && (
-          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-            <p>Debug: Referral short ID: {referralShortId}</p>
-            <p>Referrer found: {referrerData ? "Yes" : "No"}</p>
-            {referrerId && <p>Referrer full UID: {referrerId.slice(0, 12)}...</p>}
-            <p>Points per referral: {POINTS_PER_REFERRAL}</p>
-            <p>Points needed per free ride: {POINTS_REQUIRED_PER_FREE_RIDE}</p>
-          </div>
-        )}
-
+        {/* FORM for signup */}
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="flex flex-col items-center">
             <label className="w-24 h-24 mb-2 rounded-full overflow-hidden border-2 border-purple-600 flex items-center justify-center bg-gray-100 cursor-pointer">

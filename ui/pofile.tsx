@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/lib/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+import { db, storage } from "@/lib/firebaseConfig";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useParams } from "next/navigation";
 import TransportNewsPageUi from "./news";
 import WordGuessGame from "./game";
 import ShareButton from "@/ui/sharebutton";
+import { toast, Toaster } from "react-hot-toast";
 
 // ⭐ Capitalize full name function
 function capitalizeFullName(name: string) {
@@ -22,8 +24,13 @@ export default function UserProfilePageUi() {
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [game, setGame] = useState(false);
+    const [editingName, setEditingName] = useState(false);
+    const [newName, setNewName] = useState("");
+    const [uploadingImage, setUploadingImage] = useState(false);
 
-    const userId = Array.isArray(params.id) ? params.id[0] : params.id;
+    // Safely get userId with proper type handling
+    const rawId = params?.id;
+    const userId = rawId ? (Array.isArray(rawId) ? rawId[0] : rawId) : "";
     const POINTS_PER_FREE_RIDE = 20; // Changed from 10 to 20
 
     useEffect(() => {
@@ -38,7 +45,9 @@ export default function UserProfilePageUi() {
                 const snap = await getDoc(userRef);
 
                 if (snap.exists()) {
-                    setUserData(snap.data());
+                    const data = snap.data();
+                    setUserData(data);
+                    setNewName(data.fullName || "");
                 } else {
                     setUserData(null);
                 }
@@ -52,6 +61,77 @@ export default function UserProfilePageUi() {
 
         fetchUser();
     }, [userId]);
+
+    const handleUpdateName = async () => {
+        if (!newName.trim()) {
+            toast.error("Name cannot be empty");
+            return;
+        }
+
+        if (!userId) {
+            toast.error("User ID not found");
+            return;
+        }
+
+        try {
+            const userRef = doc(db, "users", userId);
+            await updateDoc(userRef, {
+                fullName: newName.trim(),
+                updatedAt: new Date()
+            });
+            
+            setUserData({ ...userData, fullName: newName.trim() });
+            setEditingName(false);
+            toast.success("Name updated successfully!");
+        } catch (err) {
+            console.error("Error updating name:", err);
+            toast.error("Failed to update name");
+        }
+    };
+
+    const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        if (!userId) {
+            toast.error("User ID not found");
+            return;
+        }
+
+        // Check file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Image size should be less than 5MB");
+            return;
+        }
+
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+            toast.error("Please select an image file");
+            return;
+        }
+
+        setUploadingImage(true);
+        try {
+            const storageRef = ref(storage, `profileImages/${userId}/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, file);
+            const photoURL = await getDownloadURL(storageRef);
+
+            const userRef = doc(db, "users", userId);
+            await updateDoc(userRef, {
+                photoURL,
+                profileImage: photoURL,
+                updatedAt: new Date()
+            });
+            
+            setUserData({ ...userData, photoURL, profileImage: photoURL });
+            toast.success("Profile image updated successfully!");
+        } catch (err) {
+            console.error("Error uploading profile image:", err);
+            toast.error("Failed to update profile image");
+        } finally {
+            setUploadingImage(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -77,27 +157,113 @@ export default function UserProfilePageUi() {
 
     return (
         <div className="relative p-3 sm:p-6 max-w-5xl mx-auto">
+            <Toaster position="top-right" />
+            
             {/* Header with Free Ride Status */}
             <div className="bg-white shadow-xl rounded-2xl p-6 mb-8">
+
+                {/* VIP card */}
+                {
+                    userData.vip? <div className="sm:absolute right-12 top-10 mt-2 inline-flex items-center gap-1 bg-gradient-to-r from-yellow-100 to-yellow-50 border border-yellow-200 px-2 py-1 rounded-full">
+                        <span className="text-yellow-600">⭐</span>
+                        <span className="text-yellow-800 text-xs sm:text-sm font-semibold">VIP Customer</span>
+                    </div> : ""
+                }
+
                 <div className="flex flex-col justify-between items-start gap-4">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">
-                                {capitalizeFullName(userData.fullName || "Unnamed User")}
-                            </h1>
-                            
-                            {/* Star indicator for free rides */}
-                            {freeRides > 0 && (
-                                <div className="flex items-center gap-1">
-                                    {freeRides > 1 && (
-                                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                                            {freeRides}
-                                        </span>
+                    <div className="w-full">
+                        <div className="flex items-center gap-3 mb-2">
+                            {/* Profile Image with Edit Button */}
+                            <div className="relative">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-gray-300">
+                                    {userData.photoURL || userData.profileImage ? (
+                                        <img
+                                            src={userData.photoURL || userData.profileImage}
+                                            alt="Profile"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white text-xl sm:text-2xl font-bold">
+                                            {userData.fullName?.charAt(0).toUpperCase() || "U"}
+                                        </div>
                                     )}
                                 </div>
-                            )}
+                                
+                                {/* Edit Profile Image Button */}
+                                <label className="absolute bottom-0 right-0 bg-white border border-gray-300 rounded-full p-1 cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <span className="text-gray-600 text-sm">✏️</span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handleProfileImageChange}
+                                        disabled={uploadingImage}
+                                    />
+                                </label>
+                                {uploadingImage && (
+                                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                                        <div className="text-white text-xs">Uploading...</div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                    {editingName ? (
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={newName}
+                                                onChange={(e) => setNewName(e.target.value)}
+                                                className="px-3 py-1 border border-gray-300 rounded-lg text-lg font-semibold"
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={handleUpdateName}
+                                                className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingName(false);
+                                                    setNewName(userData.fullName || "");
+                                                }}
+                                                className="bg-gray-300 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-400"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+                                                {capitalizeFullName(userData.fullName || "Unnamed User")}
+                                            </h1>
+                                            <button
+                                                onClick={() => setEditingName(true)}
+                                                className="text-gray-500 hover:text-gray-700 transition-colors"
+                                                title="Edit name"
+                                            >
+                                                ✏️
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                                
+                                <p className="text-gray-500 text-sm mt-1">Passenger</p>
+                                
+                                {/* Star indicator for free rides */}
+                                {freeRides > 0 && (
+                                    <div className="flex items-center gap-1 mt-2">
+                                        {freeRides > 1 && (
+                                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                                                {freeRides}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-gray-500 text-sm">Passenger</p>
                         
                         {/* Free Ride Status */}
                         {freeRides > 0 ? (
@@ -157,12 +323,14 @@ export default function UserProfilePageUi() {
                 </div>
 
                 {/* Open Game Button */}
-                <p
-                    onClick={() => setGame(true)}
-                    className="cursor-pointer text-sm text-right underline mt-4"
-                >
-                    Play Word Guess
-                </p>
+                <div className="text-right">
+                    <button
+                        onClick={() => setGame(true)}
+                        className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors w-full sm:w-auto text-sm sm:text-base"
+                    >
+                        🎮 Play Game
+                    </button>
+                </div>
 
                 {/* Word guessing game section div */}
                 {game && (
@@ -181,7 +349,7 @@ export default function UserProfilePageUi() {
 
             <div className="flex flex-col sm:flex-row gap-4">
                 {/* Cars User Has Hired */}
-                <section className="w-full bg-white shadow-lg rounded-xl p-6 mb-8">
+                <section className="w-full bg-white shadow-lg bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-6 mb-8">
                     <h2 className="text-xl sm:text-2xl font-semibold mb-4">Cars You've Hired</h2>
 
                     {userData.hiredCars && userData.hiredCars.length > 0 ? (
@@ -216,7 +384,7 @@ export default function UserProfilePageUi() {
                 </section>
 
                 {/* Drivers Contacted */}
-                <section className="w-full bg-white shadow-lg rounded-xl p-6 mb-8">
+                <section className="w-full bg-white shadow-lg bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-6 mb-8">
                     <h2 className="text-xl sm:text-2xl font-semibold mb-4">Drivers You Contacted</h2>
 
                     {userData.contactedDrivers && userData.contactedDrivers.length > 0 ? (

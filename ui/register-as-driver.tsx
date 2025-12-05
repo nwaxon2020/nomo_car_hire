@@ -17,6 +17,12 @@ export default function DriverRegisterPageUi() {
   const [whatsappPreferred, setWhatsappPreferred] = useState(false);
   const [idNumber, setIdNumber] = useState("");
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
+  
+  // Location fields
+  const [country, setCountry] = useState("");
+  const [state, setState] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -55,7 +61,7 @@ export default function DriverRegisterPageUi() {
     e.preventDefault();
     setMessage("");
 
-    if (!firstName || !lastName || !dateOfBirth || !phoneNumber || !idNumber) {
+    if (!firstName || !lastName || !dateOfBirth || !phoneNumber || !idNumber || !country || !state || !city) {
       return setMessage("All fields are required.");
     }
 
@@ -91,6 +97,11 @@ export default function DriverRegisterPageUi() {
         whatsappPreferred,
         idNumber,
         idPhotoURL,
+        // Location fields
+        country,
+        state,
+        city,
+        address,
         isDriver: true,
         verified: false,
         vehicleLog: [],
@@ -102,7 +113,7 @@ export default function DriverRegisterPageUi() {
       setMessage("✅ Driver registration submitted!");
       setSubmitting(false);
 
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setTimeout(() => router.push(`/user/driver-profile/${userId}`), 1500);
     } catch (err) {
       console.error(err);
       setMessage("Something went wrong. Try again.");
@@ -184,6 +195,7 @@ export default function DriverRegisterPageUi() {
             <span className="text-gray-700">Preferred WhatsApp?</span>
           </div>
 
+          {/* ID input section */}
           <input
             type="text"
             placeholder="Valid ID Number"
@@ -211,6 +223,47 @@ export default function DriverRegisterPageUi() {
               }
             />
           </label>
+
+
+          {/* Location Fields */}
+          <div className="space-y-4 pt-2 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-700">Location Information</h3>
+            
+            <input
+              type="text"
+              placeholder="Country"
+              className="w-full px-4 py-3 border rounded-xl"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              required
+            />
+
+            <input
+              type="text"
+              placeholder="State/Province"
+              className="w-full px-4 py-3 border rounded-xl"
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+              required
+            />
+
+            <input
+              type="text"
+              placeholder="City"
+              className="w-full px-4 py-3 border rounded-xl"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              required
+            />
+
+            <input
+              type="text"
+              placeholder="Address (Optional)"
+              className="w-full px-4 py-3 border rounded-xl"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+          </div>
 
           {message && (
             <div

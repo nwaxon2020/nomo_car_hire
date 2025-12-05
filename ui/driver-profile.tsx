@@ -36,6 +36,7 @@ interface Vehicle {
   driverId: string;
   carName: string;
   carModel: string;
+  carType: string; // Added carType field
   passengers: number;
   ac: boolean;
   plateNumber: string;
@@ -87,6 +88,7 @@ export default function DriverProfilePage() {
 
   const [carName, setCarName] = useState("");
   const [carModel, setCarModel] = useState("");
+  const [carType, setCarType] = useState("sedan"); // Added carType state
   const [passengers, setPassengers] = useState<number>(4);
   const [ac, setAc] = useState<boolean>(true);
   const [plateNumber, setPlateNumber] = useState("");
@@ -108,6 +110,7 @@ export default function DriverProfilePage() {
   const [referralCount, setReferralCount] = useState<number>(0);
   const [isVIP, setIsVIP] = useState<boolean>(false);
   const [uniqueCustomers, setUniqueCustomers] = useState<string[]>([]);
+  const [isVerified, setIsVerified] = useState<boolean>(false); // Added verification state
 
   const [selectedMainImage, setSelectedMainImage] = useState<{ [key: string]: string }>({});
 
@@ -136,11 +139,12 @@ export default function DriverProfilePage() {
           // Handle Google users: fetch displayName / photoURL if profileImage is missing
           const profileImage = data.profileImage || data.photoURL || "";
           const fullName = data.fullName || data.displayName || "Professional Driver";
+          const verified = data.verified || false; // Get verification status
 
           setDriverData({ ...data, profileImage, fullName });
-          // Check both driverVip and isVIP fields
           setIsVIP(data.driverVip || data.isVIP || false);
           setReferralCount(data.referralCount || 0);
+          setIsVerified(verified); // Set verification status
         }
 
         // Vehicles (collection)
@@ -233,7 +237,7 @@ export default function DriverProfilePage() {
     e?.preventDefault();
     setSavingVehicle(true);
 
-    if (!carName || !carModel || !plateNumber || !exteriorColor || !interiorColor) { toast.error("Fill required fields"); setSavingVehicle(false); return; }
+    if (!carName || !carModel || !plateNumber || !exteriorColor || !interiorColor || !carType) { toast.error("Fill required fields"); setSavingVehicle(false); return; }
     if (!editingVehicle && (!frontFile || !sideFile || !backFile || !interiorFile)) { toast.error("All 4 photos required"); setSavingVehicle(false); return; }
 
     try {
@@ -249,6 +253,7 @@ export default function DriverProfilePage() {
         driverId,
         carName,
         carModel,
+        carType, // Added carType to the document
         passengers,
         ac,
         plateNumber,
@@ -283,6 +288,7 @@ export default function DriverProfilePage() {
       // Reset form state
       setCarName("");
       setCarModel("");
+      setCarType("sedan");
       setPassengers(4);
       setAc(true);
       setPlateNumber("");
@@ -309,6 +315,7 @@ export default function DriverProfilePage() {
     setEditingVehicle(v);
     setCarName(v.carName);
     setCarModel(v.carModel);
+    setCarType(v.carType || "sedan");
     setPassengers(v.passengers);
     setAc(v.ac);
     setPlateNumber(v.plateNumber);
@@ -413,6 +420,7 @@ export default function DriverProfilePage() {
               </p>
             </div>
 
+            {/* VIP upgrade benefits card for dirver VIP upgrade */}
             <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-4 mb-4">
               <h4 className="font-semibold text-amber-800 mb-2">VIP Benefits:</h4>
               <ul className="text-sm text-gray-700 space-y-1">
@@ -426,7 +434,7 @@ export default function DriverProfilePage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-amber-500">✓</span>
-                  <span>Higher rates per ride</span>
+                  <span>More customer requests</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-amber-500">✓</span>
@@ -457,10 +465,32 @@ export default function DriverProfilePage() {
       <div className="bg-white shadow-lg rounded-2xl p-4 sm:p-6 mb-6">
         <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
           <div className="w-full lg:w-1/2">
-            <h1 className="text-xl sm:text-2xl font-bold">Driver Profile</h1>
-            <p className="text-xs sm:text-sm text-gray-500">
-              {driverData?.fullName ? capitalizeFullName(driverData.fullName) : "Professional Driver"}
-            </p>
+            <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold">Driver Profile</h1>
+                <p className="text-xs sm:text-sm text-gray-500">
+                  {driverData?.fullName ? capitalizeFullName(driverData.fullName) : "Professional Driver"}
+                </p>
+              </div>
+              
+              {/* Verification Status Badge */}
+              <div className={`absolute left-50 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold ${isVerified 
+                ? 'bg-green-100 text-green-800 border border-green-200' 
+                : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                {isVerified ? (
+                  <>
+                    <span className="text-green-600">✓</span>
+                    Verified Driver
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-500">○</span>
+                    Unverified
+                  </>
+                )}
+              </div>
+            </div>
+
             {isVIP && (
               <div className="mt-2 inline-flex items-center gap-1 bg-gradient-to-r from-yellow-100 to-yellow-50 border border-yellow-200 px-2 py-1 rounded-full">
                 <span className="text-yellow-600">⭐</span>
@@ -607,16 +637,15 @@ export default function DriverProfilePage() {
 
       {/* Word guessing game section */}
       {game && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl p-4 sm:p-6 max-w-4xl w-full relative border border-gray-800 mx-2 sm:mx-4">
-            <button
-              onClick={() => setGame(false)}
-              className="absolute top-3 right-3 sm:top-4 sm:right-4 text-white text-xl sm:text-2xl font-bold hover:text-gray-300 bg-gray-800 hover:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center"
+        <div className="p-10 bg-black rounded-md absolute top-36 right-[-8px] sm:right-1 lg:right-65 z-20">
+            {/* Close Game Button */}
+            <p
+                onClick={() => setGame(false)}
+                className="cursor-pointer text-white text-right text-2xl font-black"
             >
-              ✕
-            </button>
+                x
+            </p>
             <WordGuessGame />
-          </div>
         </div>
       )}
 
@@ -633,124 +662,134 @@ export default function DriverProfilePage() {
             </div>
           )}
         </div>
+
+        {/* Car Image and Thumbnail */}
         {vehicles.length === 0 ? (
           <p className="text-gray-500 text-center py-6 sm:py-8">No vehicles yet. Click "Add Vehicle" to create one.</p>
         ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                 {vehicles.map((v) => (
-                    <div key={v.id} className="bg-white shadow rounded-xl p-3 hover:shadow-md transition-shadow">
+                    <div key={v.id} className="bg-gray-900 shadow rounded-xl p-3 hover:shadow-lg transition-shadow">
 
-                    {/* MAIN IMAGE - Now clickable from thumbnails */}
-                    <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2">
-                        <img 
-                        src={selectedMainImage[v.id!] || v.images.front}
-                        className="w-full h-full object-cover"
-                        />
-                    </div>
-
-                    {/* THUMBNAILS SCROLL - Now clickable */}
-                    <div className="relative">
-                        {/* Scroll Buttons */}
-                        <button
-                        onClick={() => document.getElementById(`scroll-${v.id}`)?.scrollBy({ left: -120, behavior: "smooth" })}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
-                        >‹</button>
-
-                        <button
-                        onClick={() => document.getElementById(`scroll-${v.id}`)?.scrollBy({ left: 120, behavior: "smooth" })}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
-                        >›</button>
-
-                        {/* Thumbnails - Now clickable */}
-                        <div
-                        id={`scroll-${v.id}`}
-                        className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-6"
-                        >
-                        <img 
-                          src={v.images.front} 
-                          className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.front ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                          onClick={() => handleThumbnailClick(v.id!, v.images.front)}
-                          alt="Front view"
-                        />
-                        <img 
-                          src={v.images.side} 
-                          className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.side ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                          onClick={() => handleThumbnailClick(v.id!, v.images.side)}
-                          alt="Side view"
-                        />
-                        <img 
-                          src={v.images.back} 
-                          className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.back ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                          onClick={() => handleThumbnailClick(v.id!, v.images.back)}
-                          alt="Back view"
-                        />
-                        <img 
-                          src={v.images.interior} 
-                          className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.interior ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                          onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
-                          alt="Interior view"
-                        />
-                        </div>
-                    </div>
-
-                    {/* DETAILS */}
-                    <div className="mt-3">
-                      <h2 className="font-semibold text-lg">{v.carName}</h2>
-                      <p className="text-sm text-gray-500">{v.carModel}</p>
-                      
-                      {/* Vehicle Details Grid */}
-                      <div className="grid grid-cols-2 gap-2 mt-3">
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">👤</span>
-                          <span className="text-xs">{v.passengers} passengers</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">❄️</span>
-                          <span className="text-xs">{v.ac ? 'AC Available' : 'No AC'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">🎨</span>
-                          <span className="text-xs">{v.exteriorColor}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">🛋️</span>
-                          <span className="text-xs">{v.interiorColor}</span>
-                        </div>
+                      {/* MAIN IMAGE - Now clickable from thumbnails */}
+                      <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2">
+                          <img 
+                          src={selectedMainImage[v.id!] || v.images.front}
+                          className="w-full h-full object-cover"
+                          />
                       </div>
 
-                      {/* Status Badge */}
-                      <div className="mt-2">
-                        <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                          !v.status || v.status === 'available' 
-                            ? 'bg-green-100 text-green-800' 
-                            : v.status === 'unavailable' 
-                            ? 'bg-red-100 text-red-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {v.status ? v.status.charAt(0).toUpperCase() + v.status.slice(1) : 'Available'}
-                        </span>
+                      {/* THUMBNAILS SCROLL - Now clickable */}
+                      <div className="relative">
+                          {/* Scroll Buttons */}
+                          <button
+                          onClick={() => document.getElementById(`scroll-${v.id}`)?.scrollBy({ left: -120, behavior: "smooth" })}
+                          className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
+                          >‹</button>
+
+                          <button
+                          onClick={() => document.getElementById(`scroll-${v.id}`)?.scrollBy({ left: 120, behavior: "smooth" })}
+                          className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
+                          >›</button>
+
+                          {/* Thumbnails - Now clickable */}
+                          <div
+                          id={`scroll-${v.id}`}
+                          className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-6"
+                          >
+                          <img 
+                            src={v.images.front} 
+                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.front ? 'border-blue-500 border-2' : 'border-gray-300'}`}
+                            onClick={() => handleThumbnailClick(v.id!, v.images.front)}
+                            alt="Front view"
+                          />
+                          <img 
+                            src={v.images.side} 
+                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.side ? 'border-blue-500 border-2' : 'border-gray-300'}`}
+                            onClick={() => handleThumbnailClick(v.id!, v.images.side)}
+                            alt="Side view"
+                          />
+                          <img 
+                            src={v.images.back} 
+                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.back ? 'border-blue-500 border-2' : 'border-gray-300'}`}
+                            onClick={() => handleThumbnailClick(v.id!, v.images.back)}
+                            alt="Back view"
+                          />
+                          <img 
+                            src={v.images.interior} 
+                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.interior ? 'border-blue-500 border-2' : 'border-gray-300'}`}
+                            onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
+                            alt="Interior view"
+                          />
+                          </div>
                       </div>
 
-                      {/* Description if available */}
-                      {v.description && (
-                        <p className="text-xs text-gray-600 mt-2 line-clamp-2">{v.description}</p>
-                      )}
-                    </div>
+                      {/*CAR DETAILS */}
+                      <div className="mt-3 bg-white rounded-lg p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h2 className="font-semibold text-lg">{capitalizeFullName(v.carName)}</h2>
+                            <p className="text-sm text-gray-500">{(v.carModel).toUpperCase()}</p>
+                          </div>
+                          {/* Car Type Badge */}
+                          <span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-medium capitalize">
+                            {v.carType || "Not specified"}
+                          </span>
+                        </div>
+                        
+                        {/* Vehicle Details Grid */}
+                        <div className="grid grid-cols-2 gap-2 mt-3">
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500">👤</span>
+                            <span className="text-xs">{v.passengers} passengers</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500">❄️</span>
+                            <span className="text-xs">{v.ac ? 'AC Available' : 'No AC'}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500">🎨</span>
+                            <span className="text-xs">{capitalizeFullName(v.exteriorColor)} Exterior</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500">🛋️</span>
+                            <span className="text-xs">{capitalizeFullName(v.interiorColor)} Interior</span>
+                          </div>
+                        </div>
 
-                    <div className="flex justify-between mt-4 pt-3 border-t border-gray-100">
-                        <button
-                        onClick={() => startEdit(v)}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
-                        >
-                          <span>✏️</span> Edit
-                        </button>
-                        <button
-                        onClick={() => removeVehicle(v.id)}
-                        className="text-red-600 hover:text-red-800 text-sm font-semibold flex items-center gap-1"
-                        >
-                          <span>🗑️</span> Delete
-                        </button>
-                    </div>
+                        {/* Status Badge */}
+                        <div className="mt-2">
+                          <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+                            !v.status || v.status === 'available' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : v.status === 'unavailable' 
+                              ? 'bg-red-100 text-red-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {v.status ? v.status.charAt(0).toUpperCase() + v.status.slice(1) : 'Available'}
+                          </span>
+                        </div>
+
+                        {/* Description if available */}
+                        {v.description && (
+                          <p className="bg-green-100 rounded-lg p-2 text-xs text-green-800 mt-2 line-clamp-2">{v.description}</p>
+                        )}
+                      </div>
+
+                      <div className="flex justify-between mt-4 pt-3 border-t border-gray-100">
+                          <button
+                          onClick={() => startEdit(v)}
+                          className="text-blue-500 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
+                          >
+                            <span>✏️</span> Edit
+                          </button>
+                          <button
+                          onClick={() => removeVehicle(v.id)}
+                          className="bg-white p-1 rounded-lg text-red-600 hover:text-red-800 text-sm font-semibold flex items-center gap-1"
+                          >
+                            <span>🗑️</span> Delete
+                          </button>
+                      </div>
                     </div>
                 ))}
             </div>
@@ -799,6 +838,27 @@ export default function DriverProfilePage() {
                     className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     placeholder="e.g., 2023 LE"
                   />
+                </div>
+
+                {/* Car Type Selection - Added */}
+                <div>
+                  <label className="text-xs sm:text-sm font-medium text-gray-700">Car Type *</label>
+                  <select
+                    value={carType}
+                    onChange={(e) => setCarType(e.target.value)}
+                    required
+                    className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  >
+                    <option value="sedan">Sedan</option>
+                    <option value="suv">SUV</option>
+                    <option value="keke">Keke</option>
+                    <option value="bus">Bus</option>
+                    <option value="carrier">Carrier</option>
+                    <option value="truck">Truck</option>
+                    <option value="minivan">Minivan</option>
+                    <option value="pickup">Pickup Truck</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">

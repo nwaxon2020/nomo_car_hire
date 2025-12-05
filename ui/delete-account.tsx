@@ -8,7 +8,7 @@ import {
     EmailAuthProvider,
     reauthenticateWithPopup
 } from "firebase/auth";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { useRouter } from "next/navigation";
 
@@ -89,32 +89,65 @@ export default function DeleteAccountPage() {
         }
     };
 
-    const deleteUserData = async (user: any, userRef: any, profileImage: string | null, idImage: string | null) => {
-        // Delete profile image
-        if (profileImage) {
-            await deleteObject(ref(storage, profileImage)).catch(() =>
-                console.warn("Profile image could not be deleted")
-            );
+    const deleteUserData = async (user: any,userRef: any,profileImage: string | null,idImage: string | null) => {
+        try {
+            // 1. Delete profile image
+            if (profileImage) {
+                await deleteObject(ref(storage, profileImage)).catch(() =>
+                    console.warn("Profile image could not be deleted")
+                );
+            }
+
+            // 2. Delete driver ID image
+            if (idImage) {
+                await deleteObject(ref(storage, idImage)).catch(() =>
+                    console.warn("Driver ID image could not be deleted")
+                );
+            }
+
+            // ⭐ 3. DELETE ALL VEHICLES THAT BELONG TO THIS USER ⭐
+            const vehiclesRef = collection(db, "vehicleLog"); 
+            const q = query(vehiclesRef, where("driverId", "==", user.uid)); 
+            const snapshot = await getDocs(q);
+
+            for (const docSnap of snapshot.docs) {
+                const vehicleData = docSnap.data();
+
+                // Delete each image from vehicle.images
+                if (vehicleData.images) {
+                    for (const key of Object.keys(vehicleData.images)) {
+                        const imgUrl = vehicleData.images[key];
+                        const storagePath = extractStoragePath(imgUrl);
+                        if (storagePath) {
+                            await deleteObject(ref(storage, storagePath)).catch(() =>
+                                console.warn(`Failed to delete vehicle image: ${key}`)
+                            );
+                        }
+                    }
+                }
+
+                // Delete vehicle document
+                await deleteDoc(doc(db, "vehicleLog", docSnap.id));
+            }
+
+            // 4. Delete Firestore user doc
+            await deleteDoc(userRef);
+
+            // 5. Delete Auth user
+            await deleteUser(user);
+
+            // 6. Show success message + redirect
+            setMessage("Your account and vehicles have been deleted successfully. Redirecting...");
+            setShowPasswordBox(false);
+            setTimeout(() => router.push("/login"), 2000);
+
+        } catch (error) {
+            console.error("Error deleting user data:", error);
+            alert("Something went wrong deleting your data. Please try again.");
+            setLoading(false);
         }
-
-        // Delete driver ID image
-        if (idImage) {
-            await deleteObject(ref(storage, idImage)).catch(() =>
-                console.warn("Driver ID image could not be deleted")
-            );
-        }
-
-        // Delete Firestore doc
-        await deleteDoc(userRef);
-
-        // Delete Auth user
-        await deleteUser(user);
-
-        // Show success message and delay redirect
-        setMessage("Your account has been deleted successfully. Redirecting...");
-        setShowPasswordBox(false);
-        setTimeout(() => router.push("/login"), 2000);
     };
+
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50">
