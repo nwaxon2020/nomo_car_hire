@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import LoadingRound from "@/ui/re-useable-loading";
+import LoadingRound from "@/compoents/re-useable-loading";
 
 export default function DriverRegisterPageUi() {
   const router = useRouter();

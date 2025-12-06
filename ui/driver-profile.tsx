@@ -18,10 +18,10 @@ import {
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useParams } from "next/navigation";
-import TransportNewsPageUi from "./news";
-import WordGuessGame from "./game";
-import ShareButton from "@/ui/sharebutton";
-import LoadingRound from "@/ui/re-useable-loading";
+import TransportNewsPageUi from "../compoents/news";
+import WordGuessGame from "../compoents/game";
+import ShareButton from "@/compoents/sharebutton";
+import LoadingRound from "@/compoents/re-useable-loading";
 import { toast, Toaster } from "react-hot-toast";
 
 // Capitalize full name

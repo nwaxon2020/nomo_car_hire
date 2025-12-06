@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import LoadingDots from "@/ui/loading";
+import LoadingDots from "@/compoents/loading";
 
 import {
   FaHome,

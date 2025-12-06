@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
-import LoadingRound from "@/ui/re-useable-loading";
+import LoadingRound from "@/compoents/re-useable-loading";
 
 export default function SignUpUi() {
   const router = useRouter();

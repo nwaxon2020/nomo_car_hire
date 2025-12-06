@@ -90,7 +90,7 @@ export default function WordGuessGame() {
         </button>
       </div>
 
-      <div className="text-center mb-2">
+      <div className="text-center mb-2 text-sm">
         <span>Wrong guesses: {wrongGuesses} / 6</span>
       </div>
 
