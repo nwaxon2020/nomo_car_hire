@@ -5,9 +5,9 @@ import { db, storage } from "@/lib/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useParams } from "next/navigation";
-import TransportNewsPageUi from "../compoents/news";
-import WordGuessGame from "../compoents/game";
-import ShareButton from "@/compoents/sharebutton";
+import TransportNewsPageUi from "../components/news";
+import WordGuessGame from "../components/game";
+import ShareButton from "@/components/sharebutton";
 import { toast, Toaster } from "react-hot-toast";
 
 // ⭐ Capitalize full name function

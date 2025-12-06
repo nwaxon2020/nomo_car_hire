@@ -89,7 +89,7 @@ export default function HomePageUi() {
               
               <p className="text-xl text-blue-100 mb-8 max-w-2xl">
                 Connect with verified drivers, book rides safely, and travel with confidence.
-                Whether you're a passenger or a driver, Nomopoventures has you covered.
+                Whether you're a passenger or a driver, Nomo Cars has you covered.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4">
@@ -164,7 +164,7 @@ export default function HomePageUi() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              How Nomopoventures Works
+              How Nomo Cars Works
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Simple steps to get you moving, whether you need a ride or want to earn
@@ -233,7 +233,7 @@ export default function HomePageUi() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose Nomopoventures?
+              Why Choose Nomo Cars?
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               We're committed to providing the best car hire experience in Nigeria
@@ -364,12 +364,12 @@ export default function HomePageUi() {
               </div>
               
               <div className="text-center">
-                <p className="text-lg mb-4">Already a driver?</p>
+                <p className="text-lg mb-4">Want to be a driver?</p>
                 <Link
-                  href="/login"
+                  href="/user/register"
                   className="inline-flex items-center gap-2 text-yellow-300 font-bold text-lg hover:text-yellow-200"
                 >
-                  Login to Your Driver Account <FaArrowRight />
+                  Register A Driver Account <FaArrowRight />
                 </Link>
               </div>
             </div>
@@ -381,41 +381,10 @@ export default function HomePageUi() {
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl p-8 shadow-2xl">
-                <h3 className="text-2xl font-bold mb-6">Safe & Reliable Rides</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                      <FaShieldAlt />
-                    </div>
-                    <span>Real-time ride tracking</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                      <FaPhoneAlt />
-                    </div>
-                    <span>Emergency contact sharing</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                      <FaUsers />
-                    </div>
-                    <span>Ride sharing options</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                      <FaChartLine />
-                    </div>
-                    <span>Transparent pricing</span>
-                  </div>
-                </div>
-              </div>
-            </div>
             
             <div className="order-1 lg:order-2">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Safe Travels with Nomopoventures
+                Safe Travels with Nomo Cars
               </h2>
               
               <p className="text-xl text-gray-600 mb-8">
@@ -470,7 +439,7 @@ export default function HomePageUi() {
           </h2>
           
           <p className="text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
-            Join thousands of Nigerians who trust Nomopoventures for their transportation needs.
+            Join thousands of Nigerians who trust Nomo Cars for their transportation needs.
             Whether you need a ride or want to earn, we've got you covered.
           </p>
           

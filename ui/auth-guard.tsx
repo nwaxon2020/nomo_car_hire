@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebaseConfig";
 import { useRouter } from "next/navigation";
-import LoadingDots from "../compoents/loading";
+import LoadingDots from "../components/loading";
 
 interface AuthGuardProps {
   children: React.ReactNode;
