@@ -108,6 +108,13 @@ export default function HomePageUi() {
                   <FaCar /> Book a Ride
                 </Link>
               </div>
+
+              {!user && <Link href={"/login"}
+                  className="mt-4 bg-gray-50 text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:mt-4 bg-gray-50 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+              >
+                  LogIn
+                  <FaArrowRight />
+              </Link>}
             </div>
             
             <div className="relative">

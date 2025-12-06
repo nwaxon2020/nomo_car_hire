@@ -48,7 +48,7 @@ export default function DriverRegisterPageUi() {
       const userDoc = await getDoc(doc(db, "users", user.uid));
       if (!userDoc.exists()) return router.push("/login");
 
-      if (userDoc.data().isDriver) return router.push("/dashboard");
+      if (userDoc.data().isDriver) return router.push(`/user/driver-profile/${user?.uid}`);
 
       setLoading(false);
     };
