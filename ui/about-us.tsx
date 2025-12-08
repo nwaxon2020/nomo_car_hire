@@ -128,15 +128,14 @@ export default function AboutPageUi() {
               <strong>Affordable Pricing:</strong> We employ dynamic yet transparent 
               pricing algorithms that consider multiple factors including distance, time, 
               vehicle type, and current demand — all while maintaining complete price 
-              transparency. Our no-surprise policy ensures what you see is what you pay, 
+              transparency. Our no-surprise policy ensures what you agree is what you pay, 
               with detailed breakdowns of all charges before confirmation.
             </li>
             <li>
-              <strong>Fast & Reliable Booking:</strong> Leveraging real-time GPS tracking 
-              and intelligent dispatch systems, we guarantee prompt service with an average 
-              response time of under 8 minutes in metropolitan areas. Our advanced matching 
-              algorithm connects you with the nearest available driver while considering 
-              your specific preferences and requirements.
+              <strong>Fast & Reliable Booking:</strong> Using our real-time matching system, 
+              we ensure fast service with an average response time of under 8 minutes in major cities. 
+              Our advanced search algorithm connects you to available drivers while taking your preferences 
+              and requirements into account.
             </li>
             <li>
               <strong>24/7 Support:</strong> Our dedicated customer success team operates 
@@ -147,23 +146,14 @@ export default function AboutPageUi() {
             </li>
             <li>
               <strong>Wide Range of Cars:</strong> Our diverse fleet includes economy sedans, 
-              spacious SUVs, luxury vehicles, minibuses for groups, and specialized vehicles 
+              spacious SUVs, luxury vehicles, minibuses for groups, Keke Napep, and specialized vehicles 
               for occasions. Each category undergoes specific customization to meet the 
               unique demands of different trip types, ensuring optimal comfort and 
               functionality for every purpose.
             </li>
             <li>
-              <strong>Advanced Safety Features:</strong> We implement multiple safety 
-              protocols including real-time trip tracking, emergency SOS buttons, driver 
-              behavior monitoring, and automated incident reporting. Passengers can share 
-              their trip details with trusted contacts and access safety ratings for all 
-              drivers before booking.
-            </li>
-            <li>
-              <strong>Flexible Payment Options:</strong> We support various payment methods 
-              including cash, bank transfers, debit/credit cards, and mobile wallets. Our 
-              secure payment gateway ensures financial transactions are protected with 
-              bank-level encryption and fraud detection systems.
+              <strong>Flexible Payment Options:</strong> We do not request your account information. 
+              Payments are made directly between customers and drivers for better flexibility and transparency.
             </li>
           </ul>
 

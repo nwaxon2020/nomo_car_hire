@@ -670,132 +670,183 @@ export default function DriverProfilePage() {
         {vehicles.length === 0 ? (
           <p className="text-gray-500 text-center py-6 sm:py-8">No vehicles yet. Click "Add Vehicle" to create one.</p>
         ) : (
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                {vehicles.map((v) => (
-                    <div key={v.id} className="bg-gray-900 shadow rounded-xl p-3 hover:shadow-lg transition-shadow">
+        <div className="w-full overflow-x-auto">
+          <div className="flex flex-col sm:flex-row gap-6 mt-4 pb-4">
+            {vehicles.map((v) => (
+              <div 
+                key={v.id} 
+                className="w-full sm:min-w-[20rem] bg-gray-900 shadow rounded-xl p-3 hover:shadow-lg transition-shadow"
+              >
 
-                      {/* MAIN IMAGE - Now clickable from thumbnails */}
-                      <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2">
-                          <img 
-                          src={selectedMainImage[v.id!] || v.images.front}
-                          className="w-full h-full object-cover"
-                          />
-                      </div>
+                {/* MAIN IMAGE */}
+                <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2">
+                  <img 
+                    src={selectedMainImage[v.id!] || v.images.front}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
 
-                      {/* THUMBNAILS SCROLL - Now clickable */}
-                      <div className="relative">
-                          {/* Scroll Buttons */}
-                          <button
-                          onClick={() => document.getElementById(`scroll-${v.id}`)?.scrollBy({ left: -120, behavior: "smooth" })}
-                          className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
-                          >‹</button>
+                {/* THUMBNAIL SCROLL */}
+                <div className="relative">
+                  {/* Scroll Buttons */}
+                  <button
+                    onClick={() =>
+                      document.getElementById(`scroll-${v.id}`)?.scrollBy({
+                        left: -120,
+                        behavior: "smooth",
+                      })
+                    }
+                    className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
+                  >
+                    ‹
+                  </button>
 
-                          <button
-                          onClick={() => document.getElementById(`scroll-${v.id}`)?.scrollBy({ left: 120, behavior: "smooth" })}
-                          className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
-                          >›</button>
+                  <button
+                    onClick={() =>
+                      document.getElementById(`scroll-${v.id}`)?.scrollBy({
+                        left: 120,
+                        behavior: "smooth",
+                      })
+                    }
+                    className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
+                  >
+                    ›
+                  </button>
 
-                          {/* Thumbnails - Now clickable */}
-                          <div
-                          id={`scroll-${v.id}`}
-                          className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-6"
-                          >
-                          <img 
-                            src={v.images.front} 
-                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.front ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                            onClick={() => handleThumbnailClick(v.id!, v.images.front)}
-                            alt="Front view"
-                          />
-                          <img 
-                            src={v.images.side} 
-                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.side ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                            onClick={() => handleThumbnailClick(v.id!, v.images.side)}
-                            alt="Side view"
-                          />
-                          <img 
-                            src={v.images.back} 
-                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.back ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                            onClick={() => handleThumbnailClick(v.id!, v.images.back)}
-                            alt="Back view"
-                          />
-                          <img 
-                            src={v.images.interior} 
-                            className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.interior ? 'border-blue-500 border-2' : 'border-gray-300'}`}
-                            onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
-                            alt="Interior view"
-                          />
-                          </div>
-                      </div>
+                  {/* Thumbnails */}
+                  <div
+                    id={`scroll-${v.id}`}
+                    className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-6"
+                  >
+                    <img
+                      src={v.images.front}
+                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
+                        selectedMainImage[v.id!] === v.images.front
+                          ? "border-blue-500 border-2"
+                          : "border-gray-300"
+                      }`}
+                      onClick={() => handleThumbnailClick(v.id!, v.images.front)}
+                      alt="Front view"
+                    />
+                    <img
+                      src={v.images.side}
+                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
+                        selectedMainImage[v.id!] === v.images.side
+                          ? "border-blue-500 border-2"
+                          : "border-gray-300"
+                      }`}
+                      onClick={() => handleThumbnailClick(v.id!, v.images.side)}
+                      alt="Side view"
+                    />
+                    <img
+                      src={v.images.back}
+                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
+                        selectedMainImage[v.id!] === v.images.back
+                          ? "border-blue-500 border-2"
+                          : "border-gray-300"
+                      }`}
+                      onClick={() => handleThumbnailClick(v.id!, v.images.back)}
+                      alt="Back view"
+                    />
+                    <img
+                      src={v.images.interior}
+                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
+                        selectedMainImage[v.id!] === v.images.interior
+                          ? "border-blue-500 border-2"
+                          : "border-gray-300"
+                      }`}
+                      onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
+                      alt="Interior view"
+                    />
+                  </div>
+                </div>
 
-                      {/*CAR DETAILS */}
-                      <div className="mt-3 bg-white rounded-lg p-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h2 className="font-semibold text-lg">{capitalizeFullName(v.carName)}</h2>
-                            <p className="text-sm text-gray-500">{(v.carModel).toUpperCase()}</p>
-                          </div>
-                          {/* Car Type Badge */}
-                          <span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-medium capitalize">
-                            {v.carType || "Not specified"}
-                          </span>
-                        </div>
-                        
-                        {/* Vehicle Details Grid */}
-                        <div className="grid grid-cols-2 gap-2 mt-3">
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-500">👤</span>
-                            <span className="text-xs">{v.passengers} passengers</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-500">❄️</span>
-                            <span className="text-xs">{v.ac ? 'AC Available' : 'No AC'}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-500">🎨</span>
-                            <span className="text-xs">{capitalizeFullName(v.exteriorColor)} Exterior</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-500">🛋️</span>
-                            <span className="text-xs">{capitalizeFullName(v.interiorColor)} Interior</span>
-                          </div>
-                        </div>
-
-                        {/* Status Badge */}
-                        <div className="mt-2">
-                          <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                            !v.status || v.status === 'available' 
-                              ? 'bg-blue-100 text-blue-800' 
-                              : v.status === 'unavailable' 
-                              ? 'bg-red-100 text-red-800' 
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {v.status ? v.status.charAt(0).toUpperCase() + v.status.slice(1) : 'Available'}
-                          </span>
-                        </div>
-
-                        {/* Description if available */}
-                        {v.description && (
-                          <p className="bg-green-100 rounded-lg p-2 text-xs text-green-800 mt-2 line-clamp-2">{v.description}</p>
-                        )}
-                      </div>
-
-                      <div className="flex justify-between mt-4 pt-3 border-t border-gray-100">
-                          <button
-                          onClick={() => startEdit(v)}
-                          className="text-blue-500 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
-                          >
-                            <span>✏️</span> Edit
-                          </button>
-                          <button
-                          onClick={() => removeVehicle(v.id)}
-                          className="bg-white p-1 rounded-lg text-red-600 hover:text-red-800 text-sm font-semibold flex items-center gap-1"
-                          >
-                            <span>🗑️</span> Delete
-                          </button>
-                      </div>
+                {/* CAR DETAILS */}
+                <div className="mt-3 bg-white rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="font-semibold text-lg">
+                        {capitalizeFullName(v.carName)}
+                      </h2>
+                      <p className="text-sm text-gray-500">
+                        {v.carModel.toUpperCase()}
+                      </p>
                     </div>
-                ))}
-            </div>
+
+                    <span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-medium capitalize">
+                      {v.carType || "Not specified"}
+                    </span>
+                  </div>
+
+                  {/* DETAILS GRID */}
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">👤</span>
+                      <span className="text-xs">{v.passengers} passengers</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">❄️</span>
+                      <span className="text-xs">{v.ac ? "AC Available" : "No AC"}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">🎨</span>
+                      <span className="text-xs">
+                        {capitalizeFullName(v.exteriorColor)} Exterior
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">🛋️</span>
+                      <span className="text-xs">
+                        {capitalizeFullName(v.interiorColor)} Interior
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* STATUS BADGE */}
+                  <div className="mt-2">
+                    <span
+                      className={`inline-block px-2 py-1 text-xs rounded-full ${
+                        !v.status || v.status === "available"
+                          ? "bg-blue-100 text-blue-800"
+                          : v.status === "unavailable"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {v.status
+                        ? v.status.charAt(0).toUpperCase() + v.status.slice(1)
+                        : "Available"}
+                    </span>
+                  </div>
+
+                  {/* DESCRIPTION */}
+                  {v.description && (
+                    <p className="bg-green-100 rounded-lg p-2 text-xs text-green-800 mt-2 line-clamp-2">
+                      {v.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* ACTION BUTTONS */}
+                <div className="flex justify-between mt-4 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => startEdit(v)}
+                    className="text-blue-500 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
+                  >
+                    ✏️ Edit
+                  </button>
+
+                  <button
+                    onClick={() => removeVehicle(v.id)}
+                    className="bg-white p-1 rounded-lg text-red-600 hover:text-red-800 text-sm font-semibold flex items-center gap-1"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         )}
       </section>

@@ -52,7 +52,7 @@ export default function HomePageUi() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/hire?location=${encodeURIComponent(searchQuery)}`);
+      router.push(`/user/car-hire?location=${encodeURIComponent(searchQuery)}`);
     }
   };
 
@@ -102,7 +102,7 @@ export default function HomePageUi() {
                 </button>
                 
                 <Link
-                  href="/hire"
+                  href="/user/car-hire"
                   className="bg-white/20 backdrop-blur-sm border border-white/30 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/30 transition-all duration-300 flex items-center justify-center gap-3"
                 >
                   <FaCar /> Book a Ride

@@ -90,8 +90,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const menuItems = [ 
     { name: "Home", href: "/", icon: <FaHome /> },
     { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
-    !isDriver && { name: "Register as Driver", href: "/user/register", icon: <FaUserPlus /> },
-    { name: "Hire a Car", href: "/hire", icon: <FaCar /> },
+    !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
+    { name: "Hire a Car", href: "/user/car-hire", icon: <FaCar /> },
     { name: "About", href: "/about", icon: <FaInfoCircle /> },
     { name: "Logout", icon: <FaSignOutAlt /> },
   ].filter(Boolean);

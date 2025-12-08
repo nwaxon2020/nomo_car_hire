@@ -84,7 +84,7 @@ export default function PolicyPageUi() {
                         Last Updated: {lastUpdated}
                     </p>
                     <p className="text-sm text-gray-500 mt-2">
-                        &copy; {new Date().getFullYear()} <span className="font-semibold">NOMO CARS</span>.  
+                        &copy; {new Date().getFullYear()} <span className="font-semibold">NOMO CAR</span>.  
                         Your trust and safety remain our top priority.
                     </p>
                 </div>

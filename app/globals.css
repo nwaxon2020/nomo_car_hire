@@ -35,7 +35,7 @@ html, body, :root {
 
 /* scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;           /* width of the scrollbar */
+  width: 6px;           /* width of the scrollbar */
   height: 12px;          /* height for horizontal scrollbar */
 }
 
@@ -68,3 +68,24 @@ html, body, :root {
 }
 
 
+@media (max-width: 640px) {
+  ::-webkit-scrollbar {
+    width: 2px;           /* width of the scrollbar */
+              /* height for horizontal scrollbar */
+  }
+  ::-webkit-scrollbar-track {
+  background: #e0e0e0;   /* gray line / track */
+  border-radius: 10px;    /* rounded edges (optional) */
+}
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #031222;  /* blue bar */
+    border-radius: 10px;         /* rounded edges */
+    border: 3px solid #383737;  /* optional spacing around thumb */
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #083252;   /* darker blue on hover */
+  }
+
+}

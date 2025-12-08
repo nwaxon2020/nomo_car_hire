@@ -163,7 +163,7 @@ export default function Footer() {
               )}
               
               <FooterLink href="/policy" label="Policy" icon={<FaInfoCircle />} />
-              <FooterLink href="/hire" label="Hire a Car" icon={<FaCar />} />
+              <FooterLink href="/user/car-hire" label="Hire a Car" icon={<FaCar />} />
               <FooterLink 
                 href="mailto:nomopoventures@yahoo.com" 
                 label="Contact Us" 
