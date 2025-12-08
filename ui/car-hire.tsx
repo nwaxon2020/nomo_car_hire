@@ -36,14 +36,13 @@ import {
   FaSearch, 
   FaWhatsapp, 
   FaEnvelope, 
-  FaHistory, 
   FaClock, 
   FaUserCheck, 
-  FaSave, 
   FaExclamationTriangle,
-  FaEdit,
   FaUser
 } from 'react-icons/fa'
+
+import { useSearchParams } from 'next/navigation'
 
 // Interfaces matching your Firebase data structure
 interface VehicleLog {
@@ -130,6 +129,10 @@ interface HiredCar {
 }
 
 export default function CarHireUi() {
+
+    // activate for parameters
+    const searchParams = useSearchParams()
+
     // State for contacted drivers and hired cars from Firebase
     const [contactedDrivers, setContactedDrivers] = useState<ContactedDriver[]>([])
     const [hiredCars, setHiredCars] = useState<HiredCar[]>([])
@@ -274,6 +277,57 @@ export default function CarHireUi() {
     useEffect(() => {
         fetchDriversAndVehicles()
     }, [currentUserId]) // Re-fetch when currentUserId changes
+
+    // new useEffect to handle query parameters
+    useEffect(() => {
+        // Only check query params after drivers are loaded
+        if (driversWithVehicles.length > 0) {
+            const driverId = searchParams.get('driver')
+            const vehicleId = searchParams.get('vehicle')
+            
+            if (driverId) {
+                // Find the driver in the loaded drivers
+                const driver = driversWithVehicles.find(d => d.uid === driverId || d.id === driverId)
+                
+                if (driver) {
+                    let vehicle: VehicleLog | null = null
+                    
+                    // Find the specific vehicle if vehicleId is provided
+                    if (vehicleId) {
+                        vehicle = driver.vehicles.find(v => v.id === vehicleId) || null
+                    }
+                    
+                    // If no specific vehicle found, use the first available vehicle
+                    if (!vehicle && driver.vehicles.length > 0) {
+                        vehicle = driver.vehicles[0]
+                    }
+                    
+                    if (vehicle) {
+                        // Open the driver modal
+                        setSelectedDriver(driver)
+                        setSelectedVehicle(vehicle)
+                        setDriverInfo(true)
+                        
+                        // Set the main image
+                        const firstImage = vehicle.images?.front || 
+                                        vehicle.images?.side || 
+                                        vehicle.images?.back || 
+                                        vehicle.images?.interior || 
+                                        getDefaultVehicleImage(vehicle.carType)
+                        setMainImage(firstImage)
+                        
+                        // Scroll to the modal after a short delay
+                        setTimeout(() => {
+                            const element = document.getElementById('contact-driver')
+                            if (element) {
+                                element.scrollIntoView({ behavior: 'smooth' })
+                            }
+                        }, 300)
+                    }
+                }
+            }
+        }
+    }, [driversWithVehicles, searchParams])
 
     const fetchDriversAndVehicles = async () => {
         try {
@@ -1342,7 +1396,7 @@ export default function CarHireUi() {
 
         {/* Driver's Information Display - Modal */}
         {driverInfo && selectedDriver && selectedVehicle && (
-            <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-2 sm:p-8 z-50 overflow-y-auto">
+            <div id="contact-driver" className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-2 sm:p-8 z-50 overflow-y-auto">
                 <div className="bg-gray-900 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
                     
                     {/* Header */}
