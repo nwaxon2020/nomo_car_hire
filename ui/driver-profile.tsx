@@ -682,7 +682,6 @@ export default function DriverProfilePage() {
                     : 'bg-gray-100 text-gray-600'}`}>
                     {isVerified ? 'Verified Driver' : 'Unverified'}
                   </span>
-                  <span className="text-gray-500">🚗 {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             </div>
