@@ -425,7 +425,7 @@ export default function UserProfilePageUi() {
                     </div>
 
                     {userData.contactedDrivers && userData.contactedDrivers.length > 0 ? (
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                        <div className="grid lg:grid-cols-2 gap-3 space-y-3 max-h-[300px] overflow-y-auto pr-2">
                             {userData.contactedDrivers.map((driver: any, index: number) => (
                                 <div
                                     key={index}

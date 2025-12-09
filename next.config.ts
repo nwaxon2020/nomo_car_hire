@@ -1,22 +1,30 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
-    domains: [
-      "firebasestorage.googleapis.com",
-      "firebasestorage.app"
-    ],
     remotePatterns: [
       {
-        protocol: "https",
-        hostname: "firebasestorage.googleapis.com",
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '**',
       },
       {
-        protocol: "https",
-        hostname: "*.firebasestorage.app",
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+        pathname: '**',
       },
+      {
+        protocol: 'https',
+        hostname: '**.googleusercontent.com',
+        pathname: '**',
+      },
+      
+      // Add any other domains you use
     ],
-  },
-};
 
-export default nextConfig;
+    // If you also have local images
+    domains: ['localhost'], // for development
+  },
+  // ... other config
+}
+
+module.exports = nextConfig
