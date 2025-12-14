@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import LoadingDots from "@/components/loading";
+import { useUnreadChats } from "@/lib/hooks/useUnreadChats"; // You'll need to create this hook
 
 import {
   FaHome,
@@ -13,6 +14,7 @@ import {
   FaSignOutAlt,
   FaBars,
   FaTimes,
+  FaRegCommentDots, 
 } from "react-icons/fa";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -30,6 +32,9 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const hideSidebar = pathname.startsWith("/driver");
+
+  // Use the unread chats hook
+  const unreadCount = useUnreadChats();
 
   // Extract first name only
   const getFirstName = (name: string | null | undefined) => {
@@ -90,8 +95,9 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const menuItems = [ 
     { name: "Home", href: "/", icon: <FaHome /> },
     { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
-    !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
+    { name: "Chat", href: "/user/chat", icon: <FaRegCommentDots />, unreadCount },
     { name: "Hire a Car", href: "/user/car-hire", icon: <FaCar /> },
+    !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
     { name: "About", href: "/about", icon: <FaInfoCircle /> },
     { name: "Logout", icon: <FaSignOutAlt /> },
   ].filter(Boolean);
@@ -164,11 +170,18 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                     setSidebarOpen(false);
                   }
                 }}
-                className={`flex items-center w-full px-6 py-3 hover:bg-green-800 transition-colors
+                className={`flex items-center w-full px-6 py-3 hover:bg-green-800 transition-colors relative
                   ${pathname === item.href ? "bg-gray-800 font-bold" : "font-semibold"}`}
               >
                 <span className="mr-3 text-lg">{item.icon}</span>
                 {item.name}
+                
+                {/* Show unread count badge for Chat item */}
+                {item.name === "Chat" && item.unreadCount > 0 && (
+                  <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                    {item.unreadCount > 9 ? "9+" : item.unreadCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>

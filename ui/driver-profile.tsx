@@ -128,7 +128,7 @@ export default function DriverProfilePage() {
           if (userSnap.exists()) {
             const data = userSnap.data();
             const profileImage = data.profileImage || data.photoURL || "";
-            const fullName = data.fullName || data.displayName || "Professional Driver";
+            const fullName = (data.firstName, data.lastName) || "Professional Driver";
             const verified = data.verified || false;
             const customersCarried = data.customersCarried || [];
 
@@ -599,7 +599,7 @@ export default function DriverProfilePage() {
                     />
                   ) : (
                     <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white text-xl lg:text-2xl font-bold">
-                      {driverData?.fullName?.charAt(0).toUpperCase() || "D"}
+                      {driverData?.firstName?.charAt(0).toUpperCase() || "No First-Name"} {driverData?.lastName?.charAt(0).toUpperCase() || "No Last-Name"}
                     </div>
                   )}
                 </div>
@@ -613,7 +613,8 @@ export default function DriverProfilePage() {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
-                    {driverData?.fullName ? capitalizeFullName(driverData.fullName) : "Professional Driver"}
+                    {driverData?.fullName ? capitalizeFullName(driverData.firstName) : "Professional Driver"}{" "}
+                    {driverData?.lastName ? capitalizeFullName(driverData.lastName) : "Professional Driver"}
                   </h1>
                   {isVIP && (
                     <span className="inline-flex items-center gap-1 bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-200 px-2 py-1 rounded-full text-xs font-semibold">
@@ -1100,7 +1101,7 @@ export default function DriverProfilePage() {
       </div>
 
       {/* Comments Section */}
-      <section className="bg-black border border-gray-800 shadow-lg rounded-xl p-4 lg:p-6 mb-6">
+      <section className="bg-black border border-gray-800 shadow-lg rounded-xl p-1 py-2 lg:p-6 mb-6">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-2">
           <h2 className="text-lg lg:text-xl text-gray-200 font-semibold">Customer Comments</h2>
           {comments.length > 0 && (
@@ -1115,15 +1116,15 @@ export default function DriverProfilePage() {
         ) : (
           <div className="max-h-[22rem] lg:max-h-[28rem] px-1 sm:px-2 overflow-y-auto gap-2 lg:gap-3">
             {comments.slice(0, 3).map((c, index) => (
-              <div key={c.id || index} className="bg-gray-900 rounded-lg p-3 hover:border-blue-200 transition-colors">
+              <div key={c.id || index} className="my-4 bg-gray-900 rounded-lg p-3 hover:border-blue-200 transition-colors">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 gap-1">
-                  <p className="font-semibold text-gray-200 text-sm lg:text-base">
+                  <p className="font-semibold text-[goldenrod] text-sm lg:text-base">
                     {c.passengerName || 'Anonymous'}
                   </p>
                 </div>
                 <p className="text-xs lg:text-sm text-gray-200 line-clamp-2">{c.text}</p>
                 {c.createdAt && (
-                  <p className="text-xs text-gray-200 mt-2">
+                  <p className="text-xs text-gray-400 mt-2">
                     {c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString() : formatDate(c.createdAt)}
                   </p>
                 )}

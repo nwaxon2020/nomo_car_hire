@@ -8,7 +8,7 @@ import { signOut } from "firebase/auth";
 import { getDoc, doc } from "firebase/firestore";
 import { 
   FaTachometerAlt, FaHome, FaInfoCircle, FaUserPlus, 
-  FaSignInAlt, FaSignOutAlt, FaCar, FaMobileAlt
+  FaSignInAlt, FaSignOutAlt, FaCar, FaMobileAlt, FaRegCommentDots,
 } from "react-icons/fa";
 
 export default function Footer() {
@@ -161,6 +161,7 @@ export default function Footer() {
                   disabled={loading}
                 />
               )}
+              {user && (<FooterLink href="/user/chat" label="Chat" icon={<FaRegCommentDots />} />)}
               
               <FooterLink href="/policy" label="Policy" icon={<FaInfoCircle />} />
               <FooterLink href="/user/car-hire" label="Hire a Car" icon={<FaCar />} />

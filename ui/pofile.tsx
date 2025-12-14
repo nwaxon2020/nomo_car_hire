@@ -425,7 +425,7 @@ export default function UserProfilePageUi() {
                     </div>
 
                     {userData.contactedDrivers && userData.contactedDrivers.length > 0 ? (
-                        <div className="grid lg:grid-cols-2 gap-3 space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                        <div className="grid lg:grid-cols-2 gap-3 space-y-3 max-h-[400px] overflow-y-auto pr-2">
                             {userData.contactedDrivers.map((driver: any, index: number) => (
                                 <div
                                     key={index}
@@ -436,7 +436,7 @@ export default function UserProfilePageUi() {
                                             {driver.profileImage ? (
                                                 <img
                                                     src={driver.profileImage}
-                                                    alt={driver.driverName || "Driver"}
+                                                    alt={driver.firstName || "Driver"}
                                                     className="w-16 h-16 object-cover rounded-full border-2 border-white shadow-sm"
                                                 />
                                             ) : (

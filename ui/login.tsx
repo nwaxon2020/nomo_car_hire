@@ -18,6 +18,7 @@ import {
   increment,
   collection,
   getDocs,
+  serverTimestamp // ← ADDED THIS IMPORT
 } from "firebase/firestore";
 import axios from "axios";
 import Link from "next/link";
@@ -96,7 +97,7 @@ export default function LoginUi() {
   // Get referral short ID
   const getReferralShortId = (uid: string) => uid.slice(-8);
 
-  // Create clean user data
+  // ✅ UPDATED: Create clean user data WITH NOTIFICATION FIELDS
   const createUserData = (
     baseData: any,
     authType: string,
@@ -107,7 +108,7 @@ export default function LoginUi() {
     return {
       ...baseData,
       authType,
-      createdAt: new Date(),
+      createdAt: serverTimestamp(), // ← CHANGED to serverTimestamp
 
       // App Required Data
       isDriver: false,
@@ -124,10 +125,33 @@ export default function LoginUi() {
       freeRides: 0,
       lastFreeRideEarned: null,
       totalPointsEarned: 0,
+
+      // ✅ NEW: NOTIFICATION FIELDS (same as signup)
+      notificationEnabled: true,
+      notifications: [],
+      hasUnreadNotifications: false,
+      lastNotification: null,
+      fcmToken: "",
+      
+      // ✅ NEW: PROFILE FIELDS
+      city: "",
+      phone: "",
+      rating: 0,
+      totalTrips: 0,
+      earnings: 0,
+      isEmailVerified: authType === "google" ? true : false,
+      lastActive: serverTimestamp(),
+      
+      // Preferences
+      preferences: {
+        theme: "light",
+        language: "en",
+        currency: "NGN"
+      }
     };
   };
 
-  // Award points to referrer
+  // ✅ UPDATED: Award points to referrer with notification
   const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
     try {
       await updateDoc(doc(db, "users", referrerFullId), {
@@ -147,13 +171,61 @@ export default function LoginUi() {
         (refData?.referralPoints || 0) + POINTS_PER_REFERRAL;
 
       if (updatedPoints % POINTS_REQUIRED_PER_FREE_RIDE === 0) {
+        const freeRides = Math.floor(updatedPoints / POINTS_REQUIRED_PER_FREE_RIDE);
+        
         await updateDoc(doc(db, "users", referrerFullId), {
-          freeRides: Math.floor(updatedPoints / POINTS_REQUIRED_PER_FREE_RIDE),
+          freeRides: freeRides,
           lastFreeRideEarned: new Date(),
+        });
+
+        // ✅ ADDED: Send notification about free ride
+        await updateDoc(doc(db, "users", referrerFullId), {
+          notifications: arrayUnion({
+            id: Date.now().toString(),
+            type: "free_ride_earned",
+            title: "🎉 Free Ride Earned!",
+            message: `You earned a free ride from referral! You now have ${freeRides} free ride(s).`,
+            timestamp: new Date().toISOString(),
+            read: false,
+            actionUrl: "/user/bookings"
+          }),
+          hasUnreadNotifications: true
         });
       }
     } catch (err) {
       console.error("Error awarding referral:", err);
+    }
+  };
+
+  // ✅ NEW: Helper function to ensure user has notification fields
+  const ensureNotificationFields = async (userId: string, userData: any) => {
+    // Check if user has notification fields (for existing users before this update)
+    if (!userData.hasOwnProperty('notificationEnabled')) {
+      console.log(`🔄 Adding notification fields to existing user: ${userId}`);
+      
+      await updateDoc(doc(db, "users", userId), {
+        notificationEnabled: true,
+        notifications: userData.notifications || [],
+        hasUnreadNotifications: false,
+        lastNotification: null,
+        fcmToken: "",
+        lastActive: serverTimestamp(),
+        // Add other missing fields with default values
+        ...(userData.city === undefined && { city: "" }),
+        ...(userData.phone === undefined && { phone: "" }),
+        ...(userData.rating === undefined && { rating: 0 }),
+        ...(userData.totalTrips === undefined && { totalTrips: 0 }),
+        ...(userData.earnings === undefined && { earnings: 0 }),
+        ...(userData.preferences === undefined && { 
+          preferences: {
+            theme: "light",
+            language: "en",
+            currency: "NGN"
+          }
+        })
+      });
+      
+      console.log(`✅ Notification fields added to user: ${userId}`);
     }
   };
 
@@ -171,7 +243,7 @@ export default function LoginUi() {
     }
   };
 
-  // HANDLE EMAIL LOGIN (combined from both codes)
+  // ✅ UPDATED: HANDLE EMAIL LOGIN with notification check
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoadingLogin(true);
@@ -189,6 +261,29 @@ export default function LoginUi() {
         setShowVerificationBanner(true);
         setLoadingLogin(false);
       } else {
+        // ✅ Check and update notification fields for existing user
+        const userRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          await ensureNotificationFields(user.uid, userDoc.data());
+          
+          // ✅ Send login notification
+          await updateDoc(userRef, {
+            lastActive: serverTimestamp(),
+            notifications: arrayUnion({
+              id: Date.now().toString(),
+              type: "login",
+              title: "👋 Welcome Back!",
+              message: `You logged in at ${new Date().toLocaleTimeString()}`,
+              timestamp: new Date().toISOString(),
+              read: false,
+              actionUrl: "/"
+            }),
+            hasUnreadNotifications: true
+          });
+        }
+        
         await exchangeTokenAndRedirect(userCredential);
       }
     } catch (err: any) {
@@ -197,7 +292,7 @@ export default function LoginUi() {
     }
   };
 
-  // HANDLE GOOGLE LOGIN (combined from both codes)
+  // ✅ UPDATED: HANDLE GOOGLE LOGIN with complete notification setup
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError("");
@@ -211,7 +306,7 @@ export default function LoginUi() {
       const userRef = doc(db, "users", user.uid);
       const snap = await getDoc(userRef);
 
-      // If user doesn't exist, create new user with referral system
+      // If user doesn't exist, create new user with ALL fields
       if (!snap.exists()) {
         const baseData = {
           uid: user.uid,
@@ -220,6 +315,7 @@ export default function LoginUi() {
           profileImage: user.photoURL || "/profile.png",
           isDriver: false,
           vip: false,
+          isEmailVerified: true, // Google users are verified
         };
 
         const completeUserData = createUserData(
@@ -233,6 +329,55 @@ export default function LoginUi() {
         if (referrerId) {
           await awardReferralPoints(referrerId, user.uid);
         }
+
+        // ✅ Send welcome notification to new Google user
+        await updateDoc(userRef, {
+          notifications: arrayUnion({
+            id: Date.now().toString(),
+            type: "welcome",
+            title: "👋 Welcome to Nomo Cars!",
+            message: "Thanks for joining with Google! Complete your profile.",
+            timestamp: new Date().toISOString(),
+            read: false,
+            actionUrl: "/user/profile"
+          }),
+          hasUnreadNotifications: true
+        });
+
+        console.log(`✅ New Google user created with notification fields: ${user.email}`);
+
+      } else {
+        // User already exists
+        const userData = snap.data();
+        
+        // ✅ Ensure existing user has notification fields
+        await ensureNotificationFields(user.uid, userData);
+        
+        // ✅ Update last login and profile image
+        await updateDoc(userRef, {
+          lastActive: serverTimestamp(),
+          profileImage: user.photoURL || userData.profileImage,
+          // Update name if it was empty
+          ...(user.displayName && !userData.fullName && { 
+            fullName: user.displayName 
+          })
+        });
+
+        // ✅ Send login notification to existing user
+        await updateDoc(userRef, {
+          notifications: arrayUnion({
+            id: Date.now().toString(),
+            type: "login",
+            title: "👋 Welcome Back!",
+            message: `You logged in with Google at ${new Date().toLocaleTimeString()}`,
+            timestamp: new Date().toISOString(),
+            read: false,
+            actionUrl: "/"
+          }),
+          hasUnreadNotifications: true
+        });
+
+        console.log(`✅ Existing Google user updated: ${user.email}`);
       }
 
       // Exchange token and redirect
@@ -248,6 +393,25 @@ export default function LoginUi() {
     <div className="min-h-screen flex items-center justify-center bg-white p-4">
       <div className="bg-gray-50 shadow-xl rounded-2xl p-8 max-w-md w-full border border-gray-200">
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Welcome Back</h1>
+
+        {/* Referral Banner */}
+        {referralShortId && referrerData && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="bg-green-100 p-2 rounded-lg">
+                <span className="text-green-600 font-bold text-lg">🎁</span>
+              </div>
+              <div>
+                <p className="font-semibold text-green-800">
+                  Logging in through {referrerData.fullName?.toUpperCase() || 'Someone'}'s referral!
+                </p>
+                <p className="text-sm text-green-700">
+                  Complete your profile to get the full experience!
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Regular error messages */}
         {error && (
@@ -353,6 +517,14 @@ export default function LoginUi() {
             Sign Up
           </Link>
         </p>
+
+        {/* NEW: Notification Info */}
+        <div className="mt-6 p-3 bg-gray-100 border border-gray-300 rounded-lg">
+          <p className="text-xs text-gray-600 text-center">
+            📢 By logging in, you'll receive important notifications about bookings, 
+            offers, and safety updates.
+          </p>
+        </div>
       </div>
     </div>
   );

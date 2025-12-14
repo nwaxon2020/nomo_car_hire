@@ -16,7 +16,8 @@ import {
   arrayUnion, 
   increment,
   collection,
-  getDocs
+  getDocs,
+  serverTimestamp // ← ADDED THIS IMPORT
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
@@ -124,14 +125,18 @@ export default function SignUpUi() {
             lastFreeRideEarned: new Date(),
           });
           
-          // Optional: Add notification
+          // ADDED: Notification for free ride earned
           await updateDoc(doc(db, "users", referrerFullId), {
             notifications: arrayUnion({
+              id: Date.now().toString(),
               type: "free_ride_earned",
-              message: `🎉 You earned a free ride! You now have ${freeRides} free ride(s).`,
-              timestamp: new Date(),
-              read: false
-            })
+              title: "🎉 Free Ride Earned!",
+              message: `You earned a free ride! You now have ${freeRides} free ride(s).`,
+              timestamp: new Date().toISOString(),
+              read: false,
+              actionUrl: "/user/bookings"
+            }),
+            hasUnreadNotifications: true
           });
           
           console.log(`🏆 ${referrerData.fullName} earned a free ride at ${currentPoints} points! Total free rides: ${freeRides}`);
@@ -153,14 +158,14 @@ export default function SignUpUi() {
     return userId.slice(-8); // Last 8 characters are usually unique
   };
 
-  // ✅ Common user data structure
+  // ✅ Common user data structure - UPDATED WITH NOTIFICATION FIELDS
   const createUserData = (baseData: any, authType: string, referrerFullId: string | null) => {
     const userShortId = getReferralShortId(baseData.uid || '');
     
     return {
       ...baseData,
       authType,
-      createdAt: new Date(),
+      createdAt: serverTimestamp(), // ← CHANGED: Using serverTimestamp
       hiredCars: [],
       contactedDrivers: [],
       
@@ -173,6 +178,29 @@ export default function SignUpUi() {
       freeRides: 0,
       lastFreeRideEarned: null,
       totalPointsEarned: 0,
+
+      // NEW: NOTIFICATION FIELDS ← ADDED THESE
+      notificationEnabled: true, // Default to enabled
+      notifications: [], // Empty array for notifications
+      hasUnreadNotifications: false,
+      lastNotification: null,
+      fcmToken: "", // Will be set when they enable push notifications
+      
+      // NEW: PROFILE FIELDS ← ADDED THESE
+      city: "", // Empty by default
+      phone: "", // Will be added later
+      rating: 0, // For drivers
+      totalTrips: 0, // For drivers
+      earnings: 0, // For drivers
+      isEmailVerified: false, // Will be true after verification
+      lastActive: serverTimestamp(),
+      
+      // For future use
+      preferences: {
+        theme: "light",
+        language: "en",
+        currency: "NGN"
+      }
     };
   };
 
@@ -215,6 +243,7 @@ export default function SignUpUi() {
         profileImage: photoURL,
         isDriver: false,
         vip: false,
+        isEmailVerified: false, // Will be true after they verify
       };
 
       const completeUserData = createUserData(baseData, "email", referrerId);
@@ -227,6 +256,20 @@ export default function SignUpUi() {
       if (referrerId) {
         await awardReferralPoints(referrerId, userCred.user.uid);
       }
+
+      // 6. Send welcome notification to new user
+      await updateDoc(doc(db, "users", userCred.user.uid), {
+        notifications: arrayUnion({
+          id: Date.now().toString(),
+          type: "welcome",
+          title: "👋 Welcome to Nomo Cars!",
+          message: "Thanks for joining! Complete your profile to get started.",
+          timestamp: new Date().toISOString(),
+          read: false,
+          actionUrl: "/user/profile"
+        }),
+        hasUnreadNotifications: true
+      });
 
       setMessage("✅ Account created! Check your email for verification.");
       setLoading(false);
@@ -259,6 +302,7 @@ export default function SignUpUi() {
           profileImage: user.photoURL || "/profile.png",
           isDriver: false,
           vip: false,
+          isEmailVerified: true, // Google users are verified
         };
 
         const completeUserData = createUserData(baseData, "google", referrerId);
@@ -271,7 +315,27 @@ export default function SignUpUi() {
           await awardReferralPoints(referrerId, user.uid);
         }
 
-      } 
+        // 4. Send welcome notification
+        await updateDoc(doc(db, "users", user.uid), {
+          notifications: arrayUnion({
+            id: Date.now().toString(),
+            type: "welcome",
+            title: "👋 Welcome to Nomo Cars!",
+            message: "Thanks for joining with Google! Complete your profile.",
+            timestamp: new Date().toISOString(),
+            read: false,
+            actionUrl: "/user/profile"
+          }),
+          hasUnreadNotifications: true
+        });
+
+      } else {
+        // User already exists, just update last login
+        await updateDoc(userRef, {
+          lastActive: serverTimestamp(),
+          profileImage: user.photoURL || snap.data().profileImage
+        });
+      }
 
       setGoogleLoading(false);
       router.push("/");
@@ -307,7 +371,6 @@ export default function SignUpUi() {
                   Plus they earn {POINTS_PER_REFERRAL} points for your signup. 
                   <br />
                   {POINTS_REQUIRED_PER_FREE_RIDE} points = 1 free ride!
-                  {/* CHANGED: 20 points = 1 free ride! */}
                 </p>
               </div>
             </div>
@@ -448,7 +511,7 @@ export default function SignUpUi() {
           </Link>
         </p>
 
-        {/* Referral System Explanation - UPDATED FOR 20 POINTS */}
+        {/* Referral System Explanation */}
         <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800 text-center">
             <span className="font-bold">🎯 Referral System:</span><br />
@@ -458,6 +521,14 @@ export default function SignUpUi() {
               • {POINTS_REQUIRED_PER_FREE_RIDE} points = FREE ₦5,000 ride!<br />
               • Get started by signing up
             </span>
+          </p>
+        </div>
+
+        {/* NEW: Notification Explanation (subtle) */}
+        <div className="mt-4 p-2 bg-gray-100 border border-gray-300 rounded-lg">
+          <p className="text-xs text-gray-600 text-center">
+            📢 By signing up, you agree to receive notifications about bookings, 
+            offers, and safety updates. You can manage preferences in settings.
           </p>
         </div>
       </div>

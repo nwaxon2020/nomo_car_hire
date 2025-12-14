@@ -3,29 +3,35 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  getCountFromServer,
+  doc, 
+  getDoc 
+} from "firebase/firestore";
 import { 
   FaCar, FaMapMarkerAlt, FaStar, FaShieldAlt, 
-  FaClock, FaWallet, FaUserCheck, FaArrowRight,
-  FaGooglePlay, FaApple, FaCheckCircle, FaPhoneAlt,
-  FaUsers, FaChartLine, FaCrown, FaKey
+  FaClock, FaWallet, FaUserCheck, FaArrowRight, FaCheckCircle,
+  FaUsers, FaCrown, FaKey
 } from "react-icons/fa";
 
 export default function HomePageUi() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isDriver, setIsDriver] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [stats, setStats] = useState({
-    drivers: 1250,
-    rides: 45000,
-    cities: 25,
-    rating: 4.8
+    drivers: 0,
+    rides: 0,
+    cities: 0,
+    rating: 0
   });
 
+  // Fetch user data and stats
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser);
@@ -43,25 +49,136 @@ export default function HomePageUi() {
           console.error("Error fetching user data:", error);
         }
       }
-      setLoading(false);
+      
+      // Fetch statistics
+      await fetchStatistics();
+      
     });
 
     return () => unsubscribe();
   }, []);
 
+  // Function to fetch statistics from Firebase
+  const fetchStatistics = async () => {
+    try {
+      // 1. Count Drivers (users with isDriver = true)
+      const usersRef = collection(db, "users");
+      const driversQuery = query(usersRef, where("isDriver", "==", true));
+      const driversSnapshot = await getCountFromServer(driversQuery);
+      const driversCount = driversSnapshot.data().count;
+
+      // 2. Count Rides (count all vehicles in vehicleLog collection)
+      const ridesRef = collection(db, "vehicleLog");
+      const ridesSnapshot = await getCountFromServer(ridesRef);
+      const ridesCount = ridesSnapshot.data().count;
+
+      // 3. Count Unique Cities from drivers
+      const driversDocs = await getDocs(driversQuery);
+      const citiesSet = new Set<string>();
+      
+      driversDocs.forEach((doc) => {
+        const data = doc.data();
+        if (data.city) {
+          citiesSet.add(data.city);
+        }
+      });
+      const citiesCount = citiesSet.size;
+
+      // 4. Calculate Average Rating (from ratings collection in users)
+      let totalRating = 0;
+      let ratingCount = 0;
+      
+      const allUsers = await getDocs(usersRef);
+      allUsers.forEach((userDoc) => {
+        const data = userDoc.data();
+        if (data.ratings && Array.isArray(data.ratings) && data.ratings.length > 0) {
+          const userRatings = data.ratings;
+          userRatings.forEach((rating: any) => {
+            if (rating.score) {
+              totalRating += rating.score;
+              ratingCount++;
+            }
+          });
+        }
+      });
+
+      const averageRating = ratingCount > 0 ? totalRating / ratingCount : 4.8;
+      const roundedRating = Math.round(averageRating * 10) / 10;
+
+      setStats({
+        drivers: driversCount,
+        rides: ridesCount,
+        cities: citiesCount,
+        rating: roundedRating
+      });
+
+    } catch (error) {
+      console.error("Error fetching statistics:", error);
+      // Fallback to default values
+      setStats({
+        drivers: 1250,
+        rides: 45000,
+        cities: 25,
+        rating: 4.8
+      });
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/user/car-hire?location=${encodeURIComponent(searchQuery)}`);
+    } else {
+      // If no search query, just go to car hire page
+      router.push(`/user/car-hire`);
     }
   };
 
   const handleGetStarted = () => {
     if (user) {
-      router.push(isDriver ? `/user/driver-profile/${user.uid}` : `/user/profile/${user.uid}`);
+      if (isDriver) {
+        router.push(`/user/driver-profile/${user.uid}`);
+      } else {
+        router.push(`/user/profile/${user.uid}`);
+      }
     } else {
       router.push("/signup");
     }
+  };
+
+  const handleBookRide = () => {
+    router.push("/user/car-hire");
+  };
+
+  const handleStartDriving = () => {
+    if (user) {
+      if (isDriver) {
+        router.push(`/user/driver-profile/${user.uid}`);
+      } else {
+        router.push(`/user/profile/${user.uid}`);
+      }
+    } else {
+      router.push("/signup");
+    }
+  };
+
+  const handleRegisterDriver = () => {
+    if (user) {
+      if (isDriver) {
+        // Already a driver, show message or redirect to driver profile
+        router.push(`/user/driver-profile/${user.uid}`);
+      } else {
+        // Not a driver, go to driver registration
+        router.push("/user/driver-register");
+      }
+    } else {
+      // User not logged in, go to signup
+      router.push("/signup?type=driver");
+    }
+  };
+
+  const handleBookFirstRide = () => {
+    router.push("/user/car-hire");
   };
 
   return (
@@ -101,20 +218,22 @@ export default function HomePageUi() {
                   <FaArrowRight />
                 </button>
                 
-                <Link
-                  href="/user/car-hire"
+                <button
+                  onClick={handleBookRide}
                   className="bg-white/20 backdrop-blur-sm border border-white/30 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/30 transition-all duration-300 flex items-center justify-center gap-3"
                 >
                   <FaCar /> Book a Ride
-                </Link>
+                </button>
               </div>
 
-              {!user && <Link href={"/login"}
-                  className="mt-4 bg-gray-50 text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:mt-4 bg-gray-50 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
-              >
+              {!user && (
+                <Link href={"/login"}
+                  className="mt-4 bg-gray-50 text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-200 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+                >
                   LogIn
                   <FaArrowRight />
-              </Link>}
+                </Link>
+              )}
             </div>
             
             <div className="relative">
@@ -139,7 +258,7 @@ export default function HomePageUi() {
                       type="submit"
                       className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-3"
                     >
-                      <FaCar /> Search Available Rides
+                      <FaCar /> Search Available Cars
                     </button>
                   </form>
                   
@@ -201,10 +320,13 @@ export default function HomePageUi() {
                 Passengers: Book rides instantly. Drivers: Get ride requests and start earning.
               </p>
               <div className="flex gap-4">
-                <Link href="/hire" className="text-yellow-600 font-semibold flex items-center gap-2">
+                <button
+                  onClick={handleBookRide}
+                  className="text-yellow-600 font-semibold flex items-center gap-2 hover:text-yellow-700"
+                >
                   Book Ride <FaArrowRight />
-                </Link>
-                <Link href="/driver-register" className="text-gray-600 font-semibold flex items-center gap-2">
+                </button>
+                <Link href="/user/driver-register" className="text-gray-600 font-semibold flex items-center gap-2">
                   Become Driver <FaArrowRight />
                 </Link>
               </div>
@@ -274,7 +396,7 @@ export default function HomePageUi() {
               </div>
               <h4 className="font-bold text-gray-900 mb-2">Top Ratings</h4>
               <p className="text-gray-600 text-sm">
-                Rated {stats.rating}/5 by thousands of satisfied customers
+                Rated {stats.rating.toFixed(1)}/5 by thousands of satisfied customers
               </p>
             </div>
             
@@ -282,9 +404,9 @@ export default function HomePageUi() {
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
                 <FaWallet className="text-purple-600 text-xl" />
               </div>
-              <h4 className="font-bold text-gray-900 mb-2">Secure Payments</h4>
+              <h4 className="font-bold text-gray-900 mb-2">Flexible Payments</h4>
               <p className="text-gray-600 text-sm">
-                Cash and digital payment options with complete security
+                Cash and other payments are negotiated between passengers and drivers
               </p>
             </div>
           </div>
@@ -332,12 +454,12 @@ export default function HomePageUi() {
               </div>
               
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link
-                  href="/driver-register"
+                <button
+                  onClick={handleStartDriving}
                   className="bg-yellow-400 text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all duration-300 flex items-center justify-center gap-3"
                 >
                   Start Driving
-                </Link>
+                </button>
                 
                 {user && isDriver && (
                   <Link
@@ -372,12 +494,18 @@ export default function HomePageUi() {
               
               <div className="text-center">
                 <p className="text-lg mb-4">Want to be a driver?</p>
-                <Link
-                  href="/user/register"
-                  className="inline-flex items-center gap-2 text-yellow-300 font-bold text-lg hover:text-yellow-200"
+                <button
+                  onClick={handleRegisterDriver}
+                  disabled={isDriver}
+                  className={`inline-flex items-center gap-2 font-bold text-lg ${
+                    isDriver 
+                      ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                      : 'text-yellow-300 hover:text-yellow-200'
+                  }`}
                 >
-                  Register A Driver Account <FaArrowRight />
-                </Link>
+                  Register A Driver Account {isDriver && '(Already a Driver)'}
+                  {!isDriver && <FaArrowRight />}
+                </button>
               </div>
             </div>
           </div>
@@ -414,24 +542,24 @@ export default function HomePageUi() {
                 
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <FaClock className="text-blue-600 text-xl" />
+                    <FaWallet className="text-blue-600 text-xl" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-900 text-lg mb-2">On-Time Guarantee</h4>
+                    <h4 className="font-bold text-gray-900 text-lg mb-2">Flexible Payments</h4>
                     <p className="text-gray-600">
-                      Professional drivers who value your time and schedule
+                      Cash and other payments are negotiated between passengers and drivers - pay what you feel is fair
                     </p>
                   </div>
                 </div>
               </div>
               
               <div className="mt-8">
-                <Link
-                  href="/hire"
+                <button
+                  onClick={handleBookFirstRide}
                   className="inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300"
                 >
                   <FaCar /> Book Your First Ride
-                </Link>
+                </button>
               </div>
             </div>
           </div>
@@ -475,7 +603,7 @@ export default function HomePageUi() {
               </div>
               <div className="flex items-center gap-3">
                 <FaStar className="text-yellow-400 text-2xl" />
-                <span>Rated {stats.rating}/5</span>
+                <span>Rated {stats.rating.toFixed(1)}/5</span>
               </div>
               <div className="flex items-center gap-3">
                 <FaUsers className="text-blue-400 text-2xl" />
