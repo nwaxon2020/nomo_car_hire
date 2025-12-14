@@ -9,6 +9,7 @@ import {
     onSnapshot,
     deleteDoc,
     DocumentData,
+    getDoc,
 } from "firebase/firestore";
 import EnhancedWhatsApp from "../EnhancedWhatsApp";
 import { 
@@ -161,10 +162,17 @@ export default function ChatWindow({
         if (!newMessage.trim() || !auth.currentUser) return;
 
         setSendingMessage(true);
-        
+
+        const userId = auth.currentUser.uid;
+        const userData = doc(db, "users", userId);
+        const res = (await getDoc(userData)).data();
+        const userName = res?.firstName?.toUpperCase() ||
+        res?.fullName?.split(" ")[0].toUpperCase() || "User".toUpperCase()
+
         const message: MessageType = {
-            senderId: auth.currentUser.uid,
-            senderName: auth.currentUser.displayName || "User",
+            senderId: userId,
+            
+            senderName:  userName,
             text: newMessage.trim(),
             timestamp: new Date().toISOString(),
             read: false,
@@ -497,12 +505,12 @@ export default function ChatWindow({
                             onChange={(e) => setNewMessage(e.target.value)}
                             onFocus={markAsRead}
                             placeholder="Ask about rental dates, pricing, or terms..."
-                            className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-100 placeholder-gray-500"
+                            className="w-full flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-100 placeholder-gray-500"
                         />
                         <button
                             type="submit"
                             disabled={!newMessage.trim() || sendingMessage}
-                            className={`px-5 rounded-xl flex items-center justify-center transition-all duration-300 ${newMessage.trim() && !sendingMessage
+                            className={`px-4 rounded-xl flex items-center justify-center transition-all duration-300 ${newMessage.trim() && !sendingMessage
                                 ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-blue-500/25'
                                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                 }`}
