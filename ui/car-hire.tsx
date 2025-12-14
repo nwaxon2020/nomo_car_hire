@@ -1430,7 +1430,7 @@ export default function CarHireUi() {
                                             </div>
                                             <hr className="text-gray-400 mb-1"/>
 
-                                            <div className="bg-white p-1 rounded-lg space-y-2 mb-4 text-xs sm:text-sm">
+                                            <div className="bg-white p-2 rounded-lg space-y-2 mb-4 text-xs sm:text-sm">
                                                 <div className="flex items-center text-gray-700">
                                                     <FaMapMarkerAlt className="mr-2 text-gray-400" />
                                                     <span>{getDriverLocation(driver)}</span>

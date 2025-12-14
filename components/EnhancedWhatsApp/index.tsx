@@ -332,7 +332,7 @@ export default function EnhancedWhatsApp({
                 {/* Message Textarea */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <label className="block text-sm font-semibold text-gray-200">
+                        <label className="mt-4 block text-sm font-semibold text-gray-200">
                             Your Message:
                         </label>
                         <div className="flex items-center gap-2">
@@ -354,7 +354,7 @@ export default function EnhancedWhatsApp({
                         <textarea
                             value={customMessage}
                             onChange={(e) => setCustomMessage(e.target.value)}
-                            rows={4}
+                            rows={6}
                             className="w-full p-4 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-gray-100 placeholder-gray-500 resize-none pr-10"
                             placeholder="Click a quick message above or type your own..."
                         />
@@ -370,7 +370,7 @@ export default function EnhancedWhatsApp({
                 </div>
 
                 {/* Safety Tips */}
-                <div className="border-t border-gray-800 pt-4">
+                <div className="border-t border-gray-800 pt-8">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-amber-400" />

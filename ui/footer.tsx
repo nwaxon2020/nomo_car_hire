@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebaseConfig";
 import { signOut } from "firebase/auth";
 import { getDoc, doc } from "firebase/firestore";
@@ -13,10 +13,16 @@ import {
 
 export default function Footer() {
   const router = useRouter();
+  const pathName = usePathname();
+
   const [user, setUser] = useState<any>(null);
   const [isDriver, setIsDriver] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // if(pathName === "/user/chat"){
+  //   return;
+  // }
 
   useEffect(() => {
     let isMounted = true;
