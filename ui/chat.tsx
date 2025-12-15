@@ -21,16 +21,10 @@ import {
   User, 
   Clock, 
   Trash2,
-  LogOut,
-  MoreVertical,
-  AlertCircle,
   ChevronRight,
   CheckCircle,
-  X,
-  Filter,
   Users
 } from "lucide-react";
-import { toast } from "react-hot-toast";
 
 interface ChatUser {
   id: string;
@@ -57,7 +51,6 @@ export default function ChatPageUi() {
     driver: any;
   } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "unread" | "recent">("all");
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [userData, setUserData] = useState<any>(null);
@@ -222,18 +215,13 @@ export default function ChatPageUi() {
     
     // Mark all messages as read when opening chat
     if (chat.unreadCount > 0) {
-      updateChatUnreadCount(chat.chatId, 0);
+      setChats(prevChats => 
+        prevChats.map(c => 
+          c.chatId === chat.chatId ? { ...c, unreadCount: 0 } : c
+        )
+      );
     }
   };
-
-  const updateChatUnreadCount = async (chatId: string, newCount: number) => {
-    setChats(prevChats => 
-      prevChats.map(chat => 
-        chat.chatId === chatId ? { ...chat, unreadCount: newCount } : chat
-      )
-    );
-  };
-
 
   const formatTime = (date?: Date) => {
     if (!date) return "";
@@ -364,7 +352,7 @@ export default function ChatPageUi() {
                 {/* Chat List */}
                 <div className="flex-1 overflow-y-auto">
                     {filteredChats.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                    <div className="flex flex-col items-center justify-center h-full text-center">
                         <div className="h-20 w-20 bg-gray-900 rounded-full flex items-center justify-center mb-4 border border-gray-700">
                         <MessageCircle className="h-10 w-10 text-gray-500" />
                         </div>
@@ -444,7 +432,6 @@ export default function ChatPageUi() {
                             <button
                                 onClick={(e) => {
                                 e.stopPropagation();
-                                setShowDeleteConfirm(chat.chatId);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-red-500/20 rounded-lg"
                             >
@@ -469,12 +456,8 @@ export default function ChatPageUi() {
                 
                 {/* Footer */}
                 <div className="p-4 border-t border-gray-700">
-                    <div className="flex items-center justify-between text-sm text-gray-500">
-                    <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4" />
-                        <span>Chats auto-delete after 48h</span>
-                    </div>
-                    <span className="text-xs">{filteredChats.length} chat{filteredChats.length !== 1 ? 's' : ''}</span>
+                    <div className="text-sm text-gray-500 text-center">
+                    <span>Chats auto-delete after 48h</span>
                     </div>
                 </div>
                 </div>
@@ -483,14 +466,6 @@ export default function ChatPageUi() {
                 <div className={`flex-1 flex flex-col ${selectedChat ? 'flex' : 'hidden lg:flex'}`}>
                 {selectedChat ? (
                     <>
-                    {/* Mobile Back Button */}
-                    <button
-                        onClick={() => setSelectedChat(null)}
-                        className="lg:hidden p-4 border-b border-gray-700 flex items-center gap-2 text-gray-400 hover:text-white"
-                    >
-                        <ChevronRight className="h-5 w-5 rotate-180" />
-                        Back to chats
-                    </button>
                     
                     {/* Chat Window */}
                     <div className="flex-1">
@@ -503,7 +478,7 @@ export default function ChatPageUi() {
                     </div>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center p-8">
+                    <div className="flex-1 flex flex-col items-center justify-center">
                     <div className="max-w-md text-center">
                         <div className="h-32 w-32 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border border-gray-700">
                         <MessageCircle className="h-16 w-16 text-gray-500" />
@@ -540,7 +515,6 @@ export default function ChatPageUi() {
             </div>
         </div>
       </div>
-
     </div>
   );
 }

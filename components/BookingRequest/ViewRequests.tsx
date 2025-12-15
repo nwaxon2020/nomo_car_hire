@@ -789,7 +789,7 @@ export default function ViewRequests({
 
       {/* Header - Responsive Fix */}
       <div className="w-full bg-white rounded-xl shadow-sm md:p-4 p-3">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col justify-center md:justify-between items-center md:flex-row gap-4 text-center md:text-left">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Booking Requests</h1>
             <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-600">
@@ -815,7 +815,7 @@ export default function ViewRequests({
           </div>
 
           {/* Filter Buttons - Responsive Stack */}
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setFilter("all")}
               className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${

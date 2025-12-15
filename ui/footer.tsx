@@ -20,10 +20,6 @@ export default function Footer() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // if(pathName === "/user/chat"){
-  //   return;
-  // }
-
   useEffect(() => {
     let isMounted = true;
     
@@ -130,6 +126,10 @@ export default function Footer() {
   };
 
   const lastUpdated = new Date().toLocaleDateString();
+
+   if(pathName === "/user/chat"){
+    return null;
+  }
 
   return (
     <footer className="w-full mt-0 bg-gradient-to-br from-[#f6f7f9] to-[#e9eef3] py-12 border-t border-gray-300 shadow-inner">
