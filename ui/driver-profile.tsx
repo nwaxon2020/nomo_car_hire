@@ -11,6 +11,7 @@ import {
   query,
   where,
   onSnapshot,
+  getDoc,
   Timestamp,
   arrayUnion,
   arrayRemove,
@@ -28,6 +29,207 @@ const capitalizeFullName = (name: string) =>
   name?.split(" ").filter(Boolean)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(" ") || "Professional Driver";
+
+// VIP Configuration
+const VIP_CONFIG = {
+  levels: [
+    { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },
+    { level: 2, name: "Yellow VIP", color: "yellow", stars: 2, referralsRequired: 20, price: 7500 },
+    { level: 3, name: "Purple VIP", color: "purple", stars: 3, referralsRequired: 25, price: 11000 },
+    { level: 4, name: "Gold VIP", color: "gold", stars: 4, referralsRequired: 30, price: 15000 },
+    { level: 5, name: "Black VIP", color: "black", stars: 5, referralsRequired: 35, price: 20000 },
+  ],
+  maxLevel: 5,
+  referralMultiplier: 5,
+};
+
+// Helper function to calculate VIP details
+const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number) => {
+  let referralBasedLevel = 0;
+  for (let i = 0; i < VIP_CONFIG.levels.length; i++) {
+    if (referralCount >= VIP_CONFIG.levels[i].referralsRequired) {
+      referralBasedLevel = VIP_CONFIG.levels[i].level;
+    } else {
+      break;
+    }
+  }
+  
+  const vipLevel = Math.min(
+    Math.max(purchasedVipLevel, referralBasedLevel),
+    VIP_CONFIG.maxLevel
+  );
+  
+  let prestigeLevel = 0;
+  if (vipLevel >= VIP_CONFIG.maxLevel) {
+    const maxLevelReferrals = VIP_CONFIG.levels[VIP_CONFIG.levels.length - 1].referralsRequired;
+    const extraReferrals = referralCount - maxLevelReferrals;
+    
+    if (extraReferrals > 0) {
+      prestigeLevel = Math.floor(extraReferrals / VIP_CONFIG.referralMultiplier);
+    }
+  }
+  
+  let nextReferralsNeeded = 0;
+  let referralsForNext = 0;
+  let progressPercentage = 0;
+  
+  if (vipLevel < VIP_CONFIG.maxLevel) {
+    const nextLevelIndex = vipLevel;
+    const nextLevelReq = VIP_CONFIG.levels[nextLevelIndex]?.referralsRequired || 0;
+    const currentLevelReq = VIP_CONFIG.levels[vipLevel - 1]?.referralsRequired || 0;
+    
+    nextReferralsNeeded = Math.max(0, nextLevelReq - referralCount);
+    referralsForNext = nextLevelReq;
+    
+    const referralsInCurrentLevel = referralCount - currentLevelReq;
+    const referralsNeededForNext = nextLevelReq - currentLevelReq;
+    progressPercentage = referralsNeededForNext > 0 
+      ? (referralsInCurrentLevel / referralsNeededForNext) * 100 
+      : 0;
+  } else {
+    const baseForCurrentPrestige = VIP_CONFIG.levels[VIP_CONFIG.levels.length - 1].referralsRequired + 
+                                   (prestigeLevel * VIP_CONFIG.referralMultiplier);
+    nextReferralsNeeded = Math.max(0, baseForCurrentPrestige + VIP_CONFIG.referralMultiplier - referralCount);
+    referralsForNext = baseForCurrentPrestige + VIP_CONFIG.referralMultiplier;
+    
+    const referralsInCurrentPrestige = referralCount - baseForCurrentPrestige;
+    progressPercentage = (referralsInCurrentPrestige / VIP_CONFIG.referralMultiplier) * 100;
+  }
+  
+  return {
+    vipLevel,
+    prestigeLevel,
+    referralCount,
+    nextReferralsNeeded,
+    referralsForNext,
+    progressPercentage: Math.min(progressPercentage, 100),
+    isMaxLevel: vipLevel >= VIP_CONFIG.maxLevel,
+    currentLevelName: vipLevel > 0 ? VIP_CONFIG.levels[vipLevel - 1]?.name : "No VIP",
+    nextLevelName: vipLevel < VIP_CONFIG.maxLevel 
+      ? VIP_CONFIG.levels[vipLevel]?.name 
+      : `Prestige LV${prestigeLevel + 1}`,
+  };
+};
+
+// Initialize VIP fields if they don't exist
+const initializeVIPFields = async (driverId: string) => {
+  try {
+    const userRef = doc(db, "users", driverId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      const updates: any = {};
+      let needsUpdate = false;
+      
+      if (data.referralCount === undefined) {
+        updates.referralCount = 0;
+        needsUpdate = true;
+      }
+      
+      if (data.purchasedVipLevel === undefined) {
+        updates.purchasedVipLevel = 0;
+        needsUpdate = true;
+      }
+      
+      if (data.vipLevel === undefined) {
+        const referralCount = data.referralCount || 0;
+        const purchasedVipLevel = data.purchasedVipLevel || 0;
+        const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+        updates.vipLevel = vipDetails.vipLevel;
+        needsUpdate = true;
+      }
+      
+      if (data.prestigeLevel === undefined) {
+        const referralCount = data.referralCount || 0;
+        const purchasedVipLevel = data.purchasedVipLevel || 0;
+        const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+        updates.prestigeLevel = vipDetails.prestigeLevel;
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        await updateDoc(userRef, {
+          ...updates,
+          updatedAt: Timestamp.now()
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error initializing VIP fields:", error);
+  }
+};
+
+// VIP Star Component
+const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: { 
+  level: number, 
+  prestigeLevel?: number, 
+  size?: "sm" | "md" | "lg", 
+  showLabel?: boolean 
+}) => {
+  if (level <= 0) return null;
+  
+  const vipDetails = VIP_CONFIG.levels[level - 1];
+  if (!vipDetails) return null;
+  
+  const sizeClasses = {
+    sm: "w-4 h-4",
+    md: "w-5 h-5",
+    lg: "w-6 h-6"
+  };
+  
+  const getStarColor = (color: string) => {
+    const colors: any = {
+      green: "text-green-500",
+      yellow: "text-yellow-500",
+      purple: "text-purple-500",
+      gold: "text-yellow-600",
+      black: "text-gray-900"
+    };
+    return colors[color] || colors.green;
+  };
+  
+  const getBackgroundColor = (color: string) => {
+    const colors: any = {
+      green: "bg-gradient-to-br from-green-100 to-green-300 border-green-300",
+      yellow: "bg-gradient-to-br from-yellow-100 to-yellow-300 border-yellow-300",
+      purple: "bg-gradient-to-br from-purple-100 to-purple-300 border-purple-300",
+      gold: "bg-gradient-to-br from-yellow-200 to-yellow-400 border-yellow-400",
+      black: "bg-gradient-to-br from-gray-800 to-black border-gray-700"
+    };
+    return colors[color] || colors.green;
+  };
+  
+  return (
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getBackgroundColor(vipDetails.color)} border shadow-sm`}>
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: vipDetails.stars }).map((_, i) => (
+          <svg 
+            key={i}
+            className={`${sizeClasses[size]} ${getStarColor(vipDetails.color)} fill-current`}
+            viewBox="0 0 24 24"
+          >
+            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+          </svg>
+        ))}
+      </div>
+      {prestigeLevel > 0 && (
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+          vipDetails.color === 'black' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-white'
+        }`}>
+          LV{prestigeLevel}
+        </span>
+      )}
+      {showLabel && (
+        <span className={`text-xs font-semibold ${
+          vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
+        }`}>
+          {vipDetails.name}
+        </span>
+      )}
+    </div>
+  );
+};
 
 interface Vehicle {
   id?: string;
@@ -70,11 +272,11 @@ export default function DriverProfilePage() {
   const [showVehicleForm, setShowVehicleForm] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [showVIPModal, setShowVIPModal] = useState(false);
+  const [showVIPUpgradeModal, setShowVIPUpgradeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
-  const [editingLocation, setEditingLocation] = useState(false); // New state for location edit
+  const [editingLocation, setEditingLocation] = useState(false);
 
-  // Location state
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [whatsappPreferred, setWhatsappPreferred] = useState(false);
@@ -101,51 +303,55 @@ export default function DriverProfilePage() {
   const [ratings, setRatings] = useState<number[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [referralCount, setReferralCount] = useState<number>(0);
-  const [isVIP, setIsVIP] = useState<boolean>(false);
+  const [vipLevel, setVipLevel] = useState<number>(0);
+  const [purchasedVipLevel, setPurchasedVipLevel] = useState<number>(0);
+  const [prestigeLevel, setPrestigeLevel] = useState<number>(0);
   const [customersCarried, setCustomersCarried] = useState<number>(0);
   const [isVerified, setIsVerified] = useState<boolean>(false);
   
   const [contactedDrivers, setContactedDrivers] = useState<any[]>([]);
-
   const [selectedMainImage, setSelectedMainImage] = useState<{ [key: string]: string }>({});
 
   const BONUS_PER_15 = 5000;
   const completedBonuses = Math.floor(completedJobs / 15) * BONUS_PER_15;
   const toNextBonus = 15 - (completedJobs % 15);
   const progressPercentage = ((completedJobs % 15) / 15) * 100;
-
-  const REFERRAL_TARGET = 20;
-  const referralProgress = Math.min((referralCount / REFERRAL_TARGET) * 100, 100);
+  const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
 
   useEffect(() => {
     if (!driverId) { setLoading(false); return; }
 
     const fetchData = async () => {
       try {
-        // Get driver data including ratings and comments from users collection
+        await initializeVIPFields(driverId);
+
         const userRef = doc(db, "users", driverId);
         const unsubUser = onSnapshot(userRef, (userSnap) => {
           if (userSnap.exists()) {
             const data = userSnap.data();
             const profileImage = data.profileImage || data.photoURL || "";
-            const fullName = (data.firstName, data.lastName) || "Professional Driver";
+            const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim() || "Professional Driver";
             const verified = data.verified || false;
             const customersCarried = data.customersCarried || [];
 
+            const referralCount = data.referralCount || 0;
+            const purchasedVipLevel = data.purchasedVipLevel || 0;
+            const vipLevel = data.vipLevel || 0;
+            const prestigeLevel = data.prestigeLevel || 0;
+
             setDriverData({ ...data, profileImage, fullName });
-            setIsVIP(data.driverVip || data.isVIP || false);
-            setReferralCount(data.referralCount || 0);
+            setReferralCount(referralCount);
+            setVipLevel(vipLevel);
+            setPurchasedVipLevel(purchasedVipLevel);
+            setPrestigeLevel(prestigeLevel);
             setIsVerified(verified);
             setCustomersCarried(customersCarried.length || 0);
             
-            // Set location data
             setCity(data.city || "");
             setState(data.state || "");
             setWhatsappPreferred(data.whatsappPreferred || false);
             
-            // Load ratings from "ratings" field - this is an array of numbers
             if (data.ratings && Array.isArray(data.ratings)) {
-              // Handle both number array and object array formats
               const ratingsArray: number[] = [];
               data.ratings.forEach((rating: any) => {
                 if (typeof rating === 'number') {
@@ -157,7 +363,6 @@ export default function DriverProfilePage() {
               setRatings(ratingsArray);
             }
             
-            // Load comments from "comments" field (array in users collection)
             if (data.comments && Array.isArray(data.comments)) {
               const commentsList: Comment[] = data.comments.map((comment: any, index: number) => ({
                 id: `comment-${index}`,
@@ -171,14 +376,21 @@ export default function DriverProfilePage() {
               setCommentsCount(commentsList.length);
             }
             
-            // Load driver's contact history
             if (data.contactedDrivers) {
               setContactedDrivers(data.contactedDrivers);
+            }
+
+            const oldVipLevel = driverData?.vipLevel || 0;
+            if (vipLevel > oldVipLevel && oldVipLevel > 0) {
+              const newLevelName = VIP_CONFIG.levels[vipLevel - 1]?.name;
+              toast.success(`🎉 Congratulations! You've reached ${newLevelName}!`, {
+                duration: 5000,
+                icon: '⭐',
+              });
             }
           }
         });
 
-        // Vehicles (collection)
         const vehiclesRef = collection(db, "vehicleLog");        
         const qVehicles = query(vehiclesRef, where("driverId", "==", driverId));
         const unsubVehicles = onSnapshot(qVehicles, snapshot => {
@@ -196,7 +408,6 @@ export default function DriverProfilePage() {
           setVehicles(list);
         });
 
-        // Transactions
         const txRef = collection(db, "transactions");
         const qTx = query(txRef, where("driverId", "==", driverId), where("status", "==", "completed"), where("serviceCompleted", "==", true));
         const unsubTx = onSnapshot(qTx, snapshot => {
@@ -223,12 +434,10 @@ export default function DriverProfilePage() {
     fetchData();
   }, [driverId]);
 
-  // Calculate average rating from ratings array (which contains numbers)
   const averageRating = ratings.length > 0 
     ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
     : "0.0";
 
-  // File previews
   useEffect(() => {
     const newPreviews: any = {};
     if (frontFile) newPreviews.front = URL.createObjectURL(frontFile);
@@ -240,7 +449,6 @@ export default function DriverProfilePage() {
     return () => { Object.values(newPreviews).forEach((url: any) => url && URL.revokeObjectURL(url)); };
   }, [frontFile, sideFile, backFile, interiorFile]);
 
-  // Upload helper
   async function uploadFile(file: File, path: string) {
     const sRef = storageRef(storage, path);
     const task = uploadBytesResumable(sRef, file);
@@ -249,18 +457,17 @@ export default function DriverProfilePage() {
     });
   }
 
-  // Submit vehicle
   const submitVehicle = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setSavingVehicle(true);
 
     if (!carName || !carModel || !plateNumber || !exteriorColor || !interiorColor || !carType) { 
-      toast.error("Fill required fields"); 
+      toast.error("Please fill all required fields"); 
       setSavingVehicle(false); 
       return; 
     }
     if (!editingVehicle && (!frontFile || !sideFile || !backFile || !interiorFile)) { 
-      toast.error("All 4 photos required"); 
+      toast.error("All 4 vehicle photos are required"); 
       setSavingVehicle(false); 
       return; 
     }
@@ -291,7 +498,7 @@ export default function DriverProfilePage() {
 
       if (editingVehicle?.id) {
         await updateDoc(doc(db, "vehicleLog", editingVehicle.id), vehicleDoc);
-        toast.success("Vehicle updated");
+        toast.success("Vehicle updated successfully");
       } else {
         const newDocRef = await addDoc(collection(db, "vehicleLog"), vehicleDoc);
         try {
@@ -301,10 +508,9 @@ export default function DriverProfilePage() {
           console.error("Failed to update user's vehicleLog array:", uErr);
           toast.error("Vehicle added but user record couldn't be updated (contact admin).");
         }
-        toast.success("Vehicle added");
+        toast.success("Vehicle added successfully");
       }
 
-      // Reset form
       setCarName("");
       setCarModel("");
       setCarType("sedan");
@@ -370,7 +576,7 @@ export default function DriverProfilePage() {
         return newState;
       });
 
-      toast.success("Vehicle deleted");
+      toast.success("Vehicle deleted successfully");
     } catch (err) {
       console.error("Could not delete vehicle:", err);
       toast.error("Could not delete vehicle");
@@ -380,15 +586,12 @@ export default function DriverProfilePage() {
     }
   };
 
-  // Start editing location
   const startEditLocation = () => {
     setEditingLocation(true);
-    // Initialize with current data
     setCity(driverData?.city || "");
     setState(driverData?.state || "");
   };
 
-  // Update location
   const updateLocation = async () => {
     if (!city.trim() || !state.trim()) {
       toast.error("Please enter both city and state");
@@ -413,14 +616,12 @@ export default function DriverProfilePage() {
     }
   };
 
-  // Cancel location editing
   const cancelLocationEdit = () => {
     setEditingLocation(false);
     setCity(driverData?.city || "");
     setState(driverData?.state || "");
   };
 
-  // Toggle WhatsApp preference
   const toggleWhatsappPreference = async () => {
     const newValue = !whatsappPreferred;
     try {
@@ -445,14 +646,13 @@ export default function DriverProfilePage() {
   };
 
   const handleAddVehicleClick = () => {
-    if (!isVIP && vehicles.length >= 2) {
+    if (vipLevel === 0 && vehicles.length >= 2) {
       setShowVIPModal(true);
       return;
     }
     setShowVehicleForm(true);
   };
 
-  // Format date
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "Recently";
     
@@ -465,6 +665,95 @@ export default function DriverProfilePage() {
       return new Date(timestamp).toLocaleDateString("en-GB");
     } catch (error) {
       return "Recently";
+    }
+  };
+
+  const handleVIPPurchase = async (level: number) => {
+    try {
+      const userRef = doc(db, "users", driverId);
+      const vipDetails = VIP_CONFIG.levels[level - 1];
+      
+      if (purchasedVipLevel >= level) {
+        toast.error(`You already have VIP Level ${purchasedVipLevel}`);
+        return;
+      }
+      
+      const paymentSuccess = await simulatePayment(vipDetails.price);
+      
+      if (!paymentSuccess) {
+        toast.error("Payment failed. Please try again.");
+        return;
+      }
+      
+      await updateDoc(userRef, {
+        purchasedVipLevel: level,
+        vipPurchaseHistory: arrayUnion({
+          level: level,
+          price: vipDetails.price,
+          purchaseDate: Timestamp.now(),
+          paymentId: `PAY-${Date.now()}`
+        }),
+        updatedAt: Timestamp.now()
+      });
+      
+      const newVipDetails = calculateVIPDetails(referralCount, level);
+      await updateDoc(userRef, {
+        vipLevel: newVipDetails.vipLevel,
+        prestigeLevel: newVipDetails.prestigeLevel
+      });
+      
+      toast.success(`🎉 Successfully upgraded to ${vipDetails.name}!`, {
+        duration: 5000,
+        icon: '⭐',
+      });
+      
+      setShowVIPUpgradeModal(false);
+      
+    } catch (err) {
+      console.error("Error purchasing VIP:", err);
+      toast.error("Failed to purchase VIP");
+    }
+  };
+
+  const simulatePayment = async (amount: number) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(true);
+      }, 1000);
+    });
+  };
+
+  const handleNewReferral = async () => {
+    try {
+      const userRef = doc(db, "users", driverId);
+      const newReferralCount = referralCount + 1;
+      
+      await updateDoc(userRef, {
+        referralCount: newReferralCount,
+        updatedAt: Timestamp.now()
+      });
+      
+      const newVipDetails = calculateVIPDetails(newReferralCount, purchasedVipLevel);
+      await updateDoc(userRef, {
+        vipLevel: newVipDetails.vipLevel,
+        prestigeLevel: newVipDetails.prestigeLevel
+      });
+      
+      if (newVipDetails.vipLevel > vipLevel) {
+        const levelName = VIP_CONFIG.levels[newVipDetails.vipLevel - 1]?.name;
+        toast.success(`🎉 New referral earned! You've reached ${levelName}!`, {
+          duration: 5000,
+          icon: '⭐',
+        });
+      } else {
+        toast.success("Referral counted! Keep going!", {
+          icon: '👍',
+        });
+      }
+      
+    } catch (error) {
+      console.error("Error updating referral:", error);
+      toast.error("Failed to update referral");
     }
   };
 
@@ -484,7 +773,7 @@ export default function DriverProfilePage() {
     <div className="p-3 lg:p-4 lg:p-6 max-w-6xl mx-auto">
       <Toaster position="top-right" />
       
-      {/* VIP Upgrade Modal */}
+      {/* VIP Modal for vehicle limit */}
       {showVIPModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
@@ -496,37 +785,33 @@ export default function DriverProfilePage() {
             </button>
             
             <div className="text-center mb-4">
-              <div className="w-16 h-16 mx-auto bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full flex items-center justify-center mb-4">
-                <span className="text-2xl">⭐</span>
+              <div className="w-16 h-16 mx-auto bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mb-4">
+                <VIPStar level={1} size="lg" showLabel={false} />
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">Upgrade to VIP Driver</h3>
               <p className="text-gray-600 mb-4">
-                {vehicles.length >= 2 ? (
-                  `You have reached the limit of ${vehicles.length} vehicles. Upgrade to VIP to add more vehicles and unlock premium features!`
-                ) : (
-                  "Upgrade to VIP to unlock the ability to add multiple vehicles and other premium features!"
-                )}
+                You can only add 2 vehicles as a regular driver. Upgrade to VIP to add unlimited vehicles!
               </p>
             </div>
 
-            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-4 mb-4">
-              <h4 className="font-semibold text-amber-800 mb-2">VIP Benefits:</h4>
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 mb-4">
+              <h4 className="font-semibold text-green-800 mb-2">VIP Benefits:</h4>
               <ul className="text-sm text-gray-700 space-y-1">
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-500">✓</span>
+                  <span className="text-green-500">✓</span>
                   <span>Add unlimited vehicles</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-500">✓</span>
+                  <span className="text-green-500">✓</span>
                   <span>Priority in search results</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-500">✓</span>
-                  <span>More customer requests</span>
+                  <span className="text-green-500">✓</span>
+                  <span>Special VIP badge</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-500">✓</span>
-                  <span>Exclusive bonus rewards</span>
+                  <span className="text-green-500">✓</span>
+                  <span>Higher booking priority</span>
                 </li>
               </ul>
             </div>
@@ -538,12 +823,202 @@ export default function DriverProfilePage() {
               >
                 Maybe Later
               </button>
-              <a
-                href="/purchase"
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-xl font-medium hover:from-yellow-600 hover:to-amber-700 transition-all text-center"
+              <button
+                onClick={() => {
+                  setShowVIPModal(false);
+                  setShowVIPUpgradeModal(true);
+                }}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 transition-all text-center"
               >
-                Upgrade Now
-              </a>
+                {vipLevel > 0 ? 'Upgrade Level' : 'Become VIP'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIP Upgrade Selection Modal */}
+      {showVIPUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setShowVIPUpgradeModal(false)} 
+              className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 text-2xl"
+            >
+              ×
+            </button>
+            
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become a VIP Driver'}
+              </h3>
+              <p className="text-gray-600">Earn through referrals or purchase to level up!</p>
+            </div>
+
+            {/* Current VIP Status */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <VIPStar level={vipLevel} prestigeLevel={prestigeLevel} size="lg" showLabel={true} />
+                  <div>
+                    <h4 className="font-semibold text-gray-800">Current Status</h4>
+                    <p className="text-sm text-gray-600">
+                      {vipLevel > 0 ? (
+                        vipLevel < VIP_CONFIG.maxLevel ? (
+                          `Need ${vipDetails.nextReferralsNeeded} more referrals for next level`
+                        ) : (
+                          `Prestige Level ${prestigeLevel}`
+                        )
+                      ) : (
+                        "Start your VIP journey!"
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-center md:text-right">
+                  <div className="text-2xl font-bold text-gray-800">{referralCount}</div>
+                  <div className="text-sm text-gray-600">Total Referrals</div>
+                </div>
+              </div>
+              
+              {vipLevel > 0 && vipLevel < VIP_CONFIG.maxLevel && (
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Progress to {vipDetails.nextLevelName}</span>
+                    <span>{referralCount}/{vipDetails.referralsForNext}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
+                      style={{ width: `${vipDetails.progressPercentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* VIP Levels Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {VIP_CONFIG.levels.map((level) => {
+                const isCurrentLevel = vipLevel === level.level;
+                const isUnlocked = vipLevel >= level.level;
+                const canPurchase = purchasedVipLevel < level.level;
+                const canEarnByReferral = referralCount >= level.referralsRequired;
+                
+                return (
+                  <div 
+                    key={level.level}
+                    className={`border rounded-xl p-4 transition-all duration-300 ${
+                      isCurrentLevel 
+                        ? 'border-green-500 bg-green-50 ring-2 ring-green-200' 
+                        : isUnlocked
+                        ? 'border-blue-300 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="flex justify-center mb-3">
+                      <VIPStar level={level.level} size="lg" showLabel={false} />
+                    </div>
+                    <h4 className="text-lg font-semibold text-center mb-2">{level.name}</h4>
+                    
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Referrals Needed:</span>
+                        <span className={`font-medium ${canEarnByReferral ? 'text-green-600' : ''}`}>
+                          {level.referralsRequired}
+                          {canEarnByReferral && ' ✓'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Price:</span>
+                        <span className="font-medium">₦{level.price.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Status:</span>
+                        <span className={`font-medium ${
+                          isCurrentLevel ? 'text-green-600' :
+                          isUnlocked ? 'text-blue-600' :
+                          'text-gray-600'
+                        }`}>
+                          {isCurrentLevel ? 'Current' : isUnlocked ? 'Unlocked' : 'Locked'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => handleVIPPurchase(level.level)}
+                        disabled={!canPurchase}
+                        className={`w-full py-2 rounded-lg font-medium transition-all ${
+                          !canPurchase
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
+                        }`}
+                      >
+                        {!canPurchase ? 'Already Unlocked' : 'Purchase Now'}
+                      </button>
+                      
+                      {!canEarnByReferral && level.level > vipLevel && (
+                        <div className="text-xs text-center text-gray-500">
+                          Or get {level.referralsRequired - referralCount} more referrals
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* VIP Info Section */}
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4 mb-6">
+              <h4 className="font-semibold text-purple-800 mb-2">How VIP Works:</h4>
+              <ul className="text-sm text-gray-700 space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span><strong>Two Ways to Level Up:</strong> Get referrals OR purchase directly</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span><strong>Referral Requirements:</strong> 15, 20, 25, 30, 35 referrals for levels 1-5</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span><strong>After Level 5:</strong> Earn Prestige Levels (LV1, LV2, etc.) for extra referrals</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span><strong>Search Priority:</strong> Higher VIP levels appear first in search results</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Referral Section */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 mb-6">
+              <h4 className="font-semibold text-amber-800 mb-2">Earn VIP Through Referrals</h4>
+              <p className="text-sm text-gray-700 mb-3">
+                {vipLevel > 0 
+                  ? "Share your link to get referrals and upgrade to your next VIP level!"
+                  : "Share your link to get referrals and earn VIP status!"
+                }
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <ShareButton 
+                    userId={driverId}
+                    title="Book a Professional Driver on Nomopoventures!"
+                    text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={() => setShowVIPUpgradeModal(false)}
+                className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -599,7 +1074,8 @@ export default function DriverProfilePage() {
                     />
                   ) : (
                     <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white text-xl lg:text-2xl font-bold">
-                      {driverData?.firstName?.charAt(0).toUpperCase() || "No First-Name"} {driverData?.lastName?.charAt(0).toUpperCase() || "No Last-Name"}
+                      {driverData?.firstName?.charAt(0).toUpperCase() || "D"}
+                      {driverData?.lastName?.charAt(0).toUpperCase() || "D"}
                     </div>
                   )}
                 </div>
@@ -613,17 +1089,13 @@ export default function DriverProfilePage() {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
-                    {driverData?.fullName ? capitalizeFullName(driverData.firstName) : "Professional Driver"}{" "}
-                    {driverData?.lastName ? capitalizeFullName(driverData.lastName) : "Professional Driver"}
+                    {driverData?.fullName || "Professional Driver"}
                   </h1>
-                  {isVIP && (
-                    <span className="inline-flex items-center gap-1 bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-200 px-2 py-1 rounded-full text-xs font-semibold">
-                      ⭐ VIP Driver
-                    </span>
+                  {vipLevel > 0 && (
+                    <VIPStar level={vipLevel} prestigeLevel={prestigeLevel} size="md" showLabel={true} />
                   )}
                 </div>
                 
-                {/* Location Display with Edit Icon */}
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-gray-600 text-sm">
                     📍 {driverData?.city || "City not specified"}, {driverData?.state || "State not specified"}
@@ -636,7 +1108,6 @@ export default function DriverProfilePage() {
                   </button>
                 </div>
                 
-                {/* Location Edit Form (Only shown when editing) */}
                 {editingLocation && (
                   <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex flex-col sm:flex-row gap-2 mb-2">
@@ -684,6 +1155,52 @@ export default function DriverProfilePage() {
                     {isVerified ? 'Verified Driver' : 'Unverified'}
                   </span>
                 </div>
+
+                {/* VIP Progress Bar */}
+                {vipLevel > 0 && vipLevel < VIP_CONFIG.maxLevel && (
+                  <div className="mt-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-medium text-gray-700">
+                        Progress to {vipDetails.nextLevelName}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {referralCount}/{vipDetails.referralsForNext} referrals
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
+                        style={{ width: `${vipDetails.progressPercentage}%` }}
+                      ></div>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      {vipDetails.nextReferralsNeeded} more referrals for next level
+                    </div>
+                  </div>
+                )}
+                
+                {/* Prestige Progress */}
+                {vipLevel >= VIP_CONFIG.maxLevel && (
+                  <div className="mt-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-medium text-gray-700">
+                        Prestige Level {prestigeLevel}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {referralCount} total referrals
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="h-2 rounded-full bg-gradient-to-r from-gray-800 to-black" 
+                        style={{ width: `${vipDetails.progressPercentage}%` }}
+                      ></div>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      Next Prestige Level in {vipDetails.nextReferralsNeeded} more referrals
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -712,10 +1229,10 @@ export default function DriverProfilePage() {
               </div>
             </div>
 
-            {/* Bonus Progress */}
+            {/* Bonus Progress - UPDATED TEXT */}
             <div className="mb-4">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-medium text-gray-700">Bonus Progress</span>
+                <span className="text-sm font-medium text-gray-700">Job Bonus Progress</span>
                 <span className="text-xs text-gray-500">{completedJobs % 15}/15 jobs</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
@@ -726,10 +1243,10 @@ export default function DriverProfilePage() {
               </div>
               <div className="flex justify-between mt-2">
                 <span className="text-xs lg:text-sm text-gray-700">
-                  <span className="font-semibold">Earned:</span> ₦{completedBonuses.toLocaleString()}
+                  <span className="font-semibold">Referrals:</span> {referralCount}
                 </span>
                 <span className="text-xs lg:text-sm text-gray-600">
-                  {toNextBonus} to next ₦{BONUS_PER_15.toLocaleString()}
+                  {vipLevel > 0 ? `${vipDetails.nextReferralsNeeded} to next VIP level` : '15 for VIP status'}
                 </span>
               </div>
             </div>
@@ -744,9 +1261,9 @@ export default function DriverProfilePage() {
             </div>
 
             <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-xl p-3 lg:p-4 text-center">
-              <p className="text-xs font-semibold text-green-700 mb-1">Customers Carried</p>
+              <p className="text-xs font-semibold text-green-700 mb-1">Customers</p>
               <p className="text-xl lg:text-2xl font-bold">{customersCarried}</p>
-              <p className="text-xs text-gray-500 mt-1">Unique passengers</p>
+              <p className="text-xs text-gray-500 mt-1">Total passengers</p>
             </div>
 
             <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-3 lg:p-4 text-center">
@@ -755,15 +1272,18 @@ export default function DriverProfilePage() {
               <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                 <div 
                   className="h-1.5 rounded-full bg-green-500" 
-                  style={{ width: `${referralProgress}%` }}
+                  style={{ width: `${vipDetails.progressPercentage}%` }}
                 ></div>
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {vipLevel > 0 ? `VIP Level ${vipLevel}` : 'No VIP yet'}
+              </p>
             </div>
 
             <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-xl p-3 lg:p-4 text-center">
               <p className="text-xs font-semibold text-indigo-700 mb-1">Vehicles</p>
               <p className="text-xl lg:text-2xl font-bold">{vehicles.length}</p>
-              {!isVIP && vehicles.length >= 2 && (
+              {vipLevel === 0 && vehicles.length >= 2 && (
                 <p className="text-[10px] text-amber-600 mt-1">VIP for more</p>
               )}
             </div>
@@ -786,7 +1306,14 @@ export default function DriverProfilePage() {
                 onClick={handleAddVehicleClick}
                 className="flex-1 lg:flex-none bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
               >
-                Add Vehicle {!isVIP && vehicles.length > 0 && `(${vehicles.length}/2)`}
+                Add Vehicle {vipLevel === 0 && vehicles.length > 0 && `(${vehicles.length}/2)`}
+              </button>
+              
+              <button
+                onClick={() => setShowVIPUpgradeModal(true)}
+                className="flex-1 lg:flex-none bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-colors text-sm font-medium"
+              >
+                {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become VIP'}
               </button>
               
               <button
@@ -869,7 +1396,7 @@ export default function DriverProfilePage() {
       <section className="bg-white shadow-lg rounded-xl p-4 lg:p-6 mb-6">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-2">
           <h2 className="text-lg lg:text-xl font-semibold">Your Vehicles</h2>
-          {!isVIP && vehicles.length > 0 && (
+          {vipLevel === 0 && vehicles.length > 0 && (
             <div className="text-xs text-gray-500">
               {vehicles.length}/2 vehicles added
               {vehicles.length >= 2 && (
@@ -890,7 +1417,6 @@ export default function DriverProfilePage() {
                 className="w-full lg:min-w-[20rem] lg:w-[20rem] bg-gray-900 shadow rounded-xl p-2 hover:shadow-lg transition-shadow"
               >
                 
-                {/* MAIN IMAGE */}
                 <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2">
                   <img 
                     src={selectedMainImage[v.id!] || v.images.front}
@@ -908,7 +1434,6 @@ export default function DriverProfilePage() {
                   </div>
                 </div>
 
-                {/* THUMBNAIL SCROLL */}
                 <div className="relative">
                   <button
                     onClick={() =>
@@ -934,7 +1459,6 @@ export default function DriverProfilePage() {
                     ›
                   </button>
 
-                  {/* Thumbnails */}
                   <div
                     id={`scroll-${v.id}`}
                     className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-6"
@@ -982,7 +1506,6 @@ export default function DriverProfilePage() {
                   </div>
                 </div>
 
-                {/* CAR DETAILS */}
                 <div className="mt-3 bg-white rounded-lg p-4">
                   <div className="flex justify-between items-start">
                     <div>
@@ -999,7 +1522,6 @@ export default function DriverProfilePage() {
                     </span>
                   </div>
 
-                  {/* DETAILS GRID */}
                   <div className="grid grid-cols-2 gap-2 mt-3">
                     <div className="flex items-center gap-1">
                       <span className="text-gray-500">👤</span>
@@ -1023,7 +1545,6 @@ export default function DriverProfilePage() {
                     </div>
                   </div>
 
-                  {/* DESCRIPTION */}
                   {v.description && (
                     <p className="bg-green-100 rounded-lg p-2 text-xs text-green-800 mt-2 line-clamp-2">
                       {v.description}
@@ -1031,7 +1552,6 @@ export default function DriverProfilePage() {
                   )}
                 </div>
 
-                {/* ACTION BUTTONS */}
                 <div className="flex justify-between mt-4 pt-3 border-t border-gray-100">
                   <button
                     onClick={() => startEdit(v)}
@@ -1141,263 +1661,12 @@ export default function DriverProfilePage() {
         )}
       </section>
 
-      {/* Vehicle Form Modal/card */}
-      {showVehicleForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-2 lg:p-6 bg-black/40 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full p-3 lg:p-6 relative my-2 lg:my-8 mx-2 lg:mx-0">
-            <button 
-              onClick={() => { 
-                setShowVehicleForm(false); 
-                setEditingVehicle(null); 
-                setPreviews({});
-              }} 
-              className="absolute right-3 top-3 lg:right-4 lg:top-4 text-gray-600 text-xl lg:text-2xl hover:text-gray-800"
-            >
-              ×
-            </button>
-            
-            <h3 className="text-lg lg:text-xl font-semibold mb-4">
-              {editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
-            </h3>
-
-            <form onSubmit={submitVehicle} className="flex flex-col lg:grid lg:grid-cols-2 gap-4 lg:gap-6">
-              <div className="space-y-3 lg:space-y-4">
-                <div>
-                  <label className="text-xs lg:text-sm font-medium text-gray-700">Car Name *</label>
-                  <input 
-                    value={carName} 
-                    onChange={(e) => setCarName(e.target.value)} 
-                    required 
-                    className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder="e.g., Toyota Camry"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs lg:text-sm font-medium text-gray-700">Car Model *</label>
-                  <input 
-                    value={carModel} 
-                    onChange={(e) => setCarModel(e.target.value)} 
-                    required 
-                    className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder="e.g., 2023 LE"
-                  />
-                </div>
-
-                {/* Car Type Selection */}
-                <div>
-                  <label className="text-xs lg:text-sm font-medium text-gray-700">Car Type *</label>
-                  <select
-                    value={carType}
-                    onChange={(e) => setCarType(e.target.value)}
-                    required
-                    className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  >
-                    <option value="sedan">Sedan</option>
-                    <option value="suv">SUV</option>
-                    <option value="keke">Keke</option>
-                    <option value="bus">Bus</option>
-                    <option value="carrier">Carrier</option>
-                    <option value="truck">Truck</option>
-                    <option value="minivan">Minivan</option>
-                    <option value="pickup">Pickup Truck</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                  <div>
-                    <label className="text-xs lg:text-sm font-medium text-gray-700">Passengers *</label>
-                    <input 
-                      type="number" 
-                      min={1} 
-                      max={20}
-                      value={passengers} 
-                      onChange={(e) => setPassengers(parseInt(e.target.value || "1"))} 
-                      required 
-                      className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs lg:text-sm font-medium text-gray-700">Car Color *</label>
-                    <input 
-                      value={exteriorColor} 
-                      onChange={(e) => setExteriorColor(e.target.value)} 
-                      required
-                      className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="e.g., Black"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                  <div>
-                    <label className="text-xs lg:text-sm font-medium text-gray-700">Interior Color *</label>
-                    <input 
-                      value={interiorColor} 
-                      onChange={(e) => setInteriorColor(e.target.value)} 
-                      required
-                      className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="e.g., Beige"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs lg:text-sm font-medium text-gray-700">Status</label>
-                    <select
-                      value={vehicleStatus}
-                      onChange={(e) => setVehicleStatus(e.target.value as any)}
-                      className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    >
-                      <option value="available">Available</option>
-                      <option value="unavailable">Unavailable</option>
-                      <option value="maintenance">Maintenance</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    id="acAvailable"
-                    checked={ac} 
-                    onChange={(e) => setAc(e.target.checked)} 
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <label htmlFor="acAvailable" className="ml-2 text-xs lg:text-sm text-gray-700">
-                    Air Conditioning Available
-                  </label>
-                </div>
-
-                <div>
-                  <label className="text-xs lg:text-sm font-medium text-gray-700">
-                    Plate Number * (hidden)
-                  </label>
-                  <input 
-                    value={plateNumber} 
-                    onChange={(e) => setPlateNumber(e.target.value)} 
-                    required 
-                    className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder="e.g., ABC123"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Stored but not shown publicly
-                  </p>
-                </div>
-
-                <div>
-                  <label className="text-xs lg:text-sm font-medium text-gray-700">Description</label>
-                  <textarea 
-                    value={description} 
-                    onChange={(e) => setDescription(e.target.value)} 
-                    rows={2}
-                    className="w-full border border-gray-300 p-2 rounded mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder="Brief description..."
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3 lg:space-y-4">
-                <p className="text-xs lg:text-sm font-medium text-gray-700">
-                  Upload required photos (front, side, back, interior) *
-                </p>
-                
-                <div className="grid grid-cols-2 gap-2 lg:gap-3">
-                  {[
-                    { label: "Front View", key: "front", file: frontFile, setFile: setFrontFile },
-                    { label: "Side View", key: "side", file: sideFile, setFile: setSideFile },
-                    { label: "Back View", key: "back", file: backFile, setFile: setBackFile },
-                    { label: "Interior", key: "interior", file: interiorFile, setFile: setInteriorFile },
-                  ].map(({ label, key, file, setFile }) => (
-                    <div key={key} className="space-y-1">
-                      <label className="text-xs font-medium text-gray-700">{label}</label>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => setFile(e.target.files?.[0] || null)} 
-                        required={!editingVehicle}
-                        className="block w-full text-xs lg:text-sm text-gray-500 file:mr-2 file:py-1 file:px-2 lg:file:py-1.5 lg:file:px-3 file:rounded file:border-0 file:text-xs lg:file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      {previews[key as keyof typeof previews] && (
-                        <div className="relative mt-1">
-                          <img 
-                            src={previews[key as keyof typeof previews]} 
-                            className="w-full h-24 lg:h-32 object-cover rounded border"
-                            alt={label}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFile(null);
-                              setPreviews(prev => ({ ...prev, [key]: undefined }));
-                            }}
-                            className="absolute top-1 right-1 bg-red-500 text-white w-5 h-5 lg:w-6 lg:h-6 rounded-full text-xs flex items-center justify-center hover:bg-red-600"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 lg:p-3 mt-3 lg:mt-4">
-                  <p className="text-xs lg:text-sm text-blue-700 font-medium">Preview</p>
-                  <div className="grid grid-cols-2 gap-1 lg:gap-2 mt-1 lg:mt-2">
-                    {Object.entries(previews).map(([key, url]) => (
-                      url && (
-                        <div key={key} className="text-center">
-                          <p className="text-xs text-gray-500 capitalize">{key}</p>
-                          <img 
-                            src={url} 
-                            alt={key} 
-                            className="w-full h-16 lg:h-20 object-cover rounded mt-1"
-                          />
-                        </div>
-                      )
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-3 lg:mt-4 flex flex-col lg:flex-row justify-end gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => { 
-                      setShowVehicleForm(false); 
-                      setEditingVehicle(null); 
-                      setPreviews({});
-                    }} 
-                    className="px-3 lg:px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-sm w-full lg:w-auto order-2 lg:order-1"
-                    disabled={savingVehicle}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="bg-emerald-600 text-white px-3 lg:px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm w-full lg:w-auto order-1 lg:order-2"
-                    disabled={savingVehicle}
-                  >
-                    {savingVehicle ? (
-                      <>
-                        <LoadingRound />
-                        <span className="text-xs lg:text-sm">Saving...</span>
-                      </>
-                    ) : editingVehicle ? 'Update' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Promotion Cards Section */}
+      {/* Promotion Cards Section - UPDATED SHARE BUTTON TEXT */}
       <section className="bg-white shadow-lg rounded-xl p-4 mb-6">
         <h2 className="text-lg lg:text-xl font-semibold mb-4">Grow Your Driver Business</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Share to Earn Card with Image */}
-          <div id="share-link" className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl overflow-hidden">
+          {/* Share to Earn Card - UPDATED BUTTON TEXT */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl overflow-hidden">
             <div className="h-32 lg:h-40 bg-blue-100 overflow-hidden">
               <img 
                 src="/driverShareProfile.jpeg" 
@@ -1410,20 +1679,21 @@ export default function DriverProfilePage() {
                 <div className="w-8 h-8 lg:w-10 lg:h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-sm lg:text-base">
                   🔗
                 </div>
-                <h3 className="font-semibold text-blue-800 text-sm lg:text-base">Share & Earn Points</h3>
+                <h3 className="font-semibold text-blue-800 text-sm lg:text-base">Share Link to Upgrade Your VIP Status</h3>
               </div>
               <p className="text-xs lg:text-sm text-gray-600 mb-2 lg:mb-3">
-                Share your driver profile! Earn points for every successful referral. More points = higher visibility in search results & earn ₦5000 in cash!
+                Share your driver profile! Get referrals to climb VIP levels. Higher VIP levels get priority in search results and more bookings!
               </p>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500">
-                  Progress: {referralCount}/{REFERRAL_TARGET}
-                </span>
+              <div className="space-y-1 mb-3">
+                {VIP_CONFIG.levels.slice(0, 3).map((level) => (
+                  <div key={level.level} className="flex justify-between text-xs">
+                    <span>{level.name}:</span>
+                    <span>{level.referralsRequired} referrals</span>
+                  </div>
+                ))}
               </div>
              
-              <div
-                  className="mt-9 w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all text-center text-xs lg:text-sm"
-              >
+              <div className="mt-6 w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all text-center text-xs lg:text-sm">
                   <ShareButton 
                       userId={driverId}
                       title="Book a Professional Driver on Nomopoventures!"
@@ -1433,7 +1703,7 @@ export default function DriverProfilePage() {
             </div>
           </div>
 
-          {/* VIP Upgrade Card with Image */}
+          {/* VIP Upgrade Card */}
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl overflow-hidden">
             <div className="h-32 lg:h-40 bg-yellow-100 overflow-hidden">
               <img 
@@ -1447,32 +1717,29 @@ export default function DriverProfilePage() {
                 <div className="w-8 h-8 lg:w-10 lg:h-10 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600 text-sm lg:text-base">
                   ⭐
                 </div>
-                <h3 className="font-semibold text-yellow-800 text-sm lg:text-base">VIP Driver Benefits</h3>
+                <h3 className="font-semibold text-yellow-800 text-sm lg:text-base">
+                  {vipLevel > 0 ? 'Upgrade Your VIP Level' : 'Become a VIP Driver'}
+                </h3>
               </div>
-              <ul className="text-xs lg:text-sm text-gray-600 space-y-1 mb-2 lg:mb-3">
-                <li className="flex items-start gap-1">
-                  <span>•</span>
-                  <span>Priority in search results</span>
-                </li>
-                <li className="flex items-start gap-1">
-                  <span>•</span>
-                  <span>Higher rates per ride</span>
-                </li>
-                <li className="flex items-start gap-1">
-                  <span>•</span>
-                  <span>Exclusive bonus rewards</span>
-                </li>
-                <li className="flex items-start gap-1">
-                  <span>•</span>
-                  <span>Premium customer support</span>
-                </li>
-              </ul>
-              <a
-                href="/purchase"
-                className="block w-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-2 rounded-lg font-medium hover:from-yellow-600 hover:to-yellow-700 transition-all text-center text-xs lg:text-sm"
+              <div className="space-y-2 mb-3">
+                {VIP_CONFIG.levels.slice(0, 3).map((level) => (
+                  <div key={level.level} className="flex items-center gap-2">
+                    <VIPStar level={level.level} size="sm" showLabel={false} />
+                    <span className="text-xs">
+                      {level.name}: ₦{level.price.toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-600 mb-3">
+                VIP drivers appear first in search results and get more bookings!
+              </p>
+              <button
+                onClick={() => setShowVIPUpgradeModal(true)}
+                className="block w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white py-2 rounded-lg font-medium hover:from-yellow-600 hover:to-amber-700 transition-all text-center text-xs lg:text-sm"
               >
-                Upgrade to VIP
-              </a>
+                {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become VIP'}
+              </button>
             </div>
           </div>
         </div>
@@ -1499,7 +1766,7 @@ export default function DriverProfilePage() {
 
       {/* Transport News */}
       <div className="bg-white mt-6 p-3 lg:p-4 rounded-xl shadow">
-        <h2 className="text-lg lg:text-2xl font-bold mb-3">Latest Transport, Pricing & Shipping News</h2>
+        <h2 className="text-lg lg:text-2xl font-bold mb-3">Latest Transport News</h2>
         <div className="max-h-[45rem] lg:max-h-80 overflow-y-auto p-2">
           <TransportNewsPageUi />
         </div>

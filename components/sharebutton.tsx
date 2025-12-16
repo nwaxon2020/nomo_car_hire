@@ -130,7 +130,7 @@ export default function ShareButton({
           className="mx-auto text-white hover:text-white transition-colors flex items-center gap-1"
         >
           <Share2 size={14} />
-          Share Link to earn ₦5000
+          Share Link & Upgrade VIP status
         </button> :
 
         <button
