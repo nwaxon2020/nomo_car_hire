@@ -127,7 +127,8 @@ export default function HomePageUi() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/user/car-hire?location=${encodeURIComponent(searchQuery)}`);
+      // Redirect to car hire page with search query as URL parameter
+      router.push(`/user/car-hire?search=${encodeURIComponent(searchQuery.trim())}`);
     } else {
       // If no search query, just go to car hire page
       router.push(`/user/car-hire`);
@@ -181,10 +182,17 @@ export default function HomePageUi() {
     router.push("/user/car-hire");
   };
 
+  // Handle search input key press (Enter key)
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch(e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-blue-600 to-blue-800 text-white overflow-hidden">
+      <section id="bg-home" className="relative bg-gradient-to-r from-blue-600 to-blue-800 text-white overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-10 w-72 h-72 bg-white rounded-full"></div>
@@ -247,9 +255,10 @@ export default function HomePageUi() {
                       <FaMapMarkerAlt className="absolute left-4 top-4 text-gray-400 text-lg" />
                       <input
                         type="text"
-                        placeholder="Where do you want to go?"
+                        placeholder="Enter location, city, or destination..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyPress={handleKeyPress}
                         className="w-full pl-12 pr-4 py-4 bg-gray-100 border-2 border-gray-200 rounded-xl text-gray-800 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                       />
                     </div>

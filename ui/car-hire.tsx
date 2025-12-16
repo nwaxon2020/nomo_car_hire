@@ -8,9 +8,9 @@ import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
 import { FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt, 
   FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope, 
-  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt} from 'react-icons/fa'
+  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt, FaTimes} from 'react-icons/fa'
 
-import { useSearchParams } from 'next/navigation'
+import { useRouter ,useSearchParams } from 'next/navigation'
 
 // NEW: Imports From components 
 import PreChat from "@/components/PreChat"
@@ -104,7 +104,9 @@ interface HiredCar {
 
 export default function CarHireUi() {
     // activate for parameters
+    const router = useRouter();
     const searchParams = useSearchParams()
+    const search = searchParams.get('search');
 
     // State for contacted drivers and hired cars from Firebase
     const [contactedDrivers, setContactedDrivers] = useState<ContactedDriver[]>([])
@@ -330,6 +332,23 @@ export default function CarHireUi() {
         if (driversWithVehicles.length > 0) {
             const driverId = searchParams.get('driver')
             const vehicleId = searchParams.get('vehicle')
+            const searchQuery = searchParams.get('search')
+            
+            // Handle search query from homepage
+            if (searchQuery) {
+                setSearchLocation(searchQuery)
+                
+                // Optional: Also set a message showing what was searched
+                console.log(`Searching for: ${searchQuery}`)
+                
+                // Optional: Auto-scroll to search results
+                setTimeout(() => {
+                    const element = document.getElementById('search-results')
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth' })
+                    }
+                }, 500)
+            }
             
             if (driverId) {
                 // Find the driver in the loaded drivers
@@ -1238,83 +1257,10 @@ export default function CarHireUi() {
                     </div>
                 )}
 
-                {/* Search and Filter Section - Now with AC and Verified filters */}
-                <div className="mt-8 mb-6 p-4 bg-gray-50 rounded-lg">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                        {/* Search Location */}
-                        <div className="relative">
-                            <input 
-                                className="w-full rounded-lg outline-blue-600 py-3 px-4 pl-10 border-2 border-gray-300"  
-                                type="text" 
-                                name="searchLocation" 
-                                id="searchLocation" 
-                                placeholder="Search Location (city or state)"
-                                value={searchLocation}
-                                onChange={(e) => setSearchLocation(e.target.value)}
-                            />
-                            <FaSearch className="absolute top-3 left-3 text-gray-400" />
-                        </div>
-
-                        {/* Select Car category */}
-                        <div>
-                            <select  
-                                className="text-gray-700 outline-blue-600 w-full p-3 border-2 border-gray-300 rounded-lg"
-                                name="category" 
-                                id="category"
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                            >
-                                <option value="all">All Categories</option>
-                                <option value="sedan">Sedan</option>
-                                <option value="suv">SUV</option>
-                                <option value="truck">Truck</option>
-                                <option value="van">Van</option>
-                                <option value="keke">Keke</option>
-                                <option value="luxury">Luxury</option>
-                            </select>
-                        </div>
-
-                        {/* Filter Checkboxes */}
-                        <div className="flex flex-col space-y-2">
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={showACOnly}
-                                    onChange={(e) => setShowACOnly(e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-gray-700 font-medium flex items-center">
-                                    <FaSnowflake className="mr-2 text-blue-500" />
-                                    AC Cars Only
-                                </span>
-                            </label>
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={showVerifiedOnly}
-                                    onChange={(e) => setShowVerifiedOnly(e.target.checked)}
-                                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                                />
-                                <span className="text-gray-700 font-medium flex items-center">
-                                    <FaCheckCircle className="mr-2 text-green-500" />
-                                    Verified Drivers Only
-                                </span>
-                            </label>
-                        </div>
-
-                        {/* Results Count */}
-                        <div className="flex items-center justify-end">
-                            <span className="text-gray-600 font-semibold">
-                                {filteredDrivers.length} {filteredDrivers.length === 1 ? 'car' : 'cars'} available
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
                 {/* ✅ NEW: Booking Request Section */}
                 <section className="mt-8 mb-8">
                     {/* The Top Box */}
-                    <div className="overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-200 mb-6">
+                    <div className="max-h-[300rem] overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-200 mb-6">
                         <div className="flex flex-col md:flex-row items-center justify-between">
                         
                             {/* Left */}
@@ -1374,10 +1320,81 @@ export default function CarHireUi() {
                     </div>  
                 </section>
 
+                {/* Search and Filter Section - Now with AC and Verified filters */}
+                <div className="mt-8 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 md:items-center gap-4">
+                        {/* Search Location */}
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Search by city, state, or location..."
+                                value={searchLocation}
+                                onChange={(e) => setSearchLocation(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                            />
+                            <FaSearch className="absolute top-5 left-3 text-gray-400" />
+                        </div>
+
+                        {/* Select Car category */}
+                        <div>
+                            <select  
+                                className="text-gray-700 outline-blue-600 w-full p-3 border-2 border-gray-300 rounded-lg"
+                                name="category" 
+                                id="category"
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                            >
+                                <option value="all">All Categories</option>
+                                <option value="sedan">Sedan</option>
+                                <option value="bus">Bus</option>
+                                <option value="suv">SUV</option>
+                                <option value="truck">Truck</option>
+                                <option value="van">Van</option>
+                                <option value="keke">Keke</option>
+                                <option value="luxury">Luxury</option>
+                            </select>
+                        </div>
+
+                        {/* Filter Checkboxes */}
+                        <div className="flex flex-col space-y-2">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showACOnly}
+                                    onChange={(e) => setShowACOnly(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-gray-700 font-medium flex items-center">
+                                    <FaSnowflake className="mr-2 text-blue-500" />
+                                    AC Cars Only
+                                </span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showVerifiedOnly}
+                                    onChange={(e) => setShowVerifiedOnly(e.target.checked)}
+                                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                />
+                                <span className="text-gray-700 font-medium flex items-center">
+                                    <FaCheckCircle className="mr-2 text-green-500" />
+                                    Verified Drivers Only
+                                </span>
+                            </label>
+                        </div>
+
+                        {/* Results Count */}
+                        <div className="flex items-center justify-end">
+                            <span className="text-gray-600 font-semibold">
+                                {filteredDrivers.length} {filteredDrivers.length === 1 ? 'car' : 'cars'} available
+                            </span>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Cars Grid - Display all cars directly */}
                 <h1 className="border-b border-gray-300 px-4 py-2 mb-0 mt-8 md:mt-12 text-xl font-bold ">Available Cars</h1>
-                <div className="p-3 pt-0 max-h-[65rem] overflow-y-auto">
+                <div id="search-results" className="p-3 pt-0 max-h-[65rem] overflow-y-auto">
                     {filteredDrivers.length === 0 ? (
                         <div className="text-center py-12">
                             <FaCar className="text-5xl text-gray-300 mb-4 mx-auto" />
