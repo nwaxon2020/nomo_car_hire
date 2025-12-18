@@ -122,18 +122,17 @@ const initializeVIPFields = async (driverId: string) => {
         needsUpdate = true;
       }
       
-      if (data.vipLevel === undefined) {
-        const referralCount = data.referralCount || 0;
-        const purchasedVipLevel = data.purchasedVipLevel || 0;
-        const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+      // Always calculate VIP level from current data
+      const referralCount = data.referralCount || 0;
+      const purchasedVipLevel = data.purchasedVipLevel || 0;
+      const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+      
+      if (data.vipLevel === undefined || data.vipLevel !== vipDetails.vipLevel) {
         updates.vipLevel = vipDetails.vipLevel;
         needsUpdate = true;
       }
       
-      if (data.prestigeLevel === undefined) {
-        const referralCount = data.referralCount || 0;
-        const purchasedVipLevel = data.purchasedVipLevel || 0;
-        const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+      if (data.prestigeLevel === undefined || data.prestigeLevel !== vipDetails.prestigeLevel) {
         updates.prestigeLevel = vipDetails.prestigeLevel;
         needsUpdate = true;
       }
@@ -317,6 +316,18 @@ export default function DriverProfilePage() {
     return false;
   };
 
+  // Helper function for vehicle limit message
+  const getVehicleLimitMessage = () => {
+    if (vipLevel === 0) {
+      return "Regular drivers can add up to 2 vehicles. Upgrade to VIP for more!";
+    } else if (vipLevel >= 1 && vipLevel <= 3) {
+      return `VIP Level ${vipLevel} drivers can add up to 10 vehicles. Upgrade to Gold/Black VIP for unlimited vehicles!`;
+    } else if (vipLevel >= 4) {
+      return "Gold/Black VIP drivers have unlimited vehicles!";
+    }
+    return "";
+  };
+
   useEffect(() => {
     if (!driverId) { setLoading(false); return; }
 
@@ -325,7 +336,7 @@ export default function DriverProfilePage() {
         await initializeVIPFields(driverId);
 
         const userRef = doc(db, "users", driverId);
-        const unsubUser = onSnapshot(userRef, (userSnap) => {
+        const unsubUser = onSnapshot(userRef, async (userSnap) => {
           if (userSnap.exists()) {
             const data = userSnap.data();
             const profileImage = data.profileImage || data.photoURL || "";
@@ -335,8 +346,28 @@ export default function DriverProfilePage() {
 
             const referralCount = data.referralCount || 0;
             const purchasedVipLevel = data.purchasedVipLevel || 0;
-            const vipLevel = data.vipLevel || 0;
-            const prestigeLevel = data.prestigeLevel || 0;
+            let vipLevel = data.vipLevel || 0;
+            let prestigeLevel = data.prestigeLevel || 0;
+
+            // Calculate VIP level based on referrals and purchases
+            const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel);
+            
+            // If calculated VIP is different from stored, update it
+            if (calculatedVIP.vipLevel !== vipLevel || calculatedVIP.prestigeLevel !== prestigeLevel) {
+              vipLevel = calculatedVIP.vipLevel;
+              prestigeLevel = calculatedVIP.prestigeLevel;
+              
+              // Update in Firestore
+              try {
+                await updateDoc(userRef, {
+                  vipLevel: vipLevel,
+                  prestigeLevel: prestigeLevel,
+                  updatedAt: Timestamp.now()
+                });
+              } catch (updateError) {
+                console.error("Error updating VIP levels:", updateError);
+              }
+            }
 
             setDriverData({ ...data, profileImage, fullName });
             setReferralCount(referralCount);
@@ -379,8 +410,9 @@ export default function DriverProfilePage() {
               setContactedDrivers(data.contactedDrivers);
             }
 
+            // Show toast when VIP level changes
             const oldVipLevel = driverData?.vipLevel || 0;
-            if (vipLevel > oldVipLevel && oldVipLevel > 0) {
+            if (vipLevel > oldVipLevel && vipLevel > 0) {
               const newLevelName = VIP_CONFIG.levels[vipLevel - 1]?.name;
               toast.success(`🎉 Congratulations! You've reached ${newLevelName}!`, {
                 duration: 5000,
@@ -456,7 +488,6 @@ export default function DriverProfilePage() {
     });
   }
 
-  // Updated submitVehicle function with better error handling
   const submitVehicle = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setSavingVehicle(true);
@@ -873,48 +904,6 @@ export default function DriverProfilePage() {
     }
   };
 
-  const simulatePayment = async (amount: number) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(true);
-      }, 1000);
-    });
-  };
-
-  const handleNewReferral = async () => {
-    try {
-      const userRef = doc(db, "users", driverId);
-      const newReferralCount = referralCount + 1;
-      
-      await updateDoc(userRef, {
-        referralCount: newReferralCount,
-        updatedAt: Timestamp.now()
-      });
-      
-      const newVipDetails = calculateVIPDetails(newReferralCount, purchasedVipLevel);
-      await updateDoc(userRef, {
-        vipLevel: newVipDetails.vipLevel,
-        prestigeLevel: newVipDetails.prestigeLevel
-      });
-      
-      if (newVipDetails.vipLevel > vipLevel) {
-        const levelName = VIP_CONFIG.levels[newVipDetails.vipLevel - 1]?.name;
-        toast.success(`🎉 New referral earned! You've reached ${levelName}!`, {
-          duration: 5000,
-          icon: '⭐',
-        });
-      } else {
-        toast.success("Referral counted! Keep going!", {
-          icon: '👍',
-        });
-      }
-      
-    } catch (error) {
-      console.error("Error updating referral:", error);
-      toast.error("Failed to update referral");
-    }
-  };
-
   const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>, file: File | null) => {
     if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
       toast.error("File size should be less than 5MB");
@@ -1047,20 +1036,27 @@ export default function DriverProfilePage() {
                 </div>
               </div>
               
-              {vipLevel > 0 && vipLevel < VIP_CONFIG.maxLevel && (
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Progress to {vipDetails.nextLevelName}</span>
-                    <span>{referralCount}/{vipDetails.referralsForNext}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
-                      style={{ width: `${vipDetails.progressPercentage}%` }}
-                    ></div>
-                  </div>
+              {/* ALWAYS SHOW PROGRESS BAR - Even for non-VIP users */}
+              <div className="mt-4">
+                <div className="flex justify-between text-sm mb-1">
+                  <span>Progress to {vipLevel > 0 ? vipDetails.nextLevelName : 'Green VIP'}</span>
+                  <span>
+                    {referralCount}/{vipLevel > 0 ? vipDetails.referralsForNext : VIP_CONFIG.levels[0].referralsRequired}
+                  </span>
                 </div>
-              )}
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
+                    style={{ width: `${vipLevel > 0 ? vipDetails.progressPercentage : (referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  {vipLevel > 0 
+                    ? `${vipDetails.nextReferralsNeeded} more referrals for next level`
+                    : `${VIP_CONFIG.levels[0].referralsRequired - referralCount} more referrals to become Green VIP`
+                  }
+                </div>
+              </div>
             </div>
 
             {/* VIP Levels Grid */}
@@ -1164,7 +1160,7 @@ export default function DriverProfilePage() {
               <p className="text-sm text-gray-700 mb-3">
                 {vipLevel > 0 
                   ? `You have ${referralCount} referrals. Need ${vipDetails.nextReferralsNeeded} more for next level!`
-                  : "Share your link to get referrals and earn VIP status!"
+                  : `You have ${referralCount} referrals. Need ${VIP_CONFIG.levels[0].referralsRequired - referralCount} more to become Green VIP!`
                 }
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -1175,12 +1171,12 @@ export default function DriverProfilePage() {
                     text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
                   />
                 </div>
-                {vipLevel > 0 && vipLevel < VIP_CONFIG.maxLevel && (
-                  <div className="text-center sm:text-right">
-                    <div className="text-lg font-bold text-amber-800">{vipDetails.nextReferralsNeeded}</div>
-                    <div className="text-sm text-gray-600">More referrals needed</div>
+                <div className="text-center sm:text-right">
+                  <div className="text-lg font-bold text-amber-800">
+                    {vipLevel > 0 ? vipDetails.nextReferralsNeeded : VIP_CONFIG.levels[0].referralsRequired - referralCount}
                   </div>
-                )}
+                  <div className="text-sm text-gray-600">More referrals needed</div>
+                </div>
               </div>
             </div>
 
@@ -1328,51 +1324,32 @@ export default function DriverProfilePage() {
                   </span>
                 </div>
 
-                {/* VIP Progress Bar */}
-                {vipLevel > 0 && vipLevel < VIP_CONFIG.maxLevel && (
-                  <div className="mt-3">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-medium text-gray-700">
-                        Progress to {vipDetails.nextLevelName}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {referralCount}/{vipDetails.referralsForNext} referrals
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
-                        style={{ width: `${vipDetails.progressPercentage}%` }}
-                      ></div>
-                    </div>
-                    <div className="text-xs text-gray-600 mt-1">
-                      {vipDetails.nextReferralsNeeded} more referrals for next level
-                    </div>
+                {/* ALWAYS SHOW VIP PROGRESS BAR - Even for non-VIP users */}
+                <div className="mt-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-medium text-gray-700">
+                      Progress to {vipLevel > 0 ? vipDetails.nextLevelName : 'Green VIP'}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {referralCount}/{vipLevel > 0 ? vipDetails.referralsForNext : VIP_CONFIG.levels[0].referralsRequired} referrals
+                    </span>
                   </div>
-                )}
-                
-                {/* Prestige Progress */}
-                {vipLevel >= VIP_CONFIG.maxLevel && (
-                  <div className="mt-3">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-medium text-gray-700">
-                        Prestige Level {prestigeLevel}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {referralCount} total referrals
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full bg-gradient-to-r from-gray-800 to-black" 
-                        style={{ width: `${vipDetails.progressPercentage}%` }}
-                      ></div>
-                    </div>
-                    <div className="text-xs text-gray-600 mt-1">
-                      Next Prestige Level in {vipDetails.nextReferralsNeeded} more referrals
-                    </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
+                      style={{ 
+                        width: `${vipLevel > 0 ? vipDetails.progressPercentage : 
+                          Math.min((referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100, 100)}%` 
+                      }}
+                    ></div>
                   </div>
-                )}
+                  <div className="text-xs text-gray-600 mt-1">
+                    {vipLevel > 0 
+                      ? `${vipDetails.nextReferralsNeeded} more referrals for next level`
+                      : `${VIP_CONFIG.levels[0].referralsRequired - referralCount} more referrals to become Green VIP`
+                    }
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1422,11 +1399,14 @@ export default function DriverProfilePage() {
               <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                 <div 
                   className="h-1.5 rounded-full bg-green-500" 
-                  style={{ width: `${vipDetails.progressPercentage}%` }}
+                  style={{ 
+                    width: `${vipLevel > 0 ? vipDetails.progressPercentage : 
+                      Math.min((referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100, 100)}%` 
+                  }}
                 ></div>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {vipLevel > 0 ? `VIP Level ${vipLevel}` : 'No VIP yet'}
+                {vipLevel > 0 ? `VIP Level ${vipLevel}` : `Need ${VIP_CONFIG.levels[0].referralsRequired - referralCount} more for VIP`}
               </p>
             </div>
 
@@ -1435,9 +1415,9 @@ export default function DriverProfilePage() {
               <p className="text-xl lg:text-2xl font-bold">{vehicles.length}</p>
               <p className="text-xs text-gray-500 mt-1">
                 {vipLevel === 0 
-                  ? `${2 - vehicles.length} more available`
+                  ? `${Math.max(0, 2 - vehicles.length)} more available`
                   : vipLevel <= 3 
-                    ? `${10 - vehicles.length} more available`
+                    ? `${Math.max(0, 10 - vehicles.length)} more available`
                     : 'Unlimited'
                 }
               </p>
@@ -1984,7 +1964,8 @@ export default function DriverProfilePage() {
                   </p>
                 )}
 
-                <div className="flex justify-between pt-3 border-t border-gray-100">
+                {/* Delete and Edit Button section */}
+                <div className="flex justify-between pt-3 border-t border-gray-100 border-t border-gray-200">
                   <button
                     onClick={() => startEdit(v)}
                     className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
@@ -2197,7 +2178,7 @@ export default function DriverProfilePage() {
       {/* Transport News */}
       <div className="bg-white mt-6 p-3 lg:p-4 rounded-xl shadow">
         <h2 className="text-lg lg:text-2xl font-bold mb-3">Latest Transport News</h2>
-        <div className="max-h-[45rem] lg:max-h-80 overflow-y-auto p-2">
+        <div className="max-h-[45rem] lg:max-h-90 overflow-y-auto p-2">
           <TransportNewsPageUi />
         </div>
       </div>
