@@ -1,23 +1,13 @@
-"use client";
+"use client"
 
 import { useEffect, useState } from "react";
 import { db, storage } from "@/lib/firebaseConfig";
-import {
-  doc,
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  onSnapshot,
-  getDoc,
-  Timestamp,
-  arrayUnion,
-  arrayRemove,
+import {doc, collection,addDoc,updateDoc, deleteDoc, query,where,
+  onSnapshot,getDoc,Timestamp,arrayUnion,arrayRemove,
 } from "firebase/firestore";
+
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import TransportNewsPageUi from "../components/news";
 import WordGuessGame from "../components/game";
 import ShareButton from "@/components/sharebutton";
@@ -184,7 +174,7 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
       yellow: "text-yellow-500",
       purple: "text-purple-500",
       gold: "text-yellow-600",
-      black: "text-gray-900"
+      black: "text-gray-700"
     };
     return colors[color] || colors.green;
   };
@@ -260,6 +250,7 @@ interface Comment {
 
 export default function DriverProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const driverId = Array.isArray(params?.id) ? params.id[0] : params?.id || "";
 
   const [loading, setLoading] = useState(true);
@@ -317,6 +308,14 @@ export default function DriverProfilePage() {
   const toNextBonus = 15 - (completedJobs % 15);
   const progressPercentage = ((completedJobs % 15) / 15) * 100;
   const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+
+  // Check vehicle limits based on VIP level
+  const canAddVehicle = () => {
+    if (vipLevel === 0) return vehicles.length < 2; // Regular users: max 2
+    if (vipLevel >= 1 && vipLevel <= 3) return vehicles.length < 10; // Green/Yellow/Purple VIP: max 10
+    if (vipLevel >= 4) return true; // Gold and Black VIP: unlimited
+    return false;
+  };
 
   useEffect(() => {
     if (!driverId) { setLoading(false); return; }
@@ -457,80 +456,276 @@ export default function DriverProfilePage() {
     });
   }
 
+  // Updated submitVehicle function with better error handling
   const submitVehicle = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setSavingVehicle(true);
 
-    if (!carName || !carModel || !plateNumber || !exteriorColor || !interiorColor || !carType) { 
-      toast.error("Please fill all required fields"); 
-      setSavingVehicle(false); 
-      return; 
-    }
-    if (!editingVehicle && (!frontFile || !sideFile || !backFile || !interiorFile)) { 
-      toast.error("All 4 vehicle photos are required"); 
-      setSavingVehicle(false); 
-      return; 
-    }
-
     try {
+      // Comprehensive validation
+      const errors: string[] = [];
+
+      // Required field validations
+      if (!carName.trim()) errors.push("Vehicle name is required");
+      if (!carModel.trim()) errors.push("Vehicle model is required");
+      if (!plateNumber.trim()) errors.push("Plate number is required");
+      if (!exteriorColor.trim()) errors.push("Exterior color is required");
+      if (!interiorColor.trim()) errors.push("Interior color is required");
+      if (!carType.trim()) errors.push("Vehicle type is required");
+      
+      // Plate number format validation
+      const plateRegex = /^[A-Z0-9]{3,10}$/i;
+      if (plateNumber.trim() && !plateRegex.test(plateNumber.trim())) {
+        errors.push("Plate number should be 3-10 alphanumeric characters");
+      }
+      
+      // Color validation
+      const colorRegex = /^[a-zA-Z\s]{2,20}$/;
+      if (exteriorColor.trim() && !colorRegex.test(exteriorColor.trim())) {
+        errors.push("Exterior color should be 2-20 letters only");
+      }
+      if (interiorColor.trim() && !colorRegex.test(interiorColor.trim())) {
+        errors.push("Interior color should be 2-20 letters only");
+      }
+      
+      // Image validation for new vehicles
+      if (!editingVehicle) {
+        const requiredImages = [
+          { file: frontFile, label: "Front view" },
+          { file: sideFile, label: "Side view" },
+          { file: backFile, label: "Back view" },
+          { file: interiorFile, label: "Interior view" }
+        ];
+        
+        requiredImages.forEach(({ file, label }) => {
+          if (!file) {
+            errors.push(`${label} photo is required`);
+          } else {
+            // File type validation
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+            if (!validTypes.includes(file.type)) {
+              errors.push(`${label} must be a JPG, PNG, or WebP image`);
+            }
+            
+            // File size validation (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+              errors.push(`${label} image must be less than 5MB`);
+            }
+          }
+        });
+      }
+
+      // For editing, check if files exist and validate them
+      if (editingVehicle) {
+        const filesToCheck = [
+          { file: frontFile, label: "Front view" },
+          { file: sideFile, label: "Side view" },
+          { file: backFile, label: "Back view" },
+          { file: interiorFile, label: "Interior view" }
+        ];
+        
+        filesToCheck.forEach(({ file, label }) => {
+          if (file) {
+            // File type validation
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+            if (!validTypes.includes(file.type)) {
+              errors.push(`${label} must be a JPG, PNG, or WebP image`);
+            }
+            
+            // File size validation (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+              errors.push(`${label} image must be less than 5MB`);
+            }
+          }
+        });
+      }
+
+      // Check if vehicle limit is reached
+      if (!editingVehicle && !canAddVehicle()) {
+        errors.push(`Vehicle limit reached! ${getVehicleLimitMessage()}`);
+      }
+
+      // Show all errors at once
+      if (errors.length > 0) {
+        const errorMessage = errors.join('\n• ');
+        toast.error(`Please fix the following:\n• ${errorMessage}`, {
+          duration: 5000,
+        });
+        setSavingVehicle(false);
+        return;
+      }
+
+      // Upload files with progress tracking
+      const uploadWithProgress = async (file: File | null, path: string, label: string): Promise<string | null> => {
+        if (!file) return null;
+        
+        return new Promise((resolve, reject) => {
+          const sRef = storageRef(storage, path);
+          const task = uploadBytesResumable(sRef, file);
+          
+          task.on('state_changed',
+            (snapshot) => {
+              // You could add progress tracking here
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              console.log(`${label} upload is ${progress}% done`);
+            },
+            (error) => {
+              console.error(`Error uploading ${label}:`, error);
+              reject(new Error(`Failed to upload ${label}: ${error.message}`));
+            },
+            async () => {
+              try {
+                const url = await getDownloadURL(task.snapshot.ref);
+                resolve(url);
+              } catch (error) {
+                reject(new Error(`Failed to get download URL for ${label}`));
+              }
+            }
+          );
+        });
+      };
+
       const timestamp = Date.now();
-      const frontUrl = frontFile ? await uploadFile(frontFile, `vehicleLog/${driverId}/${timestamp}_front_${frontFile.name}`) : editingVehicle?.images.front;
-      const sideUrl = sideFile ? await uploadFile(sideFile, `vehicleLog/${driverId}/${timestamp}_side_${sideFile.name}`) : editingVehicle?.images.side;
-      const backUrl = backFile ? await uploadFile(backFile, `vehicleLog/${driverId}/${timestamp}_back_${backFile.name}`) : editingVehicle?.images.back;
-      const interiorUrl = interiorFile ? await uploadFile(interiorFile, `vehicleLog/${driverId}/${timestamp}_interior_${interiorFile.name}`) : editingVehicle?.images.interior;
+      
+      // Upload files in parallel
+      const uploadPromises = [];
+      
+      if (frontFile) {
+        uploadPromises.push(
+          uploadWithProgress(
+            frontFile, 
+            `vehicleLog/${driverId}/${timestamp}_front_${frontFile.name}`, 
+            "Front view"
+          )
+        );
+      }
+      
+      if (sideFile) {
+        uploadPromises.push(
+          uploadWithProgress(
+            sideFile, 
+            `vehicleLog/${driverId}/${timestamp}_side_${sideFile.name}`, 
+            "Side view"
+          )
+        );
+      }
+      
+      if (backFile) {
+        uploadPromises.push(
+          uploadWithProgress(
+            backFile, 
+            `vehicleLog/${driverId}/${timestamp}_back_${backFile.name}`, 
+            "Back view"
+          )
+        );
+      }
+      
+      if (interiorFile) {
+        uploadPromises.push(
+          uploadWithProgress(
+            interiorFile, 
+            `vehicleLog/${driverId}/${timestamp}_interior_${interiorFile.name}`, 
+            "Interior view"
+          )
+        );
+      }
+
+      // Wait for all uploads to complete
+      const [frontUrl, sideUrl, backUrl, interiorUrl] = await Promise.allSettled(uploadPromises)
+        .then((results) => {
+          return results.map((result, index) => {
+            if (result.status === 'fulfilled') {
+              return result.value;
+            } else {
+              throw new Error(`Upload failed: ${result.reason}`);
+            }
+          });
+        });
+
+      // Use existing URLs for images that weren't updated
+      const finalFrontUrl = frontUrl || editingVehicle?.images.front;
+      const finalSideUrl = sideUrl || editingVehicle?.images.side;
+      const finalBackUrl = backUrl || editingVehicle?.images.back;
+      const finalInteriorUrl = interiorUrl || editingVehicle?.images.interior;
+
+      // Validate that we have all required image URLs
+      const missingImages = [];
+      if (!finalFrontUrl) missingImages.push("Front view");
+      if (!finalSideUrl) missingImages.push("Side view");
+      if (!finalBackUrl) missingImages.push("Back view");
+      if (!finalInteriorUrl) missingImages.push("Interior view");
+      
+      if (missingImages.length > 0 && !editingVehicle) {
+        throw new Error(`Missing required images: ${missingImages.join(', ')}`);
+      }
 
       const vehicleDoc = {
         driverId,
-        carName,
-        carModel,
-        carType,
+        carName: carName.trim(),
+        carModel: carModel.trim(),
+        carType: carType.trim(),
         passengers,
         ac,
-        plateNumber,
-        exteriorColor,
-        interiorColor,
+        plateNumber: plateNumber.trim().toUpperCase(),
+        exteriorColor: exteriorColor.trim(),
+        interiorColor: interiorColor.trim(),
         status: vehicleStatus,
-        images: { front: frontUrl!, side: sideUrl!, back: backUrl!, interior: interiorUrl! },
-        description,
+        images: { 
+          front: finalFrontUrl!, 
+          side: finalSideUrl!, 
+          back: finalBackUrl!, 
+          interior: finalInteriorUrl! 
+        },
+        description: description.trim(),
         createdAt: editingVehicle?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
 
       if (editingVehicle?.id) {
         await updateDoc(doc(db, "vehicleLog", editingVehicle.id), vehicleDoc);
-        toast.success("Vehicle updated successfully");
+        toast.success("✅ Vehicle updated successfully!");
       } else {
         const newDocRef = await addDoc(collection(db, "vehicleLog"), vehicleDoc);
+        
         try {
           const userRef = doc(db, "users", driverId);
-          await updateDoc(userRef, { vehicleLog: arrayUnion(newDocRef.id), updatedAt: Timestamp.now() });
-        } catch (uErr) {
+          await updateDoc(userRef, { 
+            vehicleLog: arrayUnion(newDocRef.id), 
+            updatedAt: Timestamp.now() 
+          });
+        } catch (uErr: any) {
           console.error("Failed to update user's vehicleLog array:", uErr);
-          toast.error("Vehicle added but user record couldn't be updated (contact admin).");
+          // Rollback vehicle creation if user update fails
+          await deleteDoc(newDocRef);
+          throw new Error("Vehicle added but user record couldn't be updated. Please contact support.");
         }
-        toast.success("Vehicle added successfully");
+        
+        toast.success("✅ Vehicle added successfully!");
       }
 
-      setCarName("");
-      setCarModel("");
-      setCarType("sedan");
-      setPassengers(4);
-      setAc(true);
-      setPlateNumber("");
-      setDescription("");
-      setExteriorColor("");
-      setInteriorColor("");
-      setVehicleStatus("available");
-      setFrontFile(null);
-      setSideFile(null);
-      setBackFile(null);
-      setInteriorFile(null);
-      setPreviews({});
+      // Reset form
+      resetVehicleForm();
       setShowVehicleForm(false);
       setEditingVehicle(null);
-    } catch (err) {
+      
+    } catch (err: any) {
       console.error("Failed to save vehicle:", err);
-      toast.error("Failed to save vehicle");
+      
+      // User-friendly error messages
+      let errorMessage = "Failed to save vehicle";
+      if (err.message.includes("storage/unauthorized")) {
+        errorMessage = "Storage access denied. Please contact support.";
+      } else if (err.message.includes("storage/object-not-found")) {
+        errorMessage = "File not found. Please re-upload the images.";
+      } else if (err.message.includes("permission-denied")) {
+        errorMessage = "Permission denied. You may not have access to perform this action.";
+      } else if (err.message.includes("network")) {
+        errorMessage = "Network error. Please check your connection and try again.";
+      }
+      
+      toast.error(`${errorMessage}: ${err.message}`, {
+        duration: 5000,
+      });
     } finally {
       setSavingVehicle(false);
     }
@@ -646,7 +841,7 @@ export default function DriverProfilePage() {
   };
 
   const handleAddVehicleClick = () => {
-    if (vipLevel === 0 && vehicles.length >= 2) {
+    if (!canAddVehicle()) {
       setShowVIPModal(true);
       return;
     }
@@ -670,48 +865,11 @@ export default function DriverProfilePage() {
 
   const handleVIPPurchase = async (level: number) => {
     try {
-      const userRef = doc(db, "users", driverId);
-      const vipDetails = VIP_CONFIG.levels[level - 1];
-      
-      if (purchasedVipLevel >= level) {
-        toast.error(`You already have VIP Level ${purchasedVipLevel}`);
-        return;
-      }
-      
-      const paymentSuccess = await simulatePayment(vipDetails.price);
-      
-      if (!paymentSuccess) {
-        toast.error("Payment failed. Please try again.");
-        return;
-      }
-      
-      await updateDoc(userRef, {
-        purchasedVipLevel: level,
-        vipPurchaseHistory: arrayUnion({
-          level: level,
-          price: vipDetails.price,
-          purchaseDate: Timestamp.now(),
-          paymentId: `PAY-${Date.now()}`
-        }),
-        updatedAt: Timestamp.now()
-      });
-      
-      const newVipDetails = calculateVIPDetails(referralCount, level);
-      await updateDoc(userRef, {
-        vipLevel: newVipDetails.vipLevel,
-        prestigeLevel: newVipDetails.prestigeLevel
-      });
-      
-      toast.success(`🎉 Successfully upgraded to ${vipDetails.name}!`, {
-        duration: 5000,
-        icon: '⭐',
-      });
-      
-      setShowVIPUpgradeModal(false);
-      
+      // Redirect to purchase page
+      router.push(`/user/purchase?level=${level}`);
     } catch (err) {
-      console.error("Error purchasing VIP:", err);
-      toast.error("Failed to purchase VIP");
+      console.error("Error redirecting to purchase:", err);
+      toast.error("Failed to redirect to purchase page");
     }
   };
 
@@ -757,6 +915,14 @@ export default function DriverProfilePage() {
     }
   };
 
+  const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>, file: File | null) => {
+    if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast.error("File size should be less than 5MB");
+      return;
+    }
+    setter(file);
+  };
+
   if (loading) return (
     <div className="flex justify-center items-center min-h-screen">
       <LoadingRound />
@@ -786,32 +952,32 @@ export default function DriverProfilePage() {
             
             <div className="text-center mb-4">
               <div className="w-16 h-16 mx-auto bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mb-4">
-                <VIPStar level={1} size="lg" showLabel={false} />
+                <VIPStar level={vipLevel || 1} size="lg" showLabel={false} />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Upgrade to VIP Driver</h3>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                {vipLevel === 0 ? 'Upgrade to VIP Driver' : 'Upgrade VIP Level'}
+              </h3>
               <p className="text-gray-600 mb-4">
-                You can only add 2 vehicles as a regular driver. Upgrade to VIP to add unlimited vehicles!
+                {vipLevel === 0 
+                  ? "You can only add 2 vehicles as a regular driver. Upgrade to VIP to add more vehicles!" 
+                  : `You can add up to ${vipLevel <= 3 ? '10' : 'unlimited'} vehicles at VIP Level ${vipLevel}. Upgrade to add more!`}
               </p>
             </div>
 
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 mb-4">
-              <h4 className="font-semibold text-green-800 mb-2">VIP Benefits:</h4>
+              <h4 className="font-semibold text-green-800 mb-2">VIP Vehicle Limits:</h4>
               <ul className="text-sm text-gray-700 space-y-1">
                 <li className="flex items-start gap-2">
                   <span className="text-green-500">✓</span>
-                  <span>Add unlimited vehicles</span>
+                  <span>Regular Driver: <strong>2 vehicles max</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-500">✓</span>
-                  <span>Priority in search results</span>
+                  <span>Green/Yellow/Purple VIP: <strong>10 vehicles max</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-500">✓</span>
-                  <span>Special VIP badge</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-500">✓</span>
-                  <span>Higher booking priority</span>
+                  <span>Gold/Black VIP: <strong>Unlimited vehicles</strong></span>
                 </li>
               </ul>
             </div>
@@ -979,11 +1145,11 @@ export default function DriverProfilePage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-purple-500">•</span>
-                  <span><strong>Referral Requirements:</strong> 15, 20, 25, 30, 35 referrals for levels 1-5</span>
+                  <span><strong>Vehicle Limits:</strong> Regular (2), VIP 1-3 (10), VIP 4-5 (Unlimited)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-purple-500">•</span>
-                  <span><strong>After Level 5:</strong> Earn Prestige Levels (LV1, LV2, etc.) for extra referrals</span>
+                  <span><strong>Referral Requirements:</strong> 15, 20, 25, 30, 35 referrals for levels 1-5</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-purple-500">•</span>
@@ -997,7 +1163,7 @@ export default function DriverProfilePage() {
               <h4 className="font-semibold text-amber-800 mb-2">Earn VIP Through Referrals</h4>
               <p className="text-sm text-gray-700 mb-3">
                 {vipLevel > 0 
-                  ? "Share your link to get referrals and upgrade to your next VIP level!"
+                  ? `You have ${referralCount} referrals. Need ${vipDetails.nextReferralsNeeded} more for next level!`
                   : "Share your link to get referrals and earn VIP status!"
                 }
               </p>
@@ -1009,6 +1175,12 @@ export default function DriverProfilePage() {
                     text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
                   />
                 </div>
+                {vipLevel > 0 && vipLevel < VIP_CONFIG.maxLevel && (
+                  <div className="text-center sm:text-right">
+                    <div className="text-lg font-bold text-amber-800">{vipDetails.nextReferralsNeeded}</div>
+                    <div className="text-sm text-gray-600">More referrals needed</div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1228,28 +1400,6 @@ export default function DriverProfilePage() {
                 </button>
               </div>
             </div>
-
-            {/* Bonus Progress - UPDATED TEXT */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-medium text-gray-700">Job Bonus Progress</span>
-                <span className="text-xs text-gray-500">{completedJobs % 15}/15 jobs</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="h-2 rounded-full bg-emerald-600" 
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between mt-2">
-                <span className="text-xs lg:text-sm text-gray-700">
-                  <span className="font-semibold">Referrals:</span> {referralCount}
-                </span>
-                <span className="text-xs lg:text-sm text-gray-600">
-                  {vipLevel > 0 ? `${vipDetails.nextReferralsNeeded} to next VIP level` : '15 for VIP status'}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Stats Grid */}
@@ -1283,9 +1433,14 @@ export default function DriverProfilePage() {
             <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-xl p-3 lg:p-4 text-center">
               <p className="text-xs font-semibold text-indigo-700 mb-1">Vehicles</p>
               <p className="text-xl lg:text-2xl font-bold">{vehicles.length}</p>
-              {vipLevel === 0 && vehicles.length >= 2 && (
-                <p className="text-[10px] text-amber-600 mt-1">VIP for more</p>
-              )}
+              <p className="text-xs text-gray-500 mt-1">
+                {vipLevel === 0 
+                  ? `${2 - vehicles.length} more available`
+                  : vipLevel <= 3 
+                    ? `${10 - vehicles.length} more available`
+                    : 'Unlimited'
+                }
+              </p>
             </div>
           </div>
         </div>
@@ -1306,14 +1461,14 @@ export default function DriverProfilePage() {
                 onClick={handleAddVehicleClick}
                 className="flex-1 lg:flex-none bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
               >
-                Add Vehicle {vipLevel === 0 && vehicles.length > 0 && `(${vehicles.length}/2)`}
+                Add Vehicle {!canAddVehicle() && `(${vehicles.length} added)`}
               </button>
               
               <button
                 onClick={() => setShowVIPUpgradeModal(true)}
                 className="flex-1 lg:flex-none bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-colors text-sm font-medium"
               >
-                {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become VIP'}
+                {vipLevel > 0 ? 'Upgrade VIP' : 'Become VIP'}
               </button>
               
               <button
@@ -1377,6 +1532,312 @@ export default function DriverProfilePage() {
         </div>
       </div>
 
+      {/* Add Vehicle Form */}
+      {showVehicleForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
+          <div className="bg-[white] rounded-lg shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => {
+                setShowVehicleForm(false);
+                setEditingVehicle(null);
+                resetVehicleForm();
+              }} 
+              className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 text-2xl"
+            >
+              ×
+            </button>
+            
+            <h3 className="text-xl font-bold text-gray-800 mb-4">
+              {editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}
+            </h3>
+            
+            {/* Add Vehicle Form */}
+            <form onSubmit={submitVehicle} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Vehicle Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vehicle Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={carName}
+                    onChange={(e) => setCarName(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Toyota Camry"
+                    required
+                  />
+                </div>
+
+                {/* Vehicle Model */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vehicle Model <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={carModel}
+                    onChange={(e) => setCarModel(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., 2022 LE"
+                    required
+                  />
+                </div>
+
+                {/* Plate Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Plate Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={plateNumber}
+                    onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., ABC123DE"
+                    required
+                  />
+                </div>
+
+                {/* Vehicle Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vehicle Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={carType}
+                    onChange={(e) => setCarType(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="sedan">Sedan</option>
+                    <option value="suv">SUV</option>
+                    <option value="truck">Truck</option>
+                    <option value="van">Van</option>
+                    <option value="bus">Bus</option>
+                    <option value="keke">Keke</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                {/* Exterior Color */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Exterior Color <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={exteriorColor}
+                    onChange={(e) => setExteriorColor(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Red, Blue, Black"
+                    required
+                  />
+                </div>
+
+                {/* Interior Color */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Interior Color <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={interiorColor}
+                    onChange={(e) => setInteriorColor(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Black, Beige, Gray"
+                    required
+                  />
+                </div>
+
+                {/* Passengers */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Passengers <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={passengers}
+                    onChange={(e) => setPassengers(Number(e.target.value))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value={2}>2</option>
+                    <option value={4}>4</option>
+                    <option value={6}>6</option>
+                    <option value={8}>8</option>
+                    <option value={10}>10+</option>
+                  </select>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={vehicleStatus}
+                    onChange={(e) => setVehicleStatus(e.target.value as any)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="available">Available</option>
+                    <option value="unavailable">Unavailable</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* AC Checkbox */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="ac"
+                  checked={ac}
+                  onChange={(e) => setAc(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="ac" className="ml-2 text-sm text-gray-700">
+                  Air Conditioning Available
+                </label>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Describe your vehicle features..."
+                  rows={3}
+                />
+              </div>
+
+              {/* Vehicle Images */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vehicle Images <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">(All 4 photos required, max 5MB each)</span>
+                </label>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* Front View */}
+                  <div className="text-center">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Front View</label>
+                    <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
+                      {previews.front ? (
+                        <img src={previews.front} alt="Front preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                          <span className="text-2xl">📸</span>
+                          <span className="text-xs mt-1">Front</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(setFrontFile, e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        required={!editingVehicle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Side View */}
+                  <div className="text-center">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Side View</label>
+                    <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
+                      {previews.side ? (
+                        <img src={previews.side} alt="Side preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                          <span className="text-2xl">📸</span>
+                          <span className="text-xs mt-1">Side</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(setSideFile, e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        required={!editingVehicle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Back View */}
+                  <div className="text-center">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Back View</label>
+                    <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
+                      {previews.back ? (
+                        <img src={previews.back} alt="Back preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                          <span className="text-2xl">📸</span>
+                          <span className="text-xs mt-1">Back</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(setBackFile, e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        required={!editingVehicle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Interior View */}
+                  <div className="text-center">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Interior View</label>
+                    <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
+                      {previews.interior ? (
+                        <img src={previews.interior} alt="Interior preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                          <span className="text-2xl">📸</span>
+                          <span className="text-xs mt-1">Interior</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(setInteriorFile, e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        required={!editingVehicle}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVehicleForm(false);
+                    setEditingVehicle(null);
+                    resetVehicleForm();
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingVehicle}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingVehicle ? 'Saving...' : editingVehicle ? 'Update Vehicle' : 'Add Vehicle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Word guessing game section */}
       {game && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
@@ -1395,29 +1856,36 @@ export default function DriverProfilePage() {
       {/* Vehicles Section */}
       <section className="bg-white shadow-lg rounded-xl p-4 lg:p-6 mb-6">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-2">
-          <h2 className="text-lg lg:text-xl font-semibold">Your Vehicles</h2>
-          {vipLevel === 0 && vehicles.length > 0 && (
-            <div className="text-xs text-gray-500">
-              {vehicles.length}/2 vehicles added
-              {vehicles.length >= 2 && (
-                <span className="ml-2 text-amber-600 font-semibold">• VIP required for more</span>
-              )}
-            </div>
-          )}
+          <h2 className="text-lg lg:text-xl font-semibold">My Vehicles</h2>
+          <div className="text-xs text-gray-500">
+            {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} added
+            {!canAddVehicle() && vipLevel > 0 && vipLevel <= 3 && (
+              <span className="ml-2 text-amber-600 font-semibold">• VIP {vipLevel >= 4 ? 'Gold+' : 'Upgrade'} for more</span>
+            )}
+          </div>
         </div>
 
         {vehicles.length === 0 ? (
-          <p className="text-gray-500 text-center py-6 lg:py-8">No vehicles yet. Click "Add Vehicle" to create one.</p>
+          <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+            <div className="text-gray-400 text-4xl mb-2">🚗</div>
+            <p className="text-gray-500 mb-2">No vehicles yet</p>
+            <p className="text-sm text-gray-400 mb-4">Click "Add Vehicle" to create your first vehicle</p>
+            <button
+              onClick={handleAddVehicleClick}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              Add Your First Vehicle
+            </button>
+          </div>
         ) : (
-        <div className="w-full overflow-x-auto">
-          <div className="max-h-[90rem] p-2 overflow-y-auto flex flex-col lg:flex-row gap-6 mt-4 pb-4">
+          <div className="md:py-5 grid grid-cols-1 md:flex overflow-x-auto gap-4">
             {vehicles.map((v) => (
               <div 
                 key={v.id} 
-                className="w-full lg:min-w-[20rem] lg:w-[20rem] bg-gray-900 shadow rounded-xl p-2 hover:shadow-lg transition-shadow"
+                className="bg-gray-100 border border-gray-200 rounded-xl p-3 hover:shadow-md transition-shadow"
               >
                 
-                <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2">
+                <div className="relative w-full md:w-[18rem] h-40 rounded-lg overflow-hidden mb-3">
                   <img 
                     src={selectedMainImage[v.id!] || v.images.front}
                     className="w-full h-full object-cover"
@@ -1434,135 +1902,98 @@ export default function DriverProfilePage() {
                   </div>
                 </div>
 
-                <div className="relative">
-                  <button
-                    onClick={() =>
-                      document.getElementById(`scroll-${v.id}`)?.scrollBy({
-                        left: -120,
-                        behavior: "smooth",
-                      })
-                    }
-                    className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
-                  >
-                    ‹
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      document.getElementById(`scroll-${v.id}`)?.scrollBy({
-                        left: 120,
-                        behavior: "smooth",
-                      })
-                    }
-                    className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/70 px-2 py-1 rounded-full shadow"
-                  >
-                    ›
-                  </button>
-
-                  <div
-                    id={`scroll-${v.id}`}
-                    className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-6"
-                  >
-                    <img
-                      src={v.images.front}
-                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
-                        selectedMainImage[v.id!] === v.images.front
-                          ? "border-blue-500 border-2"
-                          : "border-gray-300"
-                      }`}
-                      onClick={() => handleThumbnailClick(v.id!, v.images.front)}
-                      alt="Front view"
-                    />
-                    <img
-                      src={v.images.side}
-                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
-                        selectedMainImage[v.id!] === v.images.side
-                          ? "border-blue-500 border-2"
-                          : "border-gray-300"
-                      }`}
-                      onClick={() => handleThumbnailClick(v.id!, v.images.side)}
-                      alt="Side view"
-                    />
-                    <img
-                      src={v.images.back}
-                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
-                        selectedMainImage[v.id!] === v.images.back
-                          ? "border-blue-500 border-2"
-                          : "border-gray-300"
-                      }`}
-                      onClick={() => handleThumbnailClick(v.id!, v.images.back)}
-                      alt="Back view"
-                    />
-                    <img
-                      src={v.images.interior}
-                      className={`w-16 h-16 rounded-md object-cover border cursor-pointer transition-all ${
-                        selectedMainImage[v.id!] === v.images.interior
-                          ? "border-blue-500 border-2"
-                          : "border-gray-300"
-                      }`}
-                      onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
-                      alt="Interior view"
-                    />
-                  </div>
+                {/* Thumbnail Images */}
+                <div className="flex justify-center items-center gap-2 mb-3 border-b border-gray-200 pb-1">
+                  <img
+                    src={v.images.front}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
+                      selectedMainImage[v.id!] === v.images.front
+                        ? "border-blue-500 border-2"
+                        : "border-gray-300"
+                    }`}
+                    onClick={() => handleThumbnailClick(v.id!, v.images.front)}
+                    alt="Front view"
+                  />
+                  <img
+                    src={v.images.side}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
+                      selectedMainImage[v.id!] === v.images.side
+                        ? "border-blue-500 border-2"
+                        : "border-gray-300"
+                    }`}
+                    onClick={() => handleThumbnailClick(v.id!, v.images.side)}
+                    alt="Side view"
+                  />
+                  <img
+                    src={v.images.back}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
+                      selectedMainImage[v.id!] === v.images.back
+                        ? "border-blue-500 border-2"
+                        : "border-gray-300"
+                    }`}
+                    onClick={() => handleThumbnailClick(v.id!, v.images.back)}
+                    alt="Back view"
+                  />
+                  <img
+                    src={v.images.interior}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
+                      selectedMainImage[v.id!] === v.images.interior
+                        ? "border-blue-500 border-2"
+                        : "border-gray-300"
+                    }`}
+                    onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
+                    alt="Interior view"
+                  />
                 </div>
 
-                <div className="mt-3 bg-white rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="font-semibold text-lg">
-                        {capitalizeFullName(v.carName)}
-                      </h2>
-                      <p className="text-sm text-gray-500">
-                        {v.carModel.toUpperCase()}
-                      </p>
-                    </div>
-
-                    <span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-medium capitalize">
-                      {v.carType || "Not specified"}
+                <div className="mb-3">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-semibold text-gray-800">
+                      {capitalizeFullName(v.carName)}
+                    </h3>
+                    <span className="text-xs bg-white text-gray-800 px-2 py-1 rounded-full capitalize">
+                      {v.carType}
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500">👤</span>
-                      <span className="text-xs">{v.passengers} passengers</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500">❄️</span>
-                      <span className="text-xs">{v.ac ? "AC Available" : "No AC"}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500">🎨</span>
-                      <span className="text-xs">
-                        {capitalizeFullName(v.exteriorColor)} Exterior
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500">🛋️</span>
-                      <span className="text-xs">
-                        {capitalizeFullName(v.interiorColor)} Interior
-                      </span>
-                    </div>
-                  </div>
-
-                  {v.description && (
-                    <p className="bg-green-100 rounded-lg p-2 text-xs text-green-800 mt-2 line-clamp-2">
-                      {v.description}
-                    </p>
-                  )}
+                  <p className="text-sm text-gray-600 mb-2">{v.carModel.toUpperCase()}</p>
+                  <p className="text-xs text-gray-500">Plate: {v.plateNumber}</p>
                 </div>
 
-                <div className="flex justify-between mt-4 pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>👤</span>
+                    <span>{v.passengers} seats</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>❄️</span>
+                    <span>{v.ac ? 'AC' : 'No AC'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>🎨</span>
+                    <span>{v.exteriorColor}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>🛋️</span>
+                    <span>{v.interiorColor}</span>
+                  </div>
+                </div>
+
+                {v.description && (
+                  <p className="text-xs text-gray-700 bg-green-100 rounded p-2 mb-3 line-clamp-2">
+                    {v.description}
+                  </p>
+                )}
+
+                <div className="flex justify-between pt-3 border-t border-gray-100">
                   <button
                     onClick={() => startEdit(v)}
-                    className="text-blue-500 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
+                    className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
                   >
                     ✏️ Edit
                   </button>
-
                   <button
                     onClick={() => confirmDeleteVehicle(v.id)}
-                    className="bg-white p-1 rounded-lg text-red-600 hover:text-red-800 text-sm font-semibold flex items-center gap-1"
+                    className="text-red-600 hover:text-red-800 text-xs font-medium flex items-center gap-1"
                   >
                     🗑️ Delete
                   </button>
@@ -1570,7 +2001,6 @@ export default function DriverProfilePage() {
               </div>
             ))}
           </div>
-        </div>
         )}
       </section>
 
@@ -1661,11 +2091,11 @@ export default function DriverProfilePage() {
         )}
       </section>
 
-      {/* Promotion Cards Section - UPDATED SHARE BUTTON TEXT */}
+      {/* Promotion Cards Section */}
       <section className="bg-white shadow-lg rounded-xl p-4 mb-6">
         <h2 className="text-lg lg:text-xl font-semibold mb-4">Grow Your Driver Business</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Share to Earn Card - UPDATED BUTTON TEXT */}
+          {/* Share to Earn Card */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl overflow-hidden">
             <div className="h-32 lg:h-40 bg-blue-100 overflow-hidden">
               <img 
@@ -1773,4 +2203,23 @@ export default function DriverProfilePage() {
       </div>
     </div>
   );
+
+  // Helper function to reset form
+  function resetVehicleForm() {
+    setCarName("");
+    setCarModel("");
+    setCarType("sedan");
+    setPassengers(4);
+    setAc(true);
+    setPlateNumber("");
+    setDescription("");
+    setExteriorColor("");
+    setInteriorColor("");
+    setVehicleStatus("available");
+    setFrontFile(null);
+    setSideFile(null);
+    setBackFile(null);
+    setInteriorFile(null);
+    setPreviews({});
+  }
 }

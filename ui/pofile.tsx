@@ -525,8 +525,8 @@ export default function UserProfilePageUi() {
                 </section>
             </div>
 
-            {/* Fun images and Cards */}
-            <section id="share-link" className="mt-8">
+            {/* VIP and Link Section */}
+            <section id="share-link" className="my-12">
                 <h2 className="text-xl sm:text-2xl font-semibold mb-4">Earn Free Rides!</h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -557,7 +557,7 @@ export default function UserProfilePageUi() {
                             className="w-full h-40 object-cover"
                         />
                         <div className="mx-auto text-center p-4 pb-0 text-green-800 font-semibold hover:underline">
-                            <a href="/purchase">
+                            <a href="/user/purchase">
                                 Upgrade to <span className="text-[gold]">VIP</span> Service
                             </a>
                         </div>
@@ -584,6 +584,7 @@ export default function UserProfilePageUi() {
                 
             </section>
 
+            {/* Complain section */}
             <div className="my-10 bg-gradient-to-br from-gray-900 to-black rounded-2xl p-6 sm:p-8 text-center shadow-xl border border-gray-700">
                 <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-2">
                     We're Here to Help

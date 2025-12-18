@@ -125,7 +125,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      {!hideSidebar && pathname !== "/user/register" && (
+      {!hideSidebar && pathname !== "/user/register" && pathname !== "/user/purchase" &&(
         <aside
           className={`z-30 border-r border-gray-50 sm:border-0 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col 
             transform transition-transform duration-300

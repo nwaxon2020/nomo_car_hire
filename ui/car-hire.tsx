@@ -8,7 +8,7 @@ import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
 import { FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt, 
   FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope, 
-  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt, FaTimes} from 'react-icons/fa'
+  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt} from 'react-icons/fa'
 
 import { useRouter ,useSearchParams } from 'next/navigation'
 
@@ -71,6 +71,13 @@ interface Driver {
   averageRating?: number;
   totalRatings?: number;
   customersCarried?: string[];
+  // VIP FIELDS BASED ON YOUR SYSTEM
+  isVip?: boolean;
+  vipLevel?: number; // Calculated level (0-5)
+  purchasedVipLevel?: number; // Purchased level (0-5)
+  prestigeLevel?: number; // For level 5+
+  referralCount?: number;
+  vipBadge?: string; // This might not exist, we'll calculate it
 }
 
 interface DriverWithVehicle extends Driver {
@@ -101,6 +108,124 @@ interface HiredCar {
   lastHired: any;
   timestamp?: any;
 }
+
+///////////////////////////////////////////////////////////////////////
+// VIP Configuration - Same as in driver profile
+const VIP_CONFIG = {
+    levels: [
+        { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },
+        { level: 2, name: "Yellow VIP", color: "yellow", stars: 2, referralsRequired: 20, price: 7500 },
+        { level: 3, name: "Purple VIP", color: "purple", stars: 3, referralsRequired: 25, price: 11000 },
+        { level: 4, name: "Gold VIP", color: "gold", stars: 4, referralsRequired: 30, price: 15000 },
+        { level: 5, name: "Black VIP", color: "black", stars: 5, referralsRequired: 35, price: 20000 },
+    ],
+    maxLevel: 5,
+    referralMultiplier: 5,
+};
+
+// Helper to get VIP name and color from level
+const getVIPDetails = (vipLevel: number, prestigeLevel: number = 0) => {
+    if (vipLevel <= 0) return { name: "", color: "", stars: 0 };
+    
+    const vipInfo = VIP_CONFIG.levels.find(level => level.level === vipLevel);
+    if (!vipInfo) return { name: "", color: "", stars: 0 };
+    
+    return {
+        name: vipInfo.name,
+        color: vipInfo.color,
+        stars: vipInfo.stars,
+        level: vipLevel,
+        prestigeLevel,
+        displayName: prestigeLevel > 0 
+        ? `${vipInfo.name} LV${prestigeLevel}`
+        : vipInfo.name
+    };
+};
+
+// Helper to check if driver is VIP
+const isDriverVIP = (driver: Driver): boolean => {
+    return (driver.vipLevel || 0) > 0 || (driver.purchasedVipLevel || 0) > 0;
+};
+
+
+// VIP Star Component (add this in your component file)
+const VIPStar = ({ 
+    vipLevel, 
+    prestigeLevel = 0, 
+    size = "sm" 
+    }: { 
+    vipLevel: number, 
+    prestigeLevel?: number, 
+    size?: "sm" | "md" | "lg" 
+    }) => {
+    if (vipLevel <= 0) return null;
+    
+    const vipDetails = getVIPDetails(vipLevel, prestigeLevel);
+    if (!vipDetails.name) return null;
+    
+    const sizeClasses = {
+        sm: "w-3 h-3",
+        md: "w-4 h-4",
+        lg: "w-5 h-5"
+    };
+    
+    const getColorClass = (color: string) => {
+        const colors: Record<string, string> = {
+        green: "text-green-500 bg-green-100",
+        yellow: "text-yellow-500 bg-yellow-100",
+        purple: "text-purple-500 bg-purple-100",
+        gold: "text-yellow-600 bg-yellow-100",
+        black: "text-gray-900 bg-gray-100"
+        };
+        return colors[color] || colors.green;
+    };
+    
+    const getBorderClass = (color: string) => {
+        const colors: Record<string, string> = {
+        green: "border-green-300",
+        yellow: "border-yellow-300",
+        purple: "border-purple-300",
+        gold: "border-yellow-400",
+        black: "border-gray-300"
+        };
+        return colors[color] || colors.green;
+    };
+    
+    const getTextClass = (color: string) => {
+        const colors: Record<string, string> = {
+        green: "text-green-800",
+        yellow: "text-yellow-800",
+        purple: "text-purple-800",
+        gold: "text-yellow-900",
+        black: "text-gray-900"
+        };
+        return colors[color] || colors.green;
+    };
+    
+    return (
+        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getColorClass(vipDetails.color)} ${getBorderClass(vipDetails.color)} border`}>
+        <div className="flex items-center gap-0.5">
+            {Array.from({ length: vipDetails.stars }).map((_, i) => (
+            <svg 
+                key={i}
+                className={`${sizeClasses[size]} fill-current`}
+                viewBox="0 0 24 24"
+            >
+                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+            </svg>
+            ))}
+        </div>
+        {prestigeLevel > 0 && (
+            <span className="text-xs font-bold px-1 py-0.5 rounded bg-gray-800 text-white">
+            LV{prestigeLevel}
+            </span>
+        )}
+        <span className={`text-xs font-semibold ${getTextClass(vipDetails.color)}`}>
+            {vipDetails.name}
+        </span>
+        </div>
+    );
+};
 
 export default function CarHireUi() {
     // activate for parameters
@@ -394,6 +519,7 @@ export default function CarHireUi() {
         }
     }, [driversWithVehicles, searchParams])
 
+    // Fetch Drivers and Vehicles
     const fetchDriversAndVehicles = async () => {
         try {
             setLoading(true)
@@ -429,6 +555,12 @@ export default function CarHireUi() {
                     averageRating: data.averageRating || 0,
                     totalRatings: data.totalRatings || 0,
                     customersCarried: data.customersCarried || [],
+                    // VIP FIELDS
+                    vipLevel: data.vipLevel || 0,
+                    purchasedVipLevel: data.purchasedVipLevel || 0,
+                    prestigeLevel: data.prestigeLevel || 0,
+                    referralCount: data.referralCount || 0,
+                    isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
                 }
                 driversList.push(driver)
             })
@@ -507,6 +639,49 @@ export default function CarHireUi() {
                     })
                 }
             })
+
+            // SORT DRIVERS BY PRIORITY (EXACT ORDER YOU REQUESTED):
+            driversWithVehiclesList.sort((a, b) => {
+                // Get VIP level (use the higher of vipLevel or purchasedVipLevel)
+                const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
+                    return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
+                };
+                
+                const aVipLevel = getEffectiveVipLevel(a);
+                const bVipLevel = getEffectiveVipLevel(b);
+                const aIsVIP = aVipLevel > 0;
+                const bIsVIP = bVipLevel > 0;
+                const aVerified = a.verified;
+                const bVerified = b.verified;
+                
+                // 1. VIP with Verified
+                if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
+                if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
+                
+                // 2. VIP without Verified
+                if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
+                    // Both are VIP without verified, compare VIP levels
+                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
+                    // Same VIP level, compare ratings
+                    return (b.averageRating || 0) - (a.averageRating || 0);
+                }
+                if (bIsVIP && !bVerified && !(aIsVIP && aVerified) && !(aIsVIP && aVerified)) {
+                    // Both are VIP without verified, compare VIP levels
+                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
+                    // Same VIP level, compare ratings
+                    return (b.averageRating || 0) - (a.averageRating || 0);
+                }
+                
+                // 3. Verified without VIP
+                if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
+                if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
+                
+                // 4. Others (neither VIP nor verified)
+                // Sort by rating for non-VIP, non-verified drivers
+                return (b.averageRating || 0) - (a.averageRating || 0);
+                
+                // If all criteria are equal, maintain original order
+            });
 
             setDriversWithVehicles(driversWithVehiclesList)
 
@@ -1330,7 +1505,7 @@ export default function CarHireUi() {
                                 placeholder="Search by city, state, or location..."
                                 value={searchLocation}
                                 onChange={(e) => setSearchLocation(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                                className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 placeholder:text-gray-400 placeholder:text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                             />
                             <FaSearch className="absolute top-5 left-3 text-gray-400" />
                         </div>
@@ -1418,11 +1593,24 @@ export default function CarHireUi() {
                                                 fill
                                                 className="object-cover"
                                             />
-                                            {driver.verified && (
-                                                <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center">
-                                                    <FaCheckCircle className="mr-1" /> Verified
-                                                </div>
-                                            )}
+                                            {/* VIP and Verified Badges */}
+                                            <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
+                                                {driver.verified && (
+                                                    <div className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center">
+                                                        <FaCheckCircle className="mr-1" /> Verified
+                                                    </div>
+                                                )}
+                                               {driver.vipLevel && driver.vipLevel > 0 ? (
+                                                    <div className="mt-1">
+                                                        <VIPStar
+                                                        vipLevel={driver.vipLevel}
+                                                        prestigeLevel={driver.prestigeLevel}
+                                                        size="sm"
+                                                        />
+                                                    </div>
+                                                    ) : null
+                                                }
+                                            </div>
                                         </div>
 
                                         {/* Car Info */}
@@ -1434,11 +1622,10 @@ export default function CarHireUi() {
                                                     </h3>
                                                     <p className="text-gray-600 text-sm capitalize">{vehicle.carType}</p>
                                                 </div>
-                                                {driver.averageRating ? (
+                                                {/* Only show rating if it exists and is greater than 0 */}
+                                                {driver.averageRating !== undefined && driver.averageRating !== null && driver.averageRating > 0 ? (
                                                     <div className="flex items-center gap-1">
-                                                        <span className="text-yellow-500">
-                                                            <FaStar />
-                                                        </span>
+                                                        <FaStar className="text-yellow-500" />
                                                         <span className="font-bold">
                                                             {driver.averageRating.toFixed(1)}
                                                         </span>
@@ -1481,7 +1668,7 @@ export default function CarHireUi() {
                                                 </div>
                                             </div>
 
-                                            {/* ✅ NEW: Action Buttons with Pre-Chat */}
+                                            {/* Action Buttons with Pre-Chat */}
                                             <div className="flex flex-col gap-2 mt-4">
                                                 {/* View Details Button */}
                                                 <button
@@ -1491,7 +1678,7 @@ export default function CarHireUi() {
                                                     View Details
                                                 </button>
                                                 
-                                                {/* NEW: Contact Options Row */}
+                                                {/* Contact Options Row */}
                                                 <div className="grid grid-cols-3 gap-2">                                    
                                                     
                                                     {/* Enhanced WhatsApp */}
@@ -1667,7 +1854,7 @@ export default function CarHireUi() {
                                                 <span>{selectedDriver.email}</span>
                                             </div>
                                         )}
-                                        <div className="flex items-center">
+                                        <div className="flex items-center gap-2 mb-4">
                                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${selectedDriver.verified ? 'bg-green-900 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
                                                 {selectedDriver.verified ? (
                                                     <>
@@ -1681,10 +1868,18 @@ export default function CarHireUi() {
                                                     </>
                                                 )}
                                             </span>
+                                            
+                                            {selectedDriver.vipLevel && selectedDriver.vipLevel > 0 && (
+                                                <VIPStar 
+                                                    vipLevel={selectedDriver.vipLevel} 
+                                                    prestigeLevel={selectedDriver.prestigeLevel || 0} 
+                                                    size="md" 
+                                                />
+                                            )}
                                         </div>
                                     </div>
 
-                                    {/* ✅ NEW: Enhanced Contact Buttons */}
+                                    {/* Enhanced Contact Buttons */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                                         {/* Pre-Chat Button */}
                                         <button
@@ -1772,8 +1967,8 @@ export default function CarHireUi() {
                                         )}
                                     </div>
 
-                                    {/* Rating Summary */}
-                                    {selectedDriver.averageRating ? (
+                                    {/* Rating Summary - Only show if driver has ratings */}
+                                    {selectedDriver.averageRating !== undefined && selectedDriver.averageRating !== null && selectedDriver.averageRating > 0 ? (
                                         <div className="bg-gray-800 rounded-lg p-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <div className="flex items-center gap-3">
@@ -1783,7 +1978,7 @@ export default function CarHireUi() {
                                                     <div>
                                                         {renderStars(selectedDriver.averageRating, "lg", false)}
                                                         <div className="text-gray-400 text-sm mt-1">
-                                                            {selectedDriver.totalRatings} {selectedDriver.totalRatings === 1 ? 'review' : 'reviews'}
+                                                            {selectedDriver.totalRatings || 0} {selectedDriver.totalRatings === 1 ? 'review' : 'reviews'}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1795,11 +1990,7 @@ export default function CarHireUi() {
                                                 )}
                                             </div>
                                         </div>
-                                    ) : (
-                                        <div className="bg-gray-800 rounded-lg p-4 text-center text-gray-400">
-                                            No ratings yet
-                                        </div>
-                                    )}
+                                    ) : null}
                                 </div>
                             </div>
 
