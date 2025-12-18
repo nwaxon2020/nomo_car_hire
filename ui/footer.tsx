@@ -14,7 +14,7 @@ import {
 import { 
   FaTachometerAlt, FaHome, FaInfoCircle, FaUserPlus, 
   FaSignInAlt, FaSignOutAlt, FaCar, FaMobileAlt, FaRegCommentDots,
-  FaStar, FaHeart, FaUsers, FaShieldAlt, FaEdit, FaTrash, FaTimes,
+  FaStar, FaHeart, FaUsers, FaEdit, FaTrash, FaTimes,
   FaArrowRight, FaPlus, FaCheck, FaFire, FaCrown, FaGem, FaQuoteRight
 } from "react-icons/fa";
 
@@ -705,13 +705,13 @@ export default function Footer() {
         </div>
 
         {/* Original Footer Sections */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10 border-t border-gray-300 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-10 border-t border-gray-300 py-8">
           {/* Branding */}
           <div>
             <h2 className="text-xl font-extrabold text-gray-800 tracking-wide">
               Nomopo Car Hire
             </h2>
-            <p className="text-gray-600 mt-2 leading-relaxed text-xs sm:text-sm">
+            <p className="text-gray-600 mt-2 leading-relaxed text-sm md:text-base">
               Nigeria's safest and simplest way to hire professional drivers
               and book reliable transportation.  
               Comfort • Safety • Transparency — every single ride.
@@ -720,7 +720,7 @@ export default function Footer() {
 
           {/* Navigation Links */}
           <div>
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Navigation</h3>
+            <h2 className="text-xl font-semibold text-gray-900 mb-3">Navigation</h2>
             <ul className="flex flex-col gap-2 text-gray-700">
               <FooterLink href="/" label="Home" icon={<FaHome />} />
               <FooterLink href="/about" label="About" icon={<FaInfoCircle />} />
@@ -752,7 +752,7 @@ export default function Footer() {
 
           {/* Account */}
           <div className="flex flex-col items-start sm:items-end">
-            <h3 className="p-2 text-sm sm:text-base font-semibold text-gray-900 mb-3">Account</h3>
+            <h3 className="p-2 font-semibold text-xl text-gray-900 mb-3">Account</h3>
 
             {user ? (
               <button
@@ -814,8 +814,8 @@ function FooterLink({ href, label, icon, disabled = false, isExternal = false }:
     return (
       <li className="opacity-50 cursor-not-allowed">
         <div className="flex items-center gap-2 text-gray-500">
-          <span className="text-sm">{icon}</span>
-          <span className="font-medium text-xs">{label}</span>
+          <span>{icon}</span>
+          <span>{label}</span>
         </div>
       </li>
     );
