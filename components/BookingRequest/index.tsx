@@ -155,8 +155,8 @@ export default function BookingRequest({
         <div className="max-w-full flex flex-col md:flex-row justify-between items-center gap-2">
 
           {/* TEXT */}
-          <div>
-            <h2 className="text-xl md:text-2xl font-extrabold">
+          <div className="px-2">
+            <h2 className="text-center md:text-left text-xl md:text-2xl font-extrabold">
               🚗 Need a Specific Car?
             </h2>
             <p className="text-center md:text-left text-sm opacity-90">
