@@ -159,7 +159,7 @@ export default function BookingRequest({
             <h2 className="text-xl md:text-2xl font-extrabold">
               🚗 Need a Specific Car?
             </h2>
-            <p className="text-sm opacity-90">
+            <p className="text-center md:text-left text-sm opacity-90">
               Tell us what you need — multiple drivers will contact you!
             </p>
           </div>
@@ -215,7 +215,7 @@ export default function BookingRequest({
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="mt-3 p-2 max-w-full overflow-x-auto scrollbar-hide">
+      <div className="mt-3 py-2 md:p-2 max-w-full overflow-x-auto scrollbar-hide">
         {activeTab === "browse" ? (
           <ViewRequests
             userId={userId}

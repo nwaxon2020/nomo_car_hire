@@ -344,9 +344,9 @@ export default function Footer() {
 
   return (
     <footer className="w-full mt-0 bg-gradient-to-br from-[#f6f7f9] to-[#e9eef3] py-12 border-t border-gray-300 shadow-inner">
-      <div className="mx-auto px-4  md:px-8">
+      <div className="mx-auto md:px-4">
         {/* Premium Blueish Reviews Section */}
-        <div className="mb-12 bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 rounded-2xl p-6 sm:p-8 border border-blue-200 shadow-xl relative overflow-hidden">
+        <div className="mb-12 bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 md:rounded-xl px-4 py-6 sm:p-8 border border-blue-200 shadow-xl relative overflow-hidden">
           {/* Decorative elements */}
           <div className="absolute top-0 right-0 w-48 sm:w-64 h-48 sm:h-64 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-full -translate-y-24 sm:-translate-y-32 translate-x-8 sm:translate-x-16 opacity-50"></div>
           <div className="absolute bottom-0 left-0 w-32 sm:w-48 h-32 sm:h-48 bg-gradient-to-tr from-cyan-100 to-blue-100 rounded-full translate-y-16 sm:translate-y-24 -translate-x-6 sm:-translate-x-12 opacity-60"></div>
@@ -705,7 +705,7 @@ export default function Footer() {
         </div>
 
         {/* Original Footer Sections */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-10 border-t border-gray-300 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-10 border-t border-gray-300 py-8 px-6">
           {/* Branding */}
           <div>
             <h2 className="text-xl font-extrabold text-gray-800 tracking-wide">

@@ -925,7 +925,7 @@ export default function DriverProfilePage() {
   );
 
   return (
-    <div className="p-3 lg:p-4 lg:p-6 max-w-6xl mx-auto">
+    <div className="px-2 py-3 md:p-6 mx-auto">
       <Toaster position="top-right" />
       
       {/* VIP Modal for vehicle limit */}
@@ -1436,7 +1436,7 @@ export default function DriverProfilePage() {
               />
             </div>
             
-            <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <div className="flex flex-col md:flex-row gap-2 w-full lg:w-auto">
               <button
                 onClick={handleAddVehicleClick}
                 className="flex-1 lg:flex-none bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"

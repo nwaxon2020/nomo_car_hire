@@ -259,7 +259,7 @@ export default function ChatPageUi() {
   return (
     <div className="bg-gradient-to-b from-gray-900 to-black">
       {/* Main Layout */}
-      <div className="container mx-auto px-2 md:px-4 py-3 max-w-7xl">
+      <div className="container mx-auto px-1 md:px-4 py-3 max-w-7xl">
         <div className="bg-gray-800/50 backdrop-blur-lg rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
             <div className="flex flex-col lg:flex-row h-[100vh]">
                 

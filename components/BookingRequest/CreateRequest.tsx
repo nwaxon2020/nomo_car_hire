@@ -169,7 +169,7 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6 bg-gray-900 p-3 py-5 md:p-6 rounded-xl shadow-2xl border border-gray-700 animate-fadeIn">
+        <form onSubmit={handleSubmit} className="space-y-6 bg-gray-900 p-3 py-5 md:p-6 md:rounded-xl shadow-2xl border border-gray-700 animate-fadeIn">
             
             {/* Request Limit Warning */}
             {actualRequestCount >= 3 && (

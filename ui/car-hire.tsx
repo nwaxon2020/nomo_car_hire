@@ -1435,7 +1435,7 @@ export default function CarHireUi() {
                 {/* ✅ NEW: Booking Request Section */}
                 <section className="mt-8 mb-8">
                     {/* The Top Box */}
-                    <div className="max-h-[300rem] overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-200 mb-6">
+                    <div className="max-h-[300rem] overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 px-1 md:p-4 border border-blue-200 mb-6">
                         <div className="flex flex-col md:flex-row items-center justify-between">
                         
                             {/* Left */}
@@ -1569,7 +1569,7 @@ export default function CarHireUi() {
 
                 {/* Cars Grid - Display all cars directly */}
                 <h1 className="border-b border-gray-300 px-4 py-2 mb-0 mt-8 md:mt-12 text-xl font-bold ">Available Cars</h1>
-                <div id="search-results" className="p-3 pt-0 max-h-[65rem] overflow-y-auto">
+                <div id="search-results" className="p-3 px-1 pt-0 max-h-[65rem] overflow-y-auto">
                     {filteredDrivers.length === 0 ? (
                         <div className="text-center py-12">
                             <FaCar className="text-5xl text-gray-300 mb-4 mx-auto" />

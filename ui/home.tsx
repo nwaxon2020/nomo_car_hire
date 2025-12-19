@@ -427,12 +427,12 @@ export default function HomePageUi() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
+              <div className="flex justify-center md:inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
                 <FaCrown className="text-yellow-300" />
-                <span className="text-sm font-medium">Become a Driver Partner</span>
+                <span className="text-center text-sm font-medium">Become a Driver Partner</span>
               </div>
               
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+              <h2 className="text-center md:text-left text-3xl md:text-4xl font-bold mb-6">
                 Earn Money on Your Schedule
               </h2>
               
@@ -527,7 +527,7 @@ export default function HomePageUi() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             
             <div className="order-1 lg:order-2">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+              <h2 className="text-center md:text-left text-3xl md:text-4xl font-bold text-gray-900 mb-6">
                 Safe Travels with Nomo Cars
               </h2>
               
@@ -562,10 +562,10 @@ export default function HomePageUi() {
                 </div>
               </div>
               
-              <div className="mt-8">
+              <div className="mt-8 flex justify-center md:justify-start flex">
                 <button
                   onClick={handleBookFirstRide}
-                  className="inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300"
+                  className="flex justify-center md:justify-start text-center md:inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300"
                 >
                   <FaCar /> Book Your First Ride
                 </button>

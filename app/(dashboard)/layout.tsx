@@ -188,7 +188,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         </aside>
       )}
 
-      <main className="flex-1 p-4 px-2">
+      <main className="flex-1 p-4 px-1 md:px-2">
         {msg && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4 text-center">
             {msg}

@@ -1655,7 +1655,7 @@ export default function ViewRequests({
 
       {/* Tip for Drivers & passengers */}
       {isDriver && (
-        <div className="mt-6 sm:mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-5">
+        <div className="mx-2 mt-6 md:mt-8 md:mx-0 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row items-start gap-3">
             <div className="bg-blue-100 p-2 rounded-lg self-start">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
