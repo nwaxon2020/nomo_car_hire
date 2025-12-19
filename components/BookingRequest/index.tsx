@@ -170,7 +170,7 @@ export default function BookingRequest({
             {/* LEFT → Post Request */}
             <button
               onClick={() => setActiveTab("create")}
-              className={`px-3 md:px-4 py-2 rounded-md text-sm transition font-medium ${
+              className={`text-center px-1 md:px-4 py-2 rounded-md text-sm transition font-medium ${
                 activeTab === "create"
                   ? "bg-white text-blue-700 shadow"
                   : "text-white hover:bg-white/10"
@@ -182,7 +182,7 @@ export default function BookingRequest({
             {/* RIGHT → Browse Requests */}
             <button
               onClick={() => setActiveTab("browse")}
-              className={`relative px-3 md:px-4 py-2 rounded-md text-sm transition font-medium ${
+              className={`text-center relative px-1 md:px-4 py-2 rounded-md text-sm transition font-medium ${
                 activeTab === "browse"
                   ? "bg-white text-blue-700 shadow"
                   : "text-white hover:bg-white/10"

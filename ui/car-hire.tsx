@@ -1436,11 +1436,11 @@ export default function CarHireUi() {
                 <section className="mt-8 mb-8">
                     {/* The Top Box */}
                     <div className="max-h-[300rem] overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 px-1 md:p-4 border border-blue-200 mb-6">
-                        <div className="flex flex-col md:flex-row items-center justify-between">
+                        <div className="px-2 flex flex-col md:flex-row items-center justify-between">
                         
                             {/* Left */}
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <div className="text-center md:text-left">
+                                <h2 className="flex justify-center md:justify-start text-center text-xl font-bold text-gray-800 flex items-center gap-2">
                                 <FaCalendarAlt className="text-blue-600" />
                                 Don't See What You Need?
                                 </h2>
@@ -1451,7 +1451,7 @@ export default function CarHireUi() {
                             </div>
 
                             {/* Right */}
-                            <div className="mt-4 md:mt-0 flex items-center gap-2 text-sm text-blue-700">
+                            <div className="text-center md:text-left mt-4 md:mt-0 flex md:items-center gap-2 text-sm text-blue-700">
                                 <FaCheckCircle className="text-green-600" />
                                 <span>100% Free • Get Multiple Offers • Negotiate Best Price</span>
                             </div>
@@ -1459,7 +1459,7 @@ export default function CarHireUi() {
                         </div>
 
                         {/* Toggle Button */}
-                        <div className="relative w-full mt-5">
+                        <div className="relative w-full mt-5 px-2">
                             <button
                                 onClick={() => setShowRequestBox(!showRequestBox)}
                                 className="w-full p-3 rounded-lg bg-gray-800 text-white text-sm 
