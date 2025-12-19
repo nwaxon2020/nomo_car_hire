@@ -205,7 +205,7 @@ export default function BookingRequest({
                   count={customerNotificationCount}
                   type="customer"
                   size="sm"
-                  className="absolute -top-1 -right-1"
+                  className="absolute top-0 md:top-1 right-0 md:right-1"
                 />
               )}
             </button>
