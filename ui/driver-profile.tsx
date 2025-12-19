@@ -1824,7 +1824,7 @@ export default function DriverProfilePage() {
           <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto relative">
             <button
               onClick={() => setGame(false)}
-              className="absolute top-4 right-4 text-white text-2xl hover:text-gray-300 z-10"
+              className="bg-gray-800 p-2 px-4 rounded-lg absolute top-10 md:top-4 right-4 text-white text-2xl hover:text-gray-300 z-20"
             >
               ✕
             </button>
