@@ -129,7 +129,7 @@ export default function DriverRegisterPageUi() {
     );
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-white p-4 pb-8">
+    <div className="relative min-h-screen flex items-center justify-center bg-white  px-1 py-4 md:p-4 pb-8">
       <div className="bg-gray-50 shadow-2xl rounded-2xl p-8 max-w-md w-full">
 
         {/* Close button */}
