@@ -1832,7 +1832,7 @@ export default function CarHireUi() {
                                 </div>
 
                                 {/* Driver Info */}
-                                <div className="flex-1">
+                                <div className="relative flex-1">
                                     <h1 className="text-2xl font-bold text-white mb-2">{selectedDriver.firstName} {selectedDriver.lastName}</h1>
                                     <div className="space-y-2 mb-4">
                                         <div className="flex items-center text-gray-300">
@@ -1917,13 +1917,14 @@ export default function CarHireUi() {
 
                                         {/* Direct WhatsApp */}
                                         {selectedDriver.whatsappPreferred && (
-                                            <button
-                                                onClick={() => handleWhatsAppMessage(selectedDriver, selectedVehicle)}
-                                                className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800"
-                                            >
-                                                <FaWhatsapp className="mr-2" />
-                                                Direct WhatsApp
-                                            </button>
+                                            <div className="absolute top-0 right-1 md:static">
+                                                <button
+                                                    onClick={() => handleWhatsAppMessage(selectedDriver, selectedVehicle)}
+                                                    className="w-12 h-12 md:w-full  text-white font-semibold rounded-full md:rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800"
+                                                >
+                                                    <FaWhatsapp className="text-4xl md:text-sm md:mr-2" /> <span className="hidden md:block">WhatsApp</span>
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
 

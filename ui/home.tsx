@@ -245,7 +245,7 @@ export default function HomePageUi() {
             </div>
             
             <div className="relative">
-              <div className="relative bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-2xl">
+              <div className="relative bg-white/10 backdrop-blur-sm rounded-2xl p-3 md:p-6 shadow-2xl">
                 {/* Search Card */}
                 <div className="bg-white rounded-xl p-6 shadow-lg">
                   <h3 className="text-2xl font-bold text-gray-800 mb-4">Find Your Ride</h3>
