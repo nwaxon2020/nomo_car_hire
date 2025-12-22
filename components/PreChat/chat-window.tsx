@@ -60,7 +60,7 @@ interface ChatWindowProps {
     car: CarType;
     driver: DriverType;
     onClose: () => void;
-    onReadUpdate?: (chatId: string) => void; // Add this
+    onReadUpdate?: (chatId: string) => void;
 }
 
 export default function ChatWindow({
@@ -68,7 +68,7 @@ export default function ChatWindow({
     car,
     driver,
     onClose,
-    onReadUpdate, // Make sure to destructure it here
+    onReadUpdate,
 }: ChatWindowProps) {
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [newMessage, setNewMessage] = useState<string>("");
@@ -78,10 +78,88 @@ export default function ChatWindow({
     const [showMenu, setShowMenu] = useState<boolean>(false);
     const [sendingMessage, setSendingMessage] = useState<boolean>(false);
     const [receivingMessage, setReceivingMessage] = useState<boolean>(false);
+    const [expirationTime, setExpirationTime] = useState<number | null>(null);
+    const [timeRemaining, setTimeRemaining] = useState<string>("");
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+
+    // Calculate and update time remaining
+    useEffect(() => {
+        if (!expirationTime) return;
+
+        const updateTimer = () => {
+            const now = Date.now();
+            const remaining = expirationTime - now;
+            
+            if (remaining <= 0) {
+                // Chat has expired
+                setTimeRemaining("Expired");
+                autoDeleteChat();
+                return;
+            }
+            
+            // Convert milliseconds to hours, minutes, seconds
+            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+            
+            setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`);
+        };
+
+        // Update immediately
+        updateTimer();
+        
+        // Update every second
+        const timer = setInterval(updateTimer, 1000);
+        
+        return () => clearInterval(timer);
+    }, [expirationTime]);
+
+    // Auto-delete chat when expired
+    const autoDeleteChat = async () => {
+        try {
+            const chatRef = doc(db, "preChats", chatId);
+            await deleteDoc(chatRef);
+            
+            // Notify user
+            alert("This chat has expired and has been deleted automatically.");
+            onClose();
+        } catch (error) {
+            console.error("Error auto-deleting expired chat:", error);
+        }
+    };
+
+    // Set expiration time when component mounts
+    useEffect(() => {
+        const setChatExpiration = async () => {
+            try {
+                const chatRef = doc(db, "preChats", chatId);
+                const chatDoc = await getDoc(chatRef);
+                
+                if (chatDoc.exists()) {
+                    const data = chatDoc.data();
+                    const createdAt = data.createdAt || data.lastActivity || new Date().toISOString();
+                    
+                    // Calculate expiration time (24 hours from creation)
+                    const creationTime = new Date(createdAt).getTime();
+                    const expirationTime = creationTime + (48 * 60 * 60 * 1000); // 48 hours
+                    
+                    setExpirationTime(expirationTime);
+                    
+                    // If chat is already expired, delete it
+                    if (Date.now() > expirationTime) {
+                        autoDeleteChat();
+                    }
+                }
+            } catch (error) {
+                console.error("Error setting chat expiration:", error);
+            }
+        };
+
+        setChatExpiration();
+    }, [chatId]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -107,7 +185,6 @@ export default function ChatWindow({
                 messages: updatedMessages
             });
 
-            // Update global unread count
             if (onReadUpdate) {
                 onReadUpdate(chatId);
             }
@@ -217,7 +294,6 @@ export default function ChatWindow({
             messages: updatedMessages as DocumentData[],
         });
         
-        // Also call onReadUpdate if provided
         if (onReadUpdate) {
             onReadUpdate(chatId);
         }
@@ -354,12 +430,20 @@ export default function ChatWindow({
                     </div>
                 </div>
 
-                {/* Safety Notice */}
-                <div className="px-4 py-2 bg-amber-900/20 border-y border-amber-800/30 flex items-center space-x-2">
-                    <AlertCircle className="h-4 w-4 text-amber-400 flex-shrink-0" />
-                    <p className="text-sm text-amber-300">
-                        ⚠️ Chat expires in 48 hours
-                    </p>
+                {/* Safety Notice - UPDATED FOR 24 HOURS */}
+                <div className="px-4 py-2 bg-gradient-to-r from-amber-900/20 to-red-900/20 border-y border-amber-800/30 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                        <AlertCircle className="h-4 w-4 text-amber-400 flex-shrink-0" />
+                        <p className="text-sm text-amber-300">
+                            ⚠️ Chat expires in <span className="font-bold">{timeRemaining}</span>
+                        </p>
+                    </div>
+                    {timeRemaining && timeRemaining !== "Expired" && (
+                        <div className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3 text-red-400" />
+                            <span className="text-xs text-red-300">24h limit</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Messages Container */}

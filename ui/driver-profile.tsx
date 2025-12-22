@@ -1858,14 +1858,14 @@ export default function DriverProfilePage() {
             </button>
           </div>
         ) : (
-          <div className="md:py-5 grid grid-cols-1 md:flex overflow-x-auto gap-4">
+          <div className="md:py-5 grid grid-cols-1 md:grid-cols-3 overflow-x-auto gap-4 max-h-[65rem]">
             {vehicles.map((v) => (
               <div 
                 key={v.id} 
                 className="bg-gray-100 border border-gray-200 rounded-xl p-3 hover:shadow-md transition-shadow"
               >
                 
-                <div className="relative w-full md:w-[18rem] h-40 rounded-lg overflow-hidden mb-3">
+                <div className="relative w-full h-40 rounded-lg overflow-hidden mb-3">
                   <img 
                     src={selectedMainImage[v.id!] || v.images.front}
                     className="w-full h-full object-cover"

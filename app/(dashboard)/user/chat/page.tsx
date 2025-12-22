@@ -1,4 +1,4 @@
-import ChatPageUi from "@/ui/chat";
+import ChatPageUi from "@/ui/chat-page";
 
 export default function ChatPage(){
     return(
