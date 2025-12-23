@@ -838,6 +838,7 @@ function FooterLink({ href, label, icon, disabled = false, isExternal = false }:
     );
   }
 
+  // Internal Navigation Link
   return (
     <li>
       <Link
@@ -846,7 +847,7 @@ function FooterLink({ href, label, icon, disabled = false, isExternal = false }:
       >
         <span className="absolute -left-2 h-5 w-5 bg-blue-100 rounded-full scale-0 group-hover:scale-100 transition-transform duration-300"></span>
         <span className="text-sm z-10">{icon}</span>
-        <span className="z-10 font-medium text-xs">{label}</span>
+        <span className="z-10 font-medium text-sm md:text-base">{label}</span>
       </Link>
     </li>
   );
