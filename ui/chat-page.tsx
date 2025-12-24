@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 import { 
   collection, 
   query, 
@@ -12,7 +13,8 @@ import {
   getDoc,
   updateDoc,
   Timestamp,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from "firebase/firestore";
 import ChatWindow from "@/components/PreChat/chat-window";
 import { 
@@ -23,7 +25,9 @@ import {
   Trash2,
   ChevronRight,
   CheckCircle,
-  Users} from "lucide-react";
+  Users,
+  AlertCircle
+} from "lucide-react";
 
 interface ChatUser {
   id: string;
@@ -53,91 +57,123 @@ export default function ChatPageUi() {
   const [activeFilter, setActiveFilter] = useState<"all" | "unread" | "recent">("all");
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [userData, setUserData] = useState<any>(null);
+  const [expiredChatsToDelete, setExpiredChatsToDelete] = useState<string[]>([]);
+  const [loadingChat, setLoadingChat] = useState<string | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null); // Store user from auth listener
 
-  // Fetch user data
+  // Check authentication state FIRST
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (!auth.currentUser) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // No user is signed in, redirect to login
         router.push("/login");
         return;
       }
-
+      
+      // Store the user object
+      setCurrentUser(user);
+      setAuthChecking(false);
+      
+      // Fetch user data immediately after auth is confirmed
       try {
-        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           setUserData(userDoc.data());
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
       }
-    };
+    });
 
-    fetchUserData();
+    return () => unsubscribe();
   }, [router]);
 
-  // Fetch chats and set up real-time updates
+  // Fetch chats and set up real-time updates - Only run AFTER auth is confirmed
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!currentUser || authChecking) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     
     const chatsRef = collection(db, "preChats");
-    const q = query(chatsRef, where("participants", "array-contains", auth.currentUser.uid));
+    const q = query(chatsRef, where("participants", "array-contains", currentUser.uid));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const expiredChatIds: string[] = [];
       const chatPromises = snapshot.docs.map(async (chatDoc) => {
         const chatData = chatDoc.data();
         const chatId = chatDoc.id;
 
-        // Check if chat is older than 48 hours
+        // Check if chat is older than 7 days
         const createdAt = chatData.createdAt?.toDate?.();
-        const now = new Date();
-        const hoursDiff = createdAt ? (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60) : 0;
-
-        if (hoursDiff > 48) {
-          // Delete expired chat
-          await deleteDoc(doc(db, "preChats", chatId));
-          return null;
+        const lastActivity = chatData.lastActivity ? new Date(chatData.lastActivity) : null;
+        const referenceDate = lastActivity || createdAt;
+        
+        if (referenceDate) {
+          const now = new Date();
+          const daysDiff = (now.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24);
+          
+          if (daysDiff > 7) {
+            expiredChatIds.push(chatId);
+            return null;
+          }
         }
 
         // Find other participant
-        const otherParticipantId = chatData.participants.find(
-          (id: string) => id !== auth.currentUser!.uid
+        const otherParticipantId = chatData.participants?.find(
+          (id: string) => id !== currentUser.uid
         );
 
-        // Get participant names
-        const participantNames = chatData.participantNames || {};
-        const otherParticipantName = participantNames[otherParticipantId] || "Unknown User";
+        if (!otherParticipantId) {
+          console.warn("No other participant found in chat:", chatId);
+          return null;
+        }
+
+        // Get participant info - Handle missing data
+        let otherParticipantName = "Unknown User";
+        let isDriver = false;
+        let userData = null;
+
+        try {
+          // Try to get from chat data first
+          if (chatData.participantNames && chatData.participantNames[otherParticipantId]) {
+            otherParticipantName = chatData.participantNames[otherParticipantId];
+          }
+          
+          // Get user data for other participant
+          const userDoc = await getDoc(doc(db, "users", otherParticipantId));
+          if (userDoc.exists()) {
+            userData = userDoc.data();
+            otherParticipantName = userData.firstName || userData.fullName || otherParticipantName;
+            isDriver = userData.isDriver || false;
+          }
+        } catch (error) {
+          console.warn("Error fetching user data for participant:", otherParticipantId, error);
+        }
 
         // Get car info
-        const carInfo = chatData.carInfo || { id: 'general', title: 'Car Rental Request' };
+        const carInfo = chatData.carInfo || { 
+          id: chatData.carId || 'general', 
+          title: chatData.carTitle || 'Car Rental Request' 
+        };
 
         // Get last message
         const messages = chatData.messages || [];
         const lastMessage = messages[messages.length - 1];
         
-        // Count unread messages
+        // Count unread messages - Only count messages from other participant
         const unreadCount = messages.filter(
-          (msg: any) => msg.senderId !== auth.currentUser!.uid && !msg.read
+          (msg: any) => msg.senderId !== currentUser.uid && !msg.read
         ).length;
-
-        // Get user data for other participant
-        let isDriver = false;
-        try {
-          const userDoc = await getDoc(doc(db, "users", otherParticipantId));
-          if (userDoc.exists()) {
-            isDriver = userDoc.data().isDriver || false;
-          }
-
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-        }
 
         return {
           id: otherParticipantId,
           name: otherParticipantName,
           lastMessage: lastMessage?.text || "No messages yet",
-          lastMessageTime: lastMessage?.timestamp ? new Date(lastMessage.timestamp) : new Date(chatData.createdAt?.toDate?.()),
+          lastMessageTime: lastMessage?.timestamp ? new Date(lastMessage.timestamp) : (referenceDate || new Date()),
           unreadCount,
           chatId,
           carInfo,
@@ -145,6 +181,11 @@ export default function ChatPageUi() {
           isDriver
         };
       });
+
+      // Queue expired chats for deletion
+      if (expiredChatIds.length > 0) {
+        setExpiredChatsToDelete(prev => [...prev, ...expiredChatIds]);
+      }
 
       const chatResults = await Promise.all(chatPromises);
       const validChats = chatResults.filter(chat => chat !== null) as ChatUser[];
@@ -162,17 +203,14 @@ export default function ChatPageUi() {
       const totalUnread = sortedChats.reduce((sum, chat) => sum + chat.unreadCount, 0);
       setUnreadTotal(totalUnread);
       
-      // Update user's unread count (set to zero since we're viewing)
-      if (auth.currentUser) {
+      // Update user's last chat view time
+      if (currentUser) {
         try {
-          await updateDoc(doc(db, "users", auth.currentUser.uid), {
-            unreadChats: [],
+          await updateDoc(doc(db, "users", currentUser.uid), {
             lastChatView: Timestamp.now()
           });
-
         } catch (error) {
-          console.error("Error updating unread count:", error);
-
+          console.error("Error updating last chat view:", error);
         }
       }
       
@@ -183,16 +221,149 @@ export default function ChatPageUi() {
     });
 
     return () => unsubscribe();
-  }, [router]);
+  }, [currentUser, authChecking]);
+
+  // Handle chat read update
+  const handleReadUpdate = useCallback((chatId: string) => {
+    setChats(prevChats => 
+      prevChats.map(chat => 
+        chat.chatId === chatId 
+          ? { ...chat, unreadCount: 0 }
+          : chat
+      )
+    );
+  }, []);
+
+  // Delete expired chats
+  useEffect(() => {
+    const deleteExpiredChats = async () => {
+      if (expiredChatsToDelete.length === 0 || authChecking || !currentUser) return;
+      
+      try {
+        const batch = writeBatch(db);
+        
+        expiredChatsToDelete.forEach(chatId => {
+          const chatRef = doc(db, "preChats", chatId);
+          batch.delete(chatRef);
+        });
+        
+        await batch.commit();
+        console.log(`Deleted ${expiredChatsToDelete.length} expired chats`);
+        setExpiredChatsToDelete([]);
+      } catch (error) {
+        console.error("Error deleting expired chats:", error);
+      }
+    };
+    
+    deleteExpiredChats();
+  }, [expiredChatsToDelete, authChecking, currentUser]);
+
+  // Delete a specific chat
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!window.confirm("Are you sure you want to delete this chat? All messages will be lost.")) {
+      return;
+    }
+    
+    try {
+      await deleteDoc(doc(db, "preChats", chatId));
+      
+      setChats(prevChats => prevChats.filter(chat => chat.chatId !== chatId));
+      
+      if (selectedChat?.chatId === chatId) {
+        setSelectedChat(null);
+      }
+      
+      console.log("Chat deleted successfully");
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+      alert("Failed to delete chat. Please try again.");
+    }
+  };
+
+  // Handle selecting a chat - FIXED: Now properly marks messages as read in Firestore
+  const handleSelectChat = async (chat: ChatUser) => {
+    if (loadingChat === chat.chatId || authChecking || !currentUser) return;
+    
+    setLoadingChat(chat.chatId);
+    
+    try {
+      let driverPhone = "";
+      
+      if (currentUser) {
+        try {
+          const driverDoc = await getDoc(doc(db, "users", chat.userId));
+          if (driverDoc.exists()) {
+            const driverData = driverDoc.data();
+            driverPhone = driverData.phone || driverData.phoneNumber || "";
+          }
+        } catch (error) {
+          console.warn("Could not fetch driver phone:", error);
+        }
+      }
+      
+      // CRITICAL FIX: Mark messages as read in Firestore when opening chat
+      if (chat.unreadCount > 0 && currentUser) {
+        try {
+          const chatRef = doc(db, "preChats", chat.chatId);
+          const chatSnap = await getDoc(chatRef);
+          
+          if (chatSnap.exists()) {
+            const messages = chatSnap.data().messages || [];
+            const updatedMessages = messages.map((msg: any) => ({
+              ...msg,
+              // Mark as read if message is from the other participant
+              read: msg.senderId !== currentUser.uid ? true : msg.read
+            }));
+            
+            await updateDoc(chatRef, {
+              messages: updatedMessages,
+              lastActivity: Timestamp.now()
+            });
+            
+            console.log("Marked messages as read for chat:", chat.chatId);
+          }
+        } catch (error) {
+          console.error("Error marking messages as read:", error);
+        }
+      }
+      
+      const { id, userId, name, carInfo, chatId, unreadCount, lastMessage, lastMessageTime, isDriver, ...rest } = chat;
+      
+      setSelectedChat({
+        chatId: chat.chatId,
+        car: chat.carInfo || { id: 'unknown', title: 'Unknown Car' },
+        driver: {
+          id: chat.userId,
+          name: chat.name,
+          phone: driverPhone,
+          isDriver: chat.isDriver,
+          ...rest
+        }
+      });
+      
+      // Update local state
+      if (chat.unreadCount > 0) {
+        setChats(prevChats => 
+          prevChats.map(c => 
+            c.chatId === chat.chatId ? { ...c, unreadCount: 0 } : c
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error selecting chat:", error);
+    } finally {
+      setLoadingChat(null);
+    }
+  };
 
   // Filter chats based on search and filter
   const filteredChats = chats.filter(chat => {
-    // Apply search filter
     const matchesSearch = chat.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          chat.carInfo?.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          chat.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Apply type filter
     if (activeFilter === "unread") {
       return matchesSearch && chat.unreadCount > 0;
     }
@@ -204,26 +375,6 @@ export default function ChatPageUi() {
     
     return matchesSearch;
   });
-
-  const handleSelectChat = (chat: ChatUser) => {
-    setSelectedChat({
-      chatId: chat.chatId,
-      car: chat.carInfo,
-      driver: {
-        id: chat.userId,
-        name: chat.name
-      }
-    });
-    
-    // Mark all messages as read when opening chat
-    if (chat.unreadCount > 0) {
-      setChats(prevChats => 
-        prevChats.map(c => 
-          c.chatId === chat.chatId ? { ...c, unreadCount: 0 } : c
-        )
-      );
-    }
-  };
 
   const formatTime = (date?: Date) => {
     if (!date) return "";
@@ -239,14 +390,72 @@ export default function ChatPageUi() {
     } else if (diffHours < 48) {
       return "Yesterday";
     } else {
-      return date.toLocaleDateString();
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays < 7) {
+        return `${diffDays}d ago`;
+      } else if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        return `${weeks}w ago`;
+      } else {
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
     }
-
   };
+
+  // Calculate time until expiry
+  const getTimeUntilExpiry = (lastMessageTime?: Date) => {
+    if (!lastMessageTime) return "7d";
+    
+    const now = new Date();
+    const hoursDiff = (now.getTime() - lastMessageTime.getTime()) / (1000 * 60 * 60);
+    const daysLeft = Math.max(0, Math.floor((7 * 24) - hoursDiff));
+    
+    if (daysLeft <= 0) {
+      return "Expired";
+    } else if (daysLeft === 1) {
+      return "1d";
+    } else if (daysLeft < 7) {
+      return `${daysLeft}d`;
+    } else {
+      const weeks = Math.floor(daysLeft / 7);
+      const remainingDays = daysLeft % 7;
+      if (remainingDays === 0) {
+        return `${weeks}w`;
+      } else {
+        return `${weeks}w ${remainingDays}d`;
+      }
+    }
+  };
+
+  // Handle chat click
+  const handleChatClick = async (chat: ChatUser) => {
+    const timeUntilExpiry = getTimeUntilExpiry(chat.lastMessageTime);
+    const isExpired = timeUntilExpiry === "Expired";
+    
+    if (!isExpired) {
+      await handleSelectChat(chat);
+    }
+  };
+
+  // Show loading while checking auth
+  if (authChecking) {
+    return (
+      <div className="bg-gradient-to-b from-gray-900 to-black min-h-screen">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-[80vh]">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-400">Checking authentication...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="bg-gradient-to-b from-gray-900 to-black">
+      <div className="bg-gradient-to-b from-gray-900 to-black min-h-screen">
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-[80vh]">
             <div className="text-center">
@@ -260,22 +469,18 @@ export default function ChatPageUi() {
   }
 
   return (
-    <div className="bg-gradient-to-b from-gray-900 to-black">
-      {/* Main Layout */}
+    <div className="bg-gradient-to-b from-gray-900 to-black min-h-screen">
       <div className="container mx-auto px-1 md:px-4 py-3 max-w-7xl">
         <div className="bg-gray-800/50 backdrop-blur-lg rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
-            <div className="flex flex-col lg:flex-row h-[100vh]">
+            <div className="flex flex-col lg:flex-row h-[calc(100vh-2rem)]">
                 
-                {/* Sidebar - Left */}
                 <div className={`lg:w-96 border-r border-gray-700 flex flex-col ${selectedChat ? 'hidden lg:flex' : 'flex'}`}>
 
-                {/* Header */}
                 <div className="p-6 border-b border-gray-700">
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
                             <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                             <MessageCircle className="h-6 w-6 text-white" />
-
                             </div>
                             <div>
                             <h1 className="text-xl font-bold text-white">Messages</h1>
@@ -301,7 +506,6 @@ export default function ChatPageUi() {
                         )}
                     </div>
                     
-                    {/* Search Bar */}
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                         <input
@@ -313,7 +517,6 @@ export default function ChatPageUi() {
                         />
                     </div>
                     
-                    {/* Filter Tabs */}
                     <div className="flex gap-2 mt-4">
                         <button
                             onClick={() => setActiveFilter("all")}
@@ -353,10 +556,9 @@ export default function ChatPageUi() {
                     </div>
                 </div>
                 
-                {/* Chat List */}
                 <div className="flex-1 overflow-y-auto">
                   {filteredChats.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="flex flex-col items-center justify-center h-full text-center p-4">
                       <div className="h-20 w-20 bg-gray-900 rounded-full flex items-center justify-center mb-4 border border-gray-700">
                         <MessageCircle className="h-10 w-10 text-gray-500" />
                       </div>
@@ -372,50 +574,61 @@ export default function ChatPageUi() {
                     </div>
                     ) : (
                     <div className="divide-y divide-gray-700/50">
-                      {filteredChats.map((chat) => (
+                      {filteredChats.map((chat) => {
+                        const timeUntilExpiry = getTimeUntilExpiry(chat.lastMessageTime);
+                        const isExpired = timeUntilExpiry === "Expired";
+                        const isLoading = loadingChat === chat.chatId;
+                        
+                        return (
                         <div
                           key={chat.chatId}
-                          onClick={() => handleSelectChat(chat)}
-                          className={`p-4 hover:bg-gray-800/50 cursor-pointer transition-colors relative group ${
-                          selectedChat?.chatId === chat.chatId ? 'bg-gray-800' : ''
-                          }`}
+                          onClick={() => handleChatClick(chat)}
+                          className={`p-4 cursor-pointer transition-colors relative group ${
+                            selectedChat?.chatId === chat.chatId ? 'bg-gray-800' : 'hover:bg-gray-800/50'
+                          } ${isExpired ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           <div className="flex items-start gap-3">
-                            {/* Avatar */}
                             <div className="relative">
                                 <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${
                                 chat.isDriver 
                                     ? 'bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30'
                                     : 'bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30'
                                 }`}>
-                                {chat.isDriver ? (
-                                    <span className="text-orange-400 font-bold text-lg">D</span>
+                                {isLoading ? (
+                                  <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                ) : chat.isDriver ? (
+                                  <span className="text-orange-400 font-bold text-lg">D</span>
                                 ) : (
-                                    <span className="text-blue-400 font-bold text-lg">C</span>
+                                  <span className="text-blue-400 font-bold text-lg">C</span>
                                 )}
                                 </div>
-                                {chat.unreadCount > 0 && (
+                                {chat.unreadCount > 0 && !isExpired && (
                                 <div className="absolute -top-1 -right-1 h-5 w-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
                                     {chat.unreadCount > 9 ? "9+" : chat.unreadCount}
                                 </div>
                                 )}
                             </div>
                             
-                            {/* Chat Info */}
                             <div className="flex-1 w-full">
                                 <div className="flex items-center justify-between mb-1">
                                   <h4 className="font-semibold text-white md:truncate">
                                       {chat.name}
+                                      {isExpired && (
+                                        <span className="ml-2 text-xs text-red-400 bg-red-500/20 px-2 py-0.5 rounded">Expired</span>
+                                      )}
+                                      {isLoading && (
+                                        <span className="ml-2 text-xs text-blue-400 bg-blue-500/20 px-2 py-0.5 rounded">Opening...</span>
+                                      )}
                                   </h4>
                                   <div className="flex items-center gap-2">
-                                      <span className="text-xs text-gray-500">
-                                      {formatTime(chat.lastMessageTime)}
+                                      <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-gray-500'}`}>
+                                      {isExpired ? "Expired" : formatTime(chat.lastMessageTime)}
                                       </span>
                                       <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-gray-400" />
                                   </div>
                                 </div>
                                 
-                                <p className="text-sm text-gray-400 md:truncate mb-1">
+                                <p className={`text-sm md:truncate mb-1 ${isExpired ? 'text-gray-500' : 'text-gray-400'}`}>
                                 {chat.lastMessage}
                                 </p>
                                 
@@ -433,57 +646,51 @@ export default function ChatPageUi() {
                                 </div>
                             </div>
 
-                            {/* Delete Button (on hover) */}
                             <button
-                                onClick={(e) => {
-                                e.stopPropagation();
-                                }}
+                                onClick={(e) => handleDeleteChat(chat.chatId, e)}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-red-500/20 rounded-lg"
+                                disabled={isLoading}
                             >
                                 <Trash2 className="h-4 w-4 text-gray-400 hover:text-red-400" />
                             </button>
                           </div>
 
-                          {/* 48h Expiry Indicator */}
-                          {chat.lastMessageTime && (
                           <div className="mt-2 flex items-center gap-1 text-xs">
-                            <Clock className="h-3 w-3 text-gray-500" />
-                            <span className="text-gray-500">
-                            Expires in {Math.max(0, 48 - Math.floor((new Date().getTime() - chat.lastMessageTime.getTime()) / (1000 * 60 * 60)))}h
+                            <Clock className={`h-3 w-3 ${isExpired ? 'text-red-400' : 'text-gray-500'}`} />
+                            <span className={isExpired ? 'text-red-400' : 'text-gray-500'}>
+                              {isExpired ? "Chat expired - will be deleted soon" : `Expires in ${timeUntilExpiry}`}
                             </span>
                           </div>
-                          )}
                         </div>
-                        ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
                 
-                {/* Footer */}
                 <div className="p-4 border-t border-gray-700">
-                    <div className="text-sm text-gray-500 text-center">
-                    <span>Chats auto-delete after 48h</span>
+                    <div className="text-sm text-gray-500 text-center flex items-center justify-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>Chats auto-delete after 7 days of inactivity</span>
                     </div>
                 </div>
                 </div>
                 
-                {/* Chat Window - Right */}
                 <div className={`flex-1 flex flex-col ${selectedChat ? 'flex' : 'hidden lg:flex'}`}>
                 {selectedChat ? (
                   <>
-                    
-                    {/* Chat Window */}
                     <div className="flex-1">
                       <ChatWindow
-                      chatId={selectedChat.chatId}
-                      car={selectedChat.car}
-                      driver={selectedChat.driver}
-                      onClose={() => setSelectedChat(null)}
+                        chatId={selectedChat.chatId}
+                        car={selectedChat.car}
+                        driver={selectedChat.driver}
+                        onClose={() => setSelectedChat(null)}
+                        onReadUpdate={handleReadUpdate}
                       />
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center">
+                  <div className="flex-1 flex flex-col items-center justify-center p-4">
                     <div className="max-w-md text-center">
                       <div className="h-32 w-32 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border border-gray-700">
                         <MessageCircle className="h-16 w-16 text-gray-500" />
@@ -491,7 +698,7 @@ export default function ChatPageUi() {
                       <h2 className="text-2xl font-bold text-white mb-3">Select a chat</h2>
                       <p className="text-gray-400 mb-6">
                         To continue longer chat time, please use WhatsApp.
-                        Chats automatically expire after 48 hours.
+                        Chats automatically expire after 7 days.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700">
@@ -510,7 +717,7 @@ export default function ChatPageUi() {
                           <div className="h-10 w-10 bg-purple-500/20 rounded-lg flex items-center justify-center mb-3 mx-auto">
                             <Clock className="h-5 w-5 text-purple-400" />
                           </div>
-                          <p className="text-sm text-gray-300">48-hour chat history</p>
+                          <p className="text-sm text-gray-300">7-day chat history</p>
                         </div>
                       </div>
                     </div>

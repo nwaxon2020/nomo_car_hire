@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // === USERS COLLECTION ===
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can create/update their own profile
+      allow create, update: if request.auth != null && 
+                             request.auth.uid == userId &&
+                             request.resource.data.uid == userId;
+      
+      // Only Cloud Functions can delete users
+      allow delete: if false;
+    }
+    
+    // === BOOKING REQUESTS ===
+    match /bookingRequests/{requestId} {
+      // Users can read their own booking requests
+      allow read: if request.auth != null && 
+                   resource.data.userId == request.auth.uid;
+      
+      // Users can create booking requests
+      allow create: if request.auth != null && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own booking requests
+      allow update: if request.auth != null &&
+                     resource.data.userId == request.auth.uid;
+      
+      // Only Cloud Functions can delete
+      allow delete: if false;
+    }
+    
+    // === GENERAL SITE REVIEWS ===
+    match /generalSiteReviews/{reviewId} {
+      // Anyone can read reviews
+      allow read: if true;
+      
+      // Users can create reviews for themselves
+      allow create: if request.auth != null &&
+                    request.resource.data.userId == request.auth.uid;
+      
+      // Users can update/delete their own reviews
+      allow update, delete: if request.auth != null &&
+                            resource.data.userId == request.auth.uid;
+    }
+    
+    // === PRE-CHATS ===
+    match /preChats/{chatId} {
+      // Users can read chats they're involved in
+      allow read: if request.auth != null &&
+                  (resource.data.senderId == request.auth.uid ||
+                   resource.data.receiverId == request.auth.uid);
+      
+      // Users can create chats as sender
+      allow create: if request.auth != null &&
+                    request.resource.data.senderId == request.auth.uid;
+      
+      // Users can update their own sent messages
+      allow update: if request.auth != null &&
+                    resource.data.senderId == request.auth.uid;
+      
+      // Only Cloud Functions can delete
+      allow delete: if false;
+    }
+    
+    // === VEHICLE LOG ===
+    match /vehicleLog/{vehicleId} {
+      // Vehicle owners can read their vehicles
+      allow read: if request.auth != null &&
+                  resource.data.driverId == request.auth.uid;
+      
+      // Drivers can create vehicle entries for themselves
+      allow create: if request.auth != null &&
+                    request.resource.data.driverId == request.auth.uid;
+      
+      // Drivers can update their own vehicles
+      allow update: if request.auth != null &&
+                    resource.data.driverId == request.auth.uid;
+      
+      // Only Cloud Functions can delete
+      allow delete: if false;
+    }
+  }
+}

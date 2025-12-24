@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
     doc,
@@ -10,6 +10,8 @@ import {
     deleteDoc,
     DocumentData,
     getDoc,
+    arrayRemove,
+    Timestamp,
 } from "firebase/firestore";
 import EnhancedWhatsApp from "../EnhancedWhatsApp";
 import { 
@@ -79,15 +81,78 @@ export default function ChatWindow({
     const [sendingMessage, setSendingMessage] = useState<boolean>(false);
     const [receivingMessage, setReceivingMessage] = useState<boolean>(false);
     const [expirationTime, setExpirationTime] = useState<number | null>(null);
-    const [timeRemaining, setTimeRemaining] = useState<string>("");
+    const [timeRemaining, setTimeRemaining] = useState<string>("Calculating...");
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
+    // Set expiration time when component mounts
+    useEffect(() => {
+        const setChatExpiration = async () => {
+            try {
+                const chatRef = doc(db, "preChats", chatId);
+                const chatDoc = await getDoc(chatRef);
+                
+                if (chatDoc.exists()) {
+                    const data = chatDoc.data();
+                    
+                    // Get the creation time - handle both Firestore Timestamp and string
+                    let creationTime;
+                    
+                    if (data.createdAt) {
+                        // If it's a Firestore Timestamp
+                        if (data.createdAt.toDate) {
+                            creationTime = data.createdAt.toDate().getTime();
+                        } else if (typeof data.createdAt === 'string') {
+                            // If it's an ISO string
+                            creationTime = new Date(data.createdAt).getTime();
+                        } else {
+                            // Fallback to current time
+                            creationTime = Date.now();
+                        }
+                    } else if (data.lastActivity) {
+                        // Try lastActivity if createdAt doesn't exist
+                        if (data.lastActivity.toDate) {
+                            creationTime = data.lastActivity.toDate().getTime();
+                        } else if (typeof data.lastActivity === 'string') {
+                            creationTime = new Date(data.lastActivity).getTime();
+                        } else {
+                            creationTime = Date.now();
+                        }
+                    } else {
+                        // If neither exists, use current time
+                        creationTime = Date.now();
+                    }
+                    
+                    // Calculate expiration time (7 days from creation)
+                    const expirationTimeMs = creationTime + (7 * 24 * 60 * 60 * 1000); // 7 days
+                    
+                    setExpirationTime(expirationTimeMs);
+                    
+                    // If chat is already expired, delete it
+                    if (Date.now() > expirationTimeMs) {
+                        autoDeleteChat();
+                    }
+                } else {
+                    console.error("Chat document doesn't exist");
+                    setTimeRemaining("Error");
+                }
+            } catch (error) {
+                console.error("Error setting chat expiration:", error);
+                setTimeRemaining("Error");
+            }
+        };
+
+        setChatExpiration();
+    }, [chatId]);
+
     // Calculate and update time remaining
     useEffect(() => {
-        if (!expirationTime) return;
+        if (!expirationTime) {
+            setTimeRemaining("Calculating...");
+            return;
+        }
 
         const updateTimer = () => {
             const now = Date.now();
@@ -100,19 +165,26 @@ export default function ChatWindow({
                 return;
             }
             
-            // Convert milliseconds to hours, minutes, seconds
-            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            // Convert milliseconds to days, hours, minutes
+            const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
             
-            setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`);
+            // Format with only relevant units
+            if (days > 0) {
+                setTimeRemaining(`${days}d ${hours}h`);
+            } else if (hours > 0) {
+                setTimeRemaining(`${hours}h ${minutes}m`);
+            } else {
+                setTimeRemaining(`${minutes}m`);
+            }
         };
 
         // Update immediately
         updateTimer();
         
-        // Update every second
-        const timer = setInterval(updateTimer, 1000);
+        // Update every minute instead of every second for better performance
+        const timer = setInterval(updateTimer, 60000); // Update every minute
         
         return () => clearInterval(timer);
     }, [expirationTime]);
@@ -121,45 +193,37 @@ export default function ChatWindow({
     const autoDeleteChat = async () => {
         try {
             const chatRef = doc(db, "preChats", chatId);
-            await deleteDoc(chatRef);
+            const chatDoc = await getDoc(chatRef);
             
-            // Notify user
-            alert("This chat has expired and has been deleted automatically.");
-            onClose();
+            // Check if chat still exists before deleting
+            if (chatDoc.exists()) {
+                await deleteDoc(chatRef);
+                
+                // Also remove from all users' unreadChats
+                const chatData = chatDoc.data();
+                const participants = chatData.participants || [];
+                
+                // Remove chat from all participants' unreadChats
+                await Promise.all(
+                    participants.map(async (participantId: string) => {
+                        try {
+                            await updateDoc(doc(db, "users", participantId), {
+                                unreadChats: arrayRemove(chatId)
+                            });
+                        } catch (error) {
+                            console.error(`Error removing chat from user ${participantId}:`, error);
+                        }
+                    })
+                );
+                
+                // Notify user
+                alert("This chat has expired and has been deleted automatically.");
+                onClose();
+            }
         } catch (error) {
             console.error("Error auto-deleting expired chat:", error);
         }
     };
-
-    // Set expiration time when component mounts
-    useEffect(() => {
-        const setChatExpiration = async () => {
-            try {
-                const chatRef = doc(db, "preChats", chatId);
-                const chatDoc = await getDoc(chatRef);
-                
-                if (chatDoc.exists()) {
-                    const data = chatDoc.data();
-                    const createdAt = data.createdAt || data.lastActivity || new Date().toISOString();
-                    
-                    // Calculate expiration time (24 hours from creation)
-                    const creationTime = new Date(createdAt).getTime();
-                    const expirationTime = creationTime + (48 * 60 * 60 * 1000); // 48 hours
-                    
-                    setExpirationTime(expirationTime);
-                    
-                    // If chat is already expired, delete it
-                    if (Date.now() > expirationTime) {
-                        autoDeleteChat();
-                    }
-                }
-            } catch (error) {
-                console.error("Error setting chat expiration:", error);
-            }
-        };
-
-        setChatExpiration();
-    }, [chatId]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -173,17 +237,44 @@ export default function ChatWindow({
     }, []);
 
     // Mark messages as read function
-    const markMessagesAsRead = async () => {
+    const markMessagesAsRead = useCallback(async () => {
         try {
+            const currentUserId = auth.currentUser?.uid;
+            if (!currentUserId) return;
+
             const chatRef = doc(db, "preChats", chatId);
-            const updatedMessages = messages.map(msg => ({
+            const chatDoc = await getDoc(chatRef);
+            
+            if (!chatDoc.exists()) return;
+
+            const chatData = chatDoc.data();
+            const messages = chatData.messages || [];
+            
+            // Check if there are any unread messages from other participants
+            const hasUnreadMessages = messages.some(
+                (msg: MessageType) => msg.senderId !== currentUserId && !msg.read
+            );
+
+            if (!hasUnreadMessages) return;
+
+            // Mark messages from others as read
+            const updatedMessages = messages.map((msg: MessageType) => ({
                 ...msg,
-                read: msg.senderId !== auth.currentUser?.uid ? true : msg.read
+                read: msg.senderId === currentUserId ? msg.read : true
             }));
             
             await updateDoc(chatRef, {
                 messages: updatedMessages
             });
+
+            // Remove this chat from current user's unreadChats
+            try {
+                await updateDoc(doc(db, "users", currentUserId), {
+                    unreadChats: arrayRemove(chatId)
+                });
+            } catch (error) {
+                console.error("Error removing chat from unreadChats:", error);
+            }
 
             if (onReadUpdate) {
                 onReadUpdate(chatId);
@@ -191,28 +282,43 @@ export default function ChatWindow({
         } catch (error) {
             console.error("Error marking messages as read:", error);
         }
-    };
+    }, [chatId, onReadUpdate]);
 
     // 🔄 Real-time Firestore updates
     useEffect(() => {
         if (!chatId) return;
 
         const chatRef = doc(db, "preChats", chatId);
+        let previousLength = 0;
 
-        const unsubscribe = onSnapshot(chatRef, (docSnap) => {
+        const unsubscribe = onSnapshot(chatRef, async (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const newMessages = data.messages || [];
                 
                 // Check if new message received
-                if (newMessages.length > messages.length) {
+                if (newMessages.length > previousLength) {
                     const lastMessage = newMessages[newMessages.length - 1];
-                    if (lastMessage.senderId !== auth.currentUser?.uid) {
+                    const currentUserId = auth.currentUser?.uid;
+                    
+                    if (lastMessage.senderId !== currentUserId) {
                         setReceivingMessage(true);
                         setTimeout(() => setReceivingMessage(false), 1000);
+                        
+                        // Add this chat to current user's unreadChats if they're not the sender
+                        if (currentUserId) {
+                            try {
+                                await updateDoc(doc(db, "users", currentUserId), {
+                                    unreadChats: arrayUnion(chatId)
+                                });
+                            } catch (error) {
+                                console.error("Error adding chat to unreadChats:", error);
+                            }
+                        }
                     }
                 }
                 
+                previousLength = newMessages.length;
                 setMessages(newMessages as MessageType[]);
                 setLoading(false);
 
@@ -220,18 +326,24 @@ export default function ChatWindow({
                 setTimeout(() => {
                     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
                 }, 100);
+            } else {
+                // Chat document doesn't exist
+                setLoading(false);
             }
+        }, (error) => {
+            console.error("Error listening to chat:", error);
+            setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [chatId, messages.length]);
+    }, [chatId]);
 
     // Mark messages as read when component mounts or messages change
     useEffect(() => {
         if (chatId && messages.length > 0) {
             markMessagesAsRead();
         }
-    }, [chatId, messages.length]);
+    }, [chatId, messages.length, markMessagesAsRead]);
 
     // ✉️ Send message with sending animation
     const sendMessage = async (e: React.FormEvent) => {
@@ -244,16 +356,21 @@ export default function ChatWindow({
         const userData = doc(db, "users", userId);
         const res = (await getDoc(userData)).data();
         const userName = res?.firstName?.toUpperCase() ||
-        res?.fullName?.split(" ")[0].toUpperCase() || "User".toUpperCase()
+            res?.fullName?.split(" ")[0].toUpperCase() || "User".toUpperCase();
 
         const message: MessageType = {
             senderId: userId,
-            
-            senderName:  userName,
+            senderName: userName,
             text: newMessage.trim(),
             timestamp: new Date().toISOString(),
             read: false,
         };
+
+        // OPTIMISTIC UPDATE: Add message to local state immediately
+        const messageText = newMessage.trim();
+        const optimisticMessages = [...messages, message];
+        setMessages(optimisticMessages);
+        setNewMessage("");
 
         try {
             const chatRef = doc(db, "preChats", chatId);
@@ -262,37 +379,61 @@ export default function ChatWindow({
                 lastActivity: new Date().toISOString(),
             });
 
-            setNewMessage("");
-            
-            // Mark as unread for recipient
-            const recipientId =
-                auth.currentUser.uid === driver.id
-                    ? messages[0]?.senderId
-                    : driver.id;
+            // Find the other participant
+            let otherParticipantId = null;
+            const chatDoc = await getDoc(chatRef);
+            if (chatDoc.exists()) {
+                const chatData = chatDoc.data();
+                const participants = chatData.participants || [];
+                otherParticipantId = participants.find((id: string) => id !== userId);
+            }
 
-            await updateDoc(doc(db, "users", recipientId), {
-                unreadChats: arrayUnion(chatId),
-            });
+            // Add this chat to other participant's unreadChats
+            if (otherParticipantId && otherParticipantId !== userId) {
+                try {
+                    await updateDoc(doc(db, "users", otherParticipantId), {
+                        unreadChats: arrayUnion(chatId)
+                    });
+                } catch (error) {
+                    console.error("Error adding chat to recipient's unreadChats:", error);
+                }
+            }
             
             // Simulate sending delay
             setTimeout(() => setSendingMessage(false), 500);
             
         } catch (error) {
             console.error("Error sending message:", error);
+            // REVERT on error
+            setMessages(messages);
+            setNewMessage(messageText); // Restore the message
             setSendingMessage(false);
         }
     };
 
     // 👁️ Mark incoming messages as read when input is focused
     const markAsRead = async () => {
+        const currentUserId = auth.currentUser?.uid;
+        if (!currentUserId) return;
+
+        // First update the messages in the chat
         const updatedMessages = messages.map((msg) => ({
             ...msg,
-            read: msg.senderId !== auth.currentUser?.uid ? true : msg.read,
+            read: msg.senderId === currentUserId ? msg.read : true,
         }));
 
         await updateDoc(doc(db, "preChats", chatId), {
             messages: updatedMessages as DocumentData[],
         });
+        
+        // Then remove from current user's unreadChats
+        try {
+            await updateDoc(doc(db, "users", currentUserId), {
+                unreadChats: arrayRemove(chatId)
+            });
+        } catch (error) {
+            console.error("Error removing chat from unreadChats:", error);
+        }
         
         if (onReadUpdate) {
             onReadUpdate(chatId);
@@ -303,12 +444,49 @@ export default function ChatWindow({
     const deleteChat = async () => {
         try {
             const chatRef = doc(db, "preChats", chatId);
-            await deleteDoc(chatRef);
+            const chatDoc = await getDoc(chatRef);
+            
+            if (chatDoc.exists()) {
+                // Get participants before deleting
+                const chatData = chatDoc.data();
+                const participants = chatData.participants || [];
+                
+                // Remove chat from all participants' unreadChats
+                await Promise.all(
+                    participants.map(async (participantId: string) => {
+                        try {
+                            await updateDoc(doc(db, "users", participantId), {
+                                unreadChats: arrayRemove(chatId)
+                            });
+                        } catch (error) {
+                            console.error(`Error removing chat from user ${participantId}:`, error);
+                        }
+                    })
+                );
+                
+                // Delete the chat
+                await deleteDoc(chatRef);
+            }
+            
             setShowDeleteConfirm(false);
             onClose();
         } catch (error) {
             console.error("Error deleting chat:", error);
         }
+    };
+
+    // Handle quick reply click
+    const handleQuickReplyClick = (text: string) => {
+        setNewMessage(text);
+        // Auto-focus the input field
+        setTimeout(() => {
+            const inputElement = document.querySelector('input[type="text"]') as HTMLInputElement;
+            if (inputElement) {
+                inputElement.focus();
+                // Move cursor to end
+                inputElement.selectionStart = inputElement.selectionEnd = text.length;
+            }
+        }, 50);
     };
 
     // Car rental specific quick replies
@@ -363,7 +541,7 @@ export default function ChatWindow({
     }
 
     return (
-        <div className="fixed inset-0 bg-[rgba(0,0,0,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-[rgba(0,0,0,0.5)] flex items-center justify-center z-50 p-2 md:p-4 backdrop-blur-sm">
             {/* Main Chat Window - Responsive sizing */}
             <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md md:max-w-lg lg:max-w-xl flex flex-col h-[85vh] max-h-[650px] border border-gray-700">
                 
@@ -430,7 +608,7 @@ export default function ChatWindow({
                     </div>
                 </div>
 
-                {/* Safety Notice - UPDATED FOR 24 HOURS */}
+                {/* Safety Notice - UPDATED FOR 7 DAYS */}
                 <div className="px-4 py-2 bg-gradient-to-r from-amber-900/20 to-red-900/20 border-y border-amber-800/30 flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                         <AlertCircle className="h-4 w-4 text-amber-400 flex-shrink-0" />
@@ -438,10 +616,10 @@ export default function ChatWindow({
                             ⚠️ Chat expires in <span className="font-bold">{timeRemaining}</span>
                         </p>
                     </div>
-                    {timeRemaining && timeRemaining !== "Expired" && (
+                    {timeRemaining && timeRemaining !== "Calculating..." && timeRemaining !== "Expired" && timeRemaining !== "Error" && (
                         <div className="flex items-center space-x-1">
                             <Clock className="h-3 w-3 text-red-400" />
-                            <span className="text-xs text-red-300">24h limit</span>
+                            <span className="text-xs text-red-300">7 days limit</span>
                         </div>
                     )}
                 </div>
@@ -472,7 +650,7 @@ export default function ChatWindow({
                                     return (
                                         <button
                                             key={idx}
-                                            onClick={() => setNewMessage(reply.text)}
+                                            onClick={() => handleQuickReplyClick(reply.text)}
                                             className="text-left p-3 bg-gray-800 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-gray-700 transition-all duration-200 group"
                                         >
                                             <div className="flex items-start space-x-2">

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import LoadingRound from "@/components/re-useable-loading";
@@ -25,6 +26,7 @@ export default function DriverRegisterPageUi() {
   const [address, setAddress] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [authChecking, setAuthChecking] = useState(true); // NEW: Track auth state checking
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -39,21 +41,35 @@ export default function DriverRegisterPageUi() {
     return age;
   };
 
-  // 🔐 Auth Check
+  // 🔐 Auth Check - FIXED with onAuthStateChanged
   useEffect(() => {
-    const checkAuth = async () => {
-      const user = auth.currentUser;
-      if (!user) return router.push("/login");
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
 
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) return router.push("/login");
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) {
+          router.push("/login");
+          return;
+        }
 
-      if (userDoc.data().isDriver) return router.push(`/user/driver-profile/${user?.uid}`);
+        if (userDoc.data().isDriver) {
+          router.push(`/user/driver-profile/${user.uid}`);
+          return;
+        }
 
-      setLoading(false);
-    };
+        setAuthChecking(false);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error checking user data:", error);
+        router.push("/login");
+      }
+    });
 
-    checkAuth();
+    return () => unsubscribe();
   }, [router]);
 
   // 📝 Submit Handler
@@ -121,12 +137,16 @@ export default function DriverRegisterPageUi() {
     }
   };
 
-  if (loading)
+  // Show loading while checking auth
+  if (authChecking || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-gray-700 text-lg animate-pulse">Loading...</div>
+        <div className="text-gray-700 text-lg">
+          {authChecking ? "Checking authentication..." : "Loading..."}
+        </div>
       </div>
     );
+  }
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-white  px-1 py-4 md:p-4 pb-8">

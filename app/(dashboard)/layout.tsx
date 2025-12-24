@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import LoadingDots from "@/components/loading";
-import { useUnreadChats } from "@/lib/hooks/useUnreadChats"; // You'll need to create this hook
+import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 
 import {
   FaHome,
@@ -28,13 +28,22 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [displayName, setDisplayName] = useState("fetching...");
   const [photoURL, setPhotoURL] = useState("/profile.png");
   const [userId, setUserId] = useState<string | null>(null);
+  const [authChecking, setAuthChecking] = useState(true); // NEW: Track auth state
 
   const router = useRouter();
   const pathname = usePathname();
-  const hideSidebar = pathname.startsWith("/driver");
+  
+  // FIXED: Hide sidebar on ALL auth-related pages including driver register
+  const hideSidebar = 
+    pathname.startsWith("/login") || 
+    pathname.startsWith("/register") || 
+    pathname.startsWith("/forgot-password") ||
+    pathname === "/user/driver-register" ||
+    pathname === "/user/register" ||
+    pathname === "/user/purchase";
 
-  // Use the unread chats hook
-  const unreadCount = useUnreadChats();
+  // Use the unread chats hook - this gives us the unreadCount
+  const { unreadCount } = useUnreadChats();
 
   // Extract first name only
   const getFirstName = (name: string | null | undefined) => {
@@ -50,52 +59,72 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) return router.push("/login");
+      setAuthChecking(true);
+      
+      if (!user) {
+        // If not logged in and trying to access protected pages, redirect to login
+        if (!hideSidebar) {
+          router.push("/login");
+        }
+        setAuthChecking(false);
+        return;
+      }
 
       setUserId(user.uid);
 
-      const ref = doc(db, "users", user.uid);
-      const snap = await getDoc(ref);
+      try {
+        const ref = doc(db, "users", user.uid);
+        const snap = await getDoc(ref);
 
-      let finalName = "User";
-      let photo = user.photoURL || "/profile.png";
+        let finalName = "User";
+        let photo = user.photoURL || "/profile.png";
 
-      if (snap.exists()) {
-        const data = snap.data();
-        setIsDriver(data.isDriver === true);
+        if (snap.exists()) {
+          const data = snap.data();
+          setIsDriver(data.isDriver === true);
 
-        if (data.isDriver) {
-          // DRIVER
-          finalName = getFirstName(data.firstName || user.displayName);
+          if (data.isDriver) {
+            // DRIVER
+            finalName = getFirstName(data.firstName || user.displayName);
+          } else {
+            // NORMAL USER
+            const full = data.fullName || user.displayName || "User";
+            finalName = getFirstName(full);
+          }
+
+          // PHOTO - FIXED: Changed from data.photoURL to data.profileImage
+          photo = data.profileImage || user.photoURL || "/profile.png";
         } else {
-          // NORMAL USER
-          const full = data.fullName || user.displayName || "User";
-          finalName = getFirstName(full);
+          // No Firestore doc → Google or Email user
+          finalName = getFirstName(user.displayName);
         }
 
-        // PHOTO - FIXED: Changed from data.photoURL to data.profileImage
-        photo = data.profileImage || user.photoURL || "/profile.png";
-      } else {
-        // No Firestore doc → Google or Email user
-        finalName = getFirstName(user.displayName);
+        // Apply capitalization
+        finalName = capitalize(finalName);
+
+        setDisplayName(finalName);
+        setPhotoURL(photo);
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setAuthChecking(false);
       }
-
-      // Apply capitalization
-      finalName = capitalize(finalName);
-
-      setDisplayName(finalName);
-      setPhotoURL(photo);
     });
 
     return () => unsub();
-  }, [router]);
+  }, [router, hideSidebar]);
 
   const dashboardRoute = isDriver? `/user/driver-profile/${userId}` : `/user/profile/${userId}`;
 
   const menuItems = [ 
     { name: "Home", href: "/", icon: <FaHome /> },
     { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
-    { name: "Chat", href: "/user/chat", icon: <FaRegCommentDots />, unreadCount },
+    { 
+      name: "Chat", 
+      href: "/user/chat", 
+      icon: <FaRegCommentDots />, 
+      unreadCount  // This is the unread chat count
+    },
     { name: "Hire a Car", href: "/user/car-hire", icon: <FaCar /> },
     !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
     { name: "About", href: "/about", icon: <FaInfoCircle /> },
@@ -112,9 +141,18 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     }
   };
 
+  // Show loading while checking auth
+  if (authChecking && !hideSidebar) {
+    return (
+      <div className="flex min-h-screen bg-gray-100 items-center justify-center">
+        <div className="text-gray-700">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {!hideSidebar && (
+      {!hideSidebar && !authChecking && (
         <div className="md:hidden absolute top-6 right-4 z-50">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -125,7 +163,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      {!hideSidebar && pathname !== "/user/register" && pathname !== "/user/purchase" &&(
+      {!hideSidebar && !authChecking && (
         <aside
           className={`z-30 border-r border-gray-50 sm:border-0 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col 
             transform transition-transform duration-300
@@ -173,13 +211,15 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                 className={`flex items-center w-full px-6 py-3 hover:bg-green-800 transition-colors relative
                   ${pathname === item.href ? "bg-gray-800 font-bold" : "font-semibold"}`}
               >
-                <span className="mr-3 text-lg">{item.icon}</span>
+                <span className="mr-3 text-lg">
+                  {item.icon}
+                </span>
                 {item.name}
                 
-                {/* Show unread count badge for Chat item */}
-                {item.name === "Chat" && item.unreadCount > 0 && (
+                {/* Show ONLY the unread chat count in red badge */}
+                {item.name === "Chat" && unreadCount > 0 && (
                   <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-                    {item.unreadCount > 9 ? "9+" : item.unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </button>

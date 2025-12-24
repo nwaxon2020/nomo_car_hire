@@ -766,14 +766,14 @@ export default function Footer() {
             ) : (
               <Link
                 href="/login"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white shadow hover:bg-blue-700 transition-all duration-300 text-xs sm:text-sm"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white shadow hover:bg-blue-700 transition-all duration-300 text-sm sm:text-base"
               >
                 <FaSignInAlt /> Login
               </Link>
             )}
 
             {user && (
-              <div className="p-2 mt-6 sm:mt-8 underline text-gray-700 text-xs sm:text-sm">
+              <div className="p-2 mt-6 sm:mt-8 underline text-gray-700 text-sm sm:text-base">
                 <Link href="/delete-account">Delete Account</Link>
               </div>
             )}
@@ -820,7 +820,8 @@ function FooterLink({ href, label, icon, disabled = false, isExternal = false }:
       </li>
     );
   }
-
+ 
+  // Contact Us Link
   if (isExternal || href.startsWith('http') || href.startsWith('mailto:')) {
     return (
       <li>
@@ -832,7 +833,7 @@ function FooterLink({ href, label, icon, disabled = false, isExternal = false }:
         >
           <span className="absolute -left-2 h-5 w-5 bg-blue-100 rounded-full scale-0 group-hover:scale-100 transition-transform duration-300"></span>
           <span className="text-sm z-10">{icon}</span>
-          <span className="z-10 font-medium text-xs">{label}</span>
+          <span className="z-10 font-medium text-sm md:text-base">{label}</span>
         </a>
       </li>
     );

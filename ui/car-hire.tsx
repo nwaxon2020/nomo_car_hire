@@ -964,7 +964,15 @@ export default function CarHireUi() {
     // Handle complain button
     const handleComplain = (driverName: string, vehicle: VehicleLog) => {
         setSelectDriver(`${driverName} - ${vehicle.carName} ${vehicle.carModel}`)
-        window.scrollTo({top: document.body.scrollHeight, behavior: "smooth"})
+        
+        // Scroll to the div with id="complains"
+        const complainsDiv = document.getElementById('complain');
+        if (complainsDiv) {
+            complainsDiv.scrollIntoView({ 
+                behavior: "smooth", 
+                block: "start" // or "center", "end", "nearest"
+            });
+        }
     }
 
     // Handle delete comment
