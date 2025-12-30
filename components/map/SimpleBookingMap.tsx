@@ -1,5 +1,8 @@
 'use client';
 
+import { toast } from 'react-hot-toast'; // If using react-hot-toast
+import { useEffect } from 'react';
+
 interface SimpleBookingMapProps {
   pickupLocation: string;
   destination: string;
@@ -13,6 +16,27 @@ export default function SimpleBookingMap({
   driverLocation,
   onLocationSelect 
 }: SimpleBookingMapProps) {
+  
+  const handleLocationChange = (type: 'pickup' | 'destination', value: string) => {
+    onLocationSelect(type, value);
+    
+    // Show toast notifications when locations are updated
+    if (value.trim()) {
+      if (type === 'pickup') {
+        toast.success('Pickup location updated!');
+      } else {
+        toast.success('Destination updated!');
+      }
+    }
+  };
+
+  // Optional: Show success toast when both locations are filled
+  useEffect(() => {
+    if (pickupLocation && destination) {
+      toast.success('Route set successfully! You can now proceed with booking.');
+    }
+  }, [pickupLocation, destination]);
+
   return (
     <div className="w-full bg-gray-50 rounded-lg p-4 mb-6">
       <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
@@ -30,7 +54,7 @@ export default function SimpleBookingMap({
               type="text"
               placeholder="Enter pickup address..."
               value={pickupLocation || ''}
-              onChange={(e) => onLocationSelect('pickup', e.target.value)}
+              onChange={(e) => handleLocationChange('pickup', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -43,13 +67,13 @@ export default function SimpleBookingMap({
               type="text"
               placeholder="Where do you want to go?"
               value={destination || ''}
-              onChange={(e) => onLocationSelect('destination', e.target.value)}
+              onChange={(e) => handleLocationChange('destination', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
         
-        {/* Simple map visualization (you can replace with actual map later) */}
+        {/* Simple map visualization */}
         <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -75,10 +99,12 @@ export default function SimpleBookingMap({
           )}
         </div>
         
+        {/* Success message (inline) */}
         {pickupLocation && destination && (
           <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-green-700 font-medium">
-              ✓ Route set successfully. You can now proceed with booking.
+            <p className="text-green-700 font-medium flex items-center gap-2">
+              <span>✓</span>
+              Route set successfully. You can now proceed with booking.
             </p>
           </div>
         )}

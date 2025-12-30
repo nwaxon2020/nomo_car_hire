@@ -558,7 +558,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   }
 
   return (
-    <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
+    <div className="py-6 px-2 md:p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className={`p-3 rounded-full ${isSharing ? 'bg-green-100 text-green-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>

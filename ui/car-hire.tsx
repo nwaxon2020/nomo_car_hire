@@ -393,6 +393,10 @@ export default function CarHireUi() {
     //location settings Panel
     const [showLocationPanel, setShowLocationPanel] = useState(false);
 
+    // Trip success message state
+    const [showTripSuccess, setShowTripSuccess] = useState(false);
+    const [tripSuccessMessage, setTripSuccessMessage] = useState('');
+
 
    // Initialize auth and load history from Firebase
     useEffect(() => {
@@ -689,159 +693,157 @@ export default function CarHireUi() {
 
             // Fetch drivers
             const driversQuery = query(
-            collection(db, "users"),
-            where("isDriver", "==", true)
+                collection(db, "users"),
+                where("isDriver", "==", true)
             );
             const driversSnapshot = await getDocs(driversQuery);
             
-            // Fetch all vehicles
+            // Fetch ALL vehicles (including unavailable ones)
             const vehiclesQuery = collection(db, "vehicleLog");
             const vehiclesSnapshot = await getDocs(vehiclesQuery);
             
-            // Create vehicle map - ONLY include available vehicles (not on trip)
+            // Create vehicle map - INCLUDE ALL VEHICLES regardless of status
             const vehicleMap = new Map<string, VehicleLog>();
             vehiclesSnapshot.forEach((doc) => {
-            const data = doc.data();
-            // Only include available vehicles (not on trip)
-            if (data.status === 'available') {
+                const data = doc.data();
                 const vehicle: VehicleLog = {
-                id: doc.id,
-                carName: data.carName || "",
-                carModel: data.carModel || "",
-                carType: data.carType || "",
-                exteriorColor: data.exteriorColor || "",
-                passengers: data.passengers || 0,
-                ac: data.ac || false,
-                description: data.description || "",
-                status: data.status || "available",
-                driverId: data.driverId || "",
-                images: data.images || {},
+                    id: doc.id,
+                    carName: data.carName || "",
+                    carModel: data.carModel || "",
+                    carType: data.carType || "",
+                    exteriorColor: data.exteriorColor || "",
+                    passengers: data.passengers || 0,
+                    ac: data.ac || false,
+                    description: data.description || "",
+                    status: data.status || "available", // Keep actual status
+                    driverId: data.driverId || "",
+                    images: data.images || {},
                 };
                 vehicleMap.set(doc.id, vehicle);
-            }
             });
 
-            // Combine drivers with available vehicles
+            // Combine drivers with ALL their vehicles (including unavailable ones)
             const driversWithVehiclesList: DriverWithVehicle[] = [];
             
             driversSnapshot.forEach(doc => {
-            const data = doc.data();
-            const driver: Driver = {
-                id: doc.id,
-                uid: data.uid || doc.id,
-                firstName: data.firstName || "",
-                lastName: data.lastName || "",
-                fullName: data.fullName || `${data.firstName} ${data.lastName}`,
-                phoneNumber: data.phoneNumber || "",
-                email: data.email || "",
-                city: data.city || "",
-                state: data.state || "",
-                country: data.country || "",
-                verified: data.verified || false,
-                whatsappPreferred: data.whatsappPreferred || false,
-                profileImage: data.profileImage || "",
-                vehicleLog: data.vehicleLog || [],
-                comments: data.comments || [],
-                ratings: data.ratings || [],
-                averageRating: data.averageRating || 0,
-                totalRatings: data.totalRatings || 0,
-                customersCarried: data.customersCarried || [],
-                vipLevel: data.vipLevel || 0,
-                purchasedVipLevel: data.purchasedVipLevel || 0,
-                prestigeLevel: data.prestigeLevel || 0,
-                referralCount: data.referralCount || 0,
-                isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
-            };
-
-            // Skip if this driver is the current user (prevent self-booking)
-            if (driver.uid === currentUserId) {
-                return;
-            }
-
-            // Get available vehicles for this driver
-            const driverVehicles: VehicleLog[] = [];
-            
-            driver.vehicleLog.forEach(vehicleId => {
-                const vehicle = vehicleMap.get(vehicleId);
-                if (vehicle) {
-                driverVehicles.push(vehicle);
-                }
-            });
-
-            // Also check vehicles by driverId (in case vehicleLog IDs don't match)
-            vehiclesSnapshot.forEach((vehicleDoc) => {
-                const vehicleData = vehicleDoc.data();
-                if (
-                vehicleData.driverId === driver.uid && 
-                vehicleData.status === 'available' &&
-                !driverVehicles.some(v => v.id === vehicleDoc.id)
-                ) {
-                const vehicle: VehicleLog = {
-                    id: vehicleDoc.id,
-                    carName: vehicleData.carName || "",
-                    carModel: vehicleData.carModel || "",
-                    carType: vehicleData.carType || "",
-                    exteriorColor: vehicleData.exteriorColor || "",
-                    passengers: vehicleData.passengers || 0,
-                    ac: vehicleData.ac || false,
-                    description: vehicleData.description || "",
-                    status: vehicleData.status || "available",
-                    driverId: vehicleData.driverId || "",
-                    images: vehicleData.images || {},
+                const data = doc.data();
+                const driver: Driver = {
+                    id: doc.id,
+                    uid: data.uid || doc.id,
+                    firstName: data.firstName || "",
+                    lastName: data.lastName || "",
+                    fullName: data.fullName || `${data.firstName} ${data.lastName}`,
+                    phoneNumber: data.phoneNumber || "",
+                    email: data.email || "",
+                    city: data.city || "",
+                    state: data.state || "",
+                    country: data.country || "",
+                    verified: data.verified || false,
+                    whatsappPreferred: data.whatsappPreferred || false,
+                    profileImage: data.profileImage || "",
+                    vehicleLog: data.vehicleLog || [],
+                    comments: data.comments || [],
+                    ratings: data.ratings || [],
+                    averageRating: data.averageRating || 0,
+                    totalRatings: data.totalRatings || 0,
+                    customersCarried: data.customersCarried || [],
+                    vipLevel: data.vipLevel || 0,
+                    purchasedVipLevel: data.purchasedVipLevel || 0,
+                    prestigeLevel: data.prestigeLevel || 0,
+                    referralCount: data.referralCount || 0,
+                    isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
                 };
-                driverVehicles.push(vehicle);
-                }
-            });
 
-            if (driverVehicles.length > 0) {
-                driversWithVehiclesList.push({
-                ...driver,
-                vehicles: driverVehicles
+                // Skip if this driver is the current user (prevent self-booking)
+                if (driver.uid === currentUserId) {
+                    return;
+                }
+
+                // Get ALL vehicles for this driver (including unavailable ones)
+                const driverVehicles: VehicleLog[] = [];
+                
+                // Get vehicles from driver's vehicleLog array
+                driver.vehicleLog.forEach(vehicleId => {
+                    const vehicle = vehicleMap.get(vehicleId);
+                    if (vehicle) {
+                        driverVehicles.push(vehicle);
+                    }
                 });
-            }
+
+                // Also check vehicles by driverId (in case vehicleLog IDs don't match)
+                vehiclesSnapshot.forEach((vehicleDoc) => {
+                    const vehicleData = vehicleDoc.data();
+                    if (
+                        vehicleData.driverId === driver.uid &&
+                        !driverVehicles.some(v => v.id === vehicleDoc.id)
+                    ) {
+                        const vehicle: VehicleLog = {
+                            id: vehicleDoc.id,
+                            carName: vehicleData.carName || "",
+                            carModel: vehicleData.carModel || "",
+                            carType: vehicleData.carType || "",
+                            exteriorColor: vehicleData.exteriorColor || "",
+                            passengers: vehicleData.passengers || 0,
+                            ac: vehicleData.ac || false,
+                            description: vehicleData.description || "",
+                            status: vehicleData.status || "available",
+                            driverId: vehicleData.driverId || "",
+                            images: vehicleData.images || {},
+                        };
+                        driverVehicles.push(vehicle);
+                    }
+                });
+
+                // Only include driver if they have at least one vehicle
+                if (driverVehicles.length > 0) {
+                    driversWithVehiclesList.push({
+                        ...driver,
+                        vehicles: driverVehicles
+                    });
+                }
             });
 
             // SORT DRIVERS BY PRIORITY (EXACT ORDER YOU REQUESTED):
             driversWithVehiclesList.sort((a, b) => {
-            // Get VIP level (use the higher of vipLevel or purchasedVipLevel)
-            const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
-                return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
-            };
-            
-            const aVipLevel = getEffectiveVipLevel(a);
-            const bVipLevel = getEffectiveVipLevel(b);
-            const aIsVIP = aVipLevel > 0;
-            const bIsVIP = bVipLevel > 0;
-            const aVerified = a.verified;
-            const bVerified = b.verified;
-            
-            // 1. VIP with Verified
-            if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
-            if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
-            
-            // 2. VIP without Verified
-            if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
-                // Both are VIP without verified, compare VIP levels
-                if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
-                // Same VIP level, compare ratings
+                // Get VIP level (use the higher of vipLevel or purchasedVipLevel)
+                const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
+                    return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
+                };
+                
+                const aVipLevel = getEffectiveVipLevel(a);
+                const bVipLevel = getEffectiveVipLevel(b);
+                const aIsVIP = aVipLevel > 0;
+                const bIsVIP = bVipLevel > 0;
+                const aVerified = a.verified;
+                const bVerified = b.verified;
+                
+                // 1. VIP with Verified
+                if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
+                if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
+                
+                // 2. VIP without Verified
+                if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
+                    // Both are VIP without verified, compare VIP levels
+                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
+                    // Same VIP level, compare ratings
+                    return (b.averageRating || 0) - (a.averageRating || 0);
+                }
+                if (bIsVIP && !bVerified && !(aIsVIP && aVerified) && !(aIsVIP && aVerified)) {
+                    // Both are VIP without verified, compare VIP levels
+                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
+                    // Same VIP level, compare ratings
+                    return (b.averageRating || 0) - (a.averageRating || 0);
+                }
+                
+                // 3. Verified without VIP
+                if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
+                if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
+                
+                // 4. Others (neither VIP nor verified)
+                // Sort by rating for non-VIP, non-verified drivers
                 return (b.averageRating || 0) - (a.averageRating || 0);
-            }
-            if (bIsVIP && !bVerified && !(aIsVIP && aVerified) && !(aIsVIP && aVerified)) {
-                // Both are VIP without verified, compare VIP levels
-                if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
-                // Same VIP level, compare ratings
-                return (b.averageRating || 0) - (a.averageRating || 0);
-            }
-            
-            // 3. Verified without VIP
-            if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
-            if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
-            
-            // 4. Others (neither VIP nor verified)
-            // Sort by rating for non-VIP, non-verified drivers
-            return (b.averageRating || 0) - (a.averageRating || 0);
-            
-            // If all criteria are equal, maintain original order
+                
+                // If all criteria are equal, maintain original order
             });
 
             setDriversWithVehicles(driversWithVehiclesList);
@@ -1519,12 +1521,16 @@ export default function CarHireUi() {
     // Start a new trip
     const startTrip = async (driverId: string, vehicleId: string, pickupLocation: string, destination: string) => {
         if (!currentUser) {
-            alert('Please sign in to start a trip');
+            setTripSuccessMessage('Please sign in to start a trip');
+            setShowTripSuccess(true);
+            setTimeout(() => setShowTripSuccess(false), 3000);
             return null;
         }
 
         if (!pickupLocation || !destination) {
-            alert('Please enter both pickup location and destination');
+            setTripSuccessMessage('Please enter both pickup location and destination');
+            setShowTripSuccess(true);
+            setTimeout(() => setShowTripSuccess(false), 3000);
             return null;
         }
 
@@ -1591,7 +1597,8 @@ export default function CarHireUi() {
             fetchDriversAndVehicles();
 
             // Show success message
-            alert(`Trip started successfully! Estimated fare: ₦${estimatedFare.toLocaleString()}`);
+            setTripSuccessMessage(`Trip started successfully! Live tracking activated.`);
+            setShowTripSuccess(true);
             
             // Update trip info state
             setTripInfo({
@@ -1603,16 +1610,23 @@ export default function CarHireUi() {
             endTime: null
             });
 
+            // Auto-hide success message after 3 seconds
+            setTimeout(() => {
+                setShowTripSuccess(false);
+            }, 3000);
+
             return tripDoc.id;
 
         } catch (error) {
             console.error('Error starting trip:', error);
-            alert('Failed to start trip. Please try again.');
+            setTripSuccessMessage('Failed to start trip. Please try again.');
+            setShowTripSuccess(true);
+            setTimeout(() => setShowTripSuccess(false), 3000);
             return null;
         }
     };
 
-    // Complete or cancel trip
+   // Complete or cancel trip
     const updateTripStatus = async (tripId: string, status: 'completed' | 'cancelled') => {
         if (!tripId || !currentUser) return;
 
@@ -1621,25 +1635,29 @@ export default function CarHireUi() {
             const tripDoc = await getDoc(tripRef);
             
             if (!tripDoc.exists()) {
-            alert('Trip not found');
-            return;
+                setTripSuccessMessage('Trip not found');
+                setShowTripSuccess(true);
+                setTimeout(() => setShowTripSuccess(false), 3000);
+                return;
             }
 
             const tripData = tripDoc.data() as Trip;
             
             // Check if user is authorized to update this trip
             if (tripData.customerId !== currentUser.uid && tripData.driverId !== currentUser.uid) {
-            alert('You are not authorized to update this trip');
-            return;
+                setTripSuccessMessage('You are not authorized to update this trip');
+                setShowTripSuccess(true);
+                setTimeout(() => setShowTripSuccess(false), 3000);
+                return;
             }
 
             const updates: { 
-            status: 'completed' | 'cancelled', 
-            updatedAt: Timestamp,
-            endTime?: Timestamp 
+                status: 'completed' | 'cancelled', 
+                updatedAt: Timestamp,
+                endTime?: Timestamp 
             } = {
-            status,
-            updatedAt: Timestamp.now()
+                status,
+                updatedAt: Timestamp.now()
             };
 
             if (status === 'completed') {
@@ -1662,37 +1680,42 @@ export default function CarHireUi() {
             }
 
             if (status === 'cancelled') {
-            // Update vehicle status back to available
-            const vehicleRef = doc(db, 'vehicleLog', tripData.vehicleId);
-            await updateDoc(vehicleRef, {
-                status: 'available',
-                currentTripId: null
-            });
-            
-            // Refresh drivers list
-            fetchDriversAndVehicles();
+                // Update vehicle status back to available
+                const vehicleRef = doc(db, 'vehicleLog', tripData.vehicleId);
+                await updateDoc(vehicleRef, {
+                    status: 'available',
+                    currentTripId: null
+                });
+                
+                // Refresh drivers list
+                fetchDriversAndVehicles();
             }
 
             await updateDoc(tripRef, updates);
             
             // Clear active trip if completed or cancelled
             if (status === 'completed' || status === 'cancelled') {
-            setActiveTrip(null);
-            setTripInfo({
-                pickupLocation: '',
-                destination: '',
-                fare: 0,
-                status: 'pending',
-                startTime: null,
-                endTime: null
-            });
+                setActiveTrip(null);
+                setTripInfo({
+                    pickupLocation: '',
+                    destination: '',
+                    fare: 0,
+                    status: 'pending',
+                    startTime: null,
+                    endTime: null
+                });
             }
 
-            alert(`Trip ${status} successfully!`);
+            // Show success message with appropriate styling
+            setTripSuccessMessage(`Trip ${status} successfully!`);
+            setShowTripSuccess(true);
+            setTimeout(() => setShowTripSuccess(false), 3000);
             
         } catch (error) {
             console.error('Error updating trip:', error);
-            alert('Failed to update trip status');
+            setTripSuccessMessage('Failed to update trip status');
+            setShowTripSuccess(true);
+            setTimeout(() => setShowTripSuccess(false), 3000);
         }
     };
 
@@ -1769,115 +1792,173 @@ export default function CarHireUi() {
                         <small><span className="font-black">Important Notice:</span> Please make sure you contact drivers, book appointments properly, negotiate on or before services.</small>
                     </div>
 
-                    <div className="py-8 px-2 relative">
-                        <button
-                            onClick={() => setShowLocationPanel(!showLocationPanel)}
-                            className="w-full md:w-50 md:left-2 left-0 top-0 absolute mt-6 mx-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors text-sm"
-                        >
-                            {showLocationPanel ? 'Hide Location Settings' : 'Show Location Settings'}
-                        </button>
+                    <div className="pt-6 pb-4 px-2">
+                        {/* Trip Notification Popup */}
+                        {showTripSuccess && (
+                            <div className="fixed top-4 right-4 z-50 animate-slideIn">
+                                <div className={`border rounded-lg shadow-lg p-4 max-w-sm ${
+                                    tripSuccessMessage.includes('successfully') 
+                                        ? 'bg-green-50 border-green-200' 
+                                        : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                        ? 'bg-red-50 border-red-200'
+                                        : 'bg-yellow-50 border-yellow-200'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                            tripSuccessMessage.includes('successfully') 
+                                                ? 'bg-green-100 text-green-600' 
+                                                : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                                ? 'bg-red-100 text-red-600'
+                                                : 'bg-yellow-100 text-yellow-600'
+                                        }`}>
+                                            {tripSuccessMessage.includes('successfully') 
+                                                ? <span className="text-lg">✓</span>
+                                                : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                                ? <span className="text-lg">✗</span>
+                                                : <span className="text-lg">⚠</span>
+                                            }
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className={`font-medium ${
+                                                tripSuccessMessage.includes('successfully') 
+                                                    ? 'text-green-800' 
+                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                                    ? 'text-red-800'
+                                                    : 'text-yellow-800'
+                                            }`}>
+                                                {tripSuccessMessage}
+                                            </p>
+                                        </div>
+                                        <button 
+                                            onClick={() => setShowTripSuccess(false)}
+                                            className={`${
+                                                tripSuccessMessage.includes('successfully') 
+                                                    ? 'text-green-400 hover:text-green-600' 
+                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                                    ? 'text-red-400 hover:text-red-600'
+                                                    : 'text-yellow-400 hover:text-yellow-600'
+                                            }`}
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
+                        {/* Button to hide and show settings panel */}
+                        <div className="mb-2 flex flex-col">
+                            <button
+                                onClick={() => setShowLocationPanel(!showLocationPanel)}
+                                className="w-full md:w-50 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors text-sm"
+                            >
+                                {showLocationPanel ? 'Hide Location Settings' : 'Show Location Settings'}
+                            </button>
+                            {!showLocationPanel && <p className="text-sm text-left text-blue-600">Share your real-time location with loved ones</p>}
+                        </div>
+
+                        {/* Toggle Location settings and panel */}
                         {showLocationPanel && (
                             <div>
                                 {currentUser && (
-                                    <div className="my-8">
+                                    <div className="mb-8">
                                         <CustomerLocationToggle 
                                             userId={currentUser.uid}
                                             tripId={activeTrip?.id}
                                         />
                                     </div>
                                 )}
-
-                                {/* Active Trip Banner with Tracker */}
-                                {activeTrip && (
-                                    <div className="m-2 mb-4 rounded-xl overflow-hidden shadow-xl border border-blue-200">
-                                        {/* Banner Header with Gradient */}
-                                        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="bg-white/20 p-2 rounded-full">
-                                                        <FaCar className="text-white text-lg" />
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-white text-lg">🚗 Active Trip</h3>
-                                                        <p className="text-blue-100 text-sm">Real-time tracking enabled</p>
-                                                    </div>
-                                                </div>
-                                                <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
-                                                    🟢 LIVE
-                                                </span>
-                                            </div>
-                                            
-                                            {/* Route Info */}
-                                            <div className="flex justify-center md:justify-start items-center gap-4 space-y-1 text-white">
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                                                    <span className="truncate">{activeTrip.pickupLocation}</span>
-                                                </div>
-                                                <div><p className="font-bold">to</p></div>
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <div className="w-2 h-2 rounded-full bg-red-400"></div>
-                                                    <span className="truncate">{activeTrip.destination}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* LIVE TRIP TRACKER WIDGET - ADD THIS */}
-                                        <div className="p-3 bg-white">
-                                            <TripTracker 
-                                                tripId={activeTrip.id}
-                                                driverId={selectedDriver?.id || activeTrip.driverId}
-                                                customerId={currentUser?.uid}
-                                            />
-                                        </div>
-                                        
-                                        {/* Action Buttons */}
-                                        <div className="p-3 bg-white border-t border-gray-100">
-                                            <div className="flex flex-col sm:flex-row gap-2">
-                                                <button
-                                                    onClick={() => updateTripStatus(activeTrip.id, 'completed')}
-                                                    className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
-                                                >
-                                                    <FaCheckCircle />
-                                                    Mark Completed
-                                                </button>
-                                                <button
-                                                    onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
-                                                    className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
-                                                >
-                                                    <FaTimesCircle />
-                                                    Cancel Trip
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Safety Section */}
-                                        <div className="p-3 bg-gradient-to-r from-blue-50 to-blue-100 border-t border-blue-200">
-                                            <div className="flex flex-col md:flex-row items-center justify-between mb-2">
-                                                <h4 className="font-semibold text-blue-800 flex items-center gap-2">
-                                                    <FaShieldAlt className="text-blue-600" />
-                                                    Safety Features
-                                                </h4>
-                                                <ShareLocation
-                                                    tripId={activeTrip.id}
-                                                    driverId={selectedDriver?.id || activeTrip.driverId}
-                                                    driverName={selectedDriver?.fullName || 'Driver'}
-                                                    vehicleDetails={`${selectedVehicle?.carName} ${selectedVehicle?.carModel}`}
-                                                    pickup={activeTrip.pickupLocation}
-                                                    destination={activeTrip.destination}
-                                                    currentUserId={currentUser?.uid}
-                                                />
-                                            </div>
-                                            
-                                            <p className="text-blue-700 text-xs">
-                                                ✅ Your trip is being tracked for safety. Share location with loved ones.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
                             </div>
                         )}
+
+                        {/* Active Trip Banner with Tracker */}
+                        {activeTrip && (
+                            <div className="mb-4 rounded-xl overflow-hidden shadow-xl border border-blue-200">
+                                {/* Banner Header with Gradient */}
+                                <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-white/20 p-2 rounded-full">
+                                                <FaCar className="text-white text-lg" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-white text-lg">🚗 Active Trip</h3>
+                                                <p className="text-blue-100 text-sm">Real-time tracking enabled</p>
+                                            </div>
+                                        </div>
+                                        <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
+                                            🟢 LIVE
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Route Info */}
+                                    <div className="flex justify-center md:justify-start items-center gap-4 space-y-1 text-white">
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                                            <span className="truncate">{activeTrip.pickupLocation}</span>
+                                        </div>
+                                        <div><p className="font-bold">to</p></div>
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                                            <span className="truncate">{activeTrip.destination}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* LIVE TRIP TRACKER WIDGET - ADD THIS */}
+                                <div className="p-3 bg-white">
+                                    <TripTracker 
+                                        tripId={activeTrip.id}
+                                        driverId={selectedDriver?.id || activeTrip.driverId}
+                                        customerId={currentUser?.uid}
+                                    />
+                                </div>
+                                
+                                {/* Action Buttons */}
+                                <div className="p-3 bg-white border-t border-gray-100">
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            onClick={() => updateTripStatus(activeTrip.id, 'completed')}
+                                            className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <FaCheckCircle />
+                                            Mark Completed
+                                        </button>
+                                        <button
+                                            onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
+                                            className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <FaTimesCircle />
+                                            Cancel Trip
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* Safety Section */}
+                                <div className="p-3 bg-gradient-to-r from-blue-50 to-blue-100 border-t border-blue-200">
+                                    <div className="flex flex-col md:flex-row items-center justify-between mb-2">
+                                        <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+                                            <FaShieldAlt className="text-blue-600" />
+                                            Safety Features
+                                        </h4>
+                                        <ShareLocation
+                                            tripId={activeTrip.id}
+                                            driverId={selectedDriver?.id || activeTrip.driverId}
+                                            driverName={selectedDriver?.fullName || 'Driver'}
+                                            vehicleDetails={`${selectedVehicle?.carName} ${selectedVehicle?.carModel}`}
+                                            pickup={activeTrip.pickupLocation}
+                                            destination={activeTrip.destination}
+                                            currentUserId={currentUser?.uid}
+                                        />
+                                    </div>
+                                    
+                                    <p className="text-blue-700 text-xs">
+                                        ✅ Your trip is being tracked for safety. Share location with loved ones.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                     </div>
                 </div>
 
@@ -2120,7 +2201,13 @@ export default function CarHireUi() {
 
                                         {/* Car Info */}
                                         <div className="p-4">
-                                            <div className="flex justify-between items-start mb-1">
+                                            <div className="relative flex justify-between items-start mb-1">
+                                                {/* Car availability status */}
+                                                {vehicle.status !== 'available' && (
+                                                    <div className="text-xs absolute top-6 right-0 bg-red-500 text-white text-xs px-2 py-1 rounded-tl-lg">
+                                                        In USE
+                                                    </div>
+                                                )}
                                                 <div>
                                                     <h3 className="font-semibold text-gray-900">
                                                         {vehicle.carName} {vehicle.carModel}
@@ -2268,6 +2355,7 @@ export default function CarHireUi() {
             {/* Driver's Information Display - Modal */}
             {driverInfo && selectedDriver && selectedVehicle && (
                 <div id="contact-driver" className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-2 sm:p-8 z-50 overflow-y-auto">
+                    
                     <div className="bg-gray-900 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
                         
                         {/* Header */}
@@ -2521,10 +2609,10 @@ export default function CarHireUi() {
                                                 {/* Start Trip Button - Only enabled when both locations are set */}
                                                 {(tripInfo.pickupLocation && tripInfo.destination) && (
                                                     <>
+                                                        {/* Start Trip Button */}
                                                         <button
                                                             onClick={async () => {
                                                                 if (!tripInfo.pickupLocation || !tripInfo.destination) {
-                                                                    alert('Please enter both pickup location and destination');
                                                                     return;
                                                                 }
                                                                 
@@ -2535,17 +2623,19 @@ export default function CarHireUi() {
                                                                     tripInfo.destination
                                                                 );
                                                                 
+                                                                // Only close modal if trip was successful AND after showing success message
                                                                 if (tripId) {
-                                                                    // Close the modal after starting trip
+                                                                    // Wait for success message to show before closing modal
                                                                     setTimeout(() => {
                                                                         setDriverInfo(false);
-                                                                    }, 1500);
+                                                                    }, 1500); // Wait 1.5 seconds before closing
                                                                 }
                                                             }}
+                                                            disabled={!tripInfo.pickupLocation || !tripInfo.destination}
                                                             className={`w-full py-3 text-white font-semibold rounded-lg transition-all duration-300 mb-2 ${
                                                                 tripInfo.pickupLocation && tripInfo.destination
-                                                                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
-                                                                    : 'bg-gray-700 cursor-not-allowed'
+                                                                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 cursor-pointer'
+                                                                    : 'bg-gray-500 cursor-not-allowed opacity-50'
                                                             }`}
                                                         >
                                                             🚀 Start Trip for Safety Tracking
