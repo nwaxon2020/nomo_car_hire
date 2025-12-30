@@ -5,9 +5,12 @@ import { db, storage } from "@/lib/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useParams, useRouter } from "next/navigation";
+
 import TransportNewsPageUi from "../components/news";
 import WordGuessGame from "../components/game";
 import ShareButton from "@/components/sharebutton";
+import TripHistoryCard from "@/components/map/TripHistoryCard";
+
 import { toast, Toaster } from "react-hot-toast";
 
 // ⭐ Capitalize full name function
@@ -84,6 +87,10 @@ export default function UserProfilePageUi() {
     const [newName, setNewName] = useState("");
     const [uploadingImage, setUploadingImage] = useState(false);
 
+    // Trip History state
+    const [tripHistory, setTripHistory] = useState<any[]>([]);
+    const [loadingTripHistory, setLoadingTripHistory] = useState(false);
+
     // Safely get userId with proper type handling
     const rawId = params?.id;
     const userId = rawId ? (Array.isArray(rawId) ? rawId[0] : rawId) : "";
@@ -116,6 +123,13 @@ export default function UserProfilePageUi() {
         };
 
         fetchUser();
+    }, [userId]);
+
+    // Load trip history when user data is fetched
+    useEffect(() => {
+        if (userId) {
+            loadTripHistory();
+        }
     }, [userId]);
 
     const handleUpdateName = async () => {
@@ -189,6 +203,102 @@ export default function UserProfilePageUi() {
         }
     };
 
+    // Load trip history
+    const loadTripHistory = async () => {
+        if (!userId) return;
+        
+        setLoadingTripHistory(true);
+        try {
+            const { collection, query, where, getDocs, doc, getDoc } = await import("firebase/firestore");
+            
+            // Fetch ALL trips for this user
+            const tripsRef = collection(db, "trips");
+            const q = query(tripsRef, where("customerId", "==", userId));
+            
+            const tripsSnapshot = await getDocs(q);
+            
+            const tripsList: any[] = [];
+            
+            for (const tripDoc of tripsSnapshot.docs) {
+            const tripData = tripDoc.data();
+            
+            // Only show completed or cancelled trips
+            if (tripData.status === "completed" || tripData.status === "cancelled") {
+                // Get driver details
+                const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
+                const driverData = driverDoc.data();
+                
+                // Get vehicle details
+                const vehicleDoc = await getDoc(doc(db, "vehicleLog", tripData.vehicleId));
+                const vehicleData = vehicleDoc.data();
+                
+                // Get driver's average rating from "ratings" field
+                let driverRating = 0;
+                if (driverData?.ratings && Array.isArray(driverData.ratings) && driverData.ratings.length > 0) {
+                // Calculate average rating
+                const sum = driverData.ratings.reduce((a: number, b: number) => a + b, 0);
+                driverRating = sum / driverData.ratings.length;
+                }
+                
+                // Get user's review for this trip if exists
+                let userRating = undefined;
+                let userReview = undefined;
+                
+                if (driverData?.comments) {
+                const userComment = driverData.comments.find(
+                    (comment: any) => comment.userId === userId
+                );
+                if (userComment) {
+                    userRating = userComment.rating;
+                    userReview = userComment.comment;
+                }
+                }
+                
+                const tripHistoryItem = {
+                id: tripDoc.id,
+                tripId: tripDoc.id,
+                driverId: tripData.driverId,
+                driverName: driverData?.fullName || `${driverData?.firstName || ''} ${driverData?.lastName || ''}`.trim() || 'Driver',
+                driverImage: driverData?.profileImage,
+                driverRating: driverRating, // ADD THIS
+                vehicleId: tripData.vehicleId,
+                vehicleName: vehicleData?.carName || "",
+                vehicleModel: vehicleData?.carModel || "",
+                vehicleImage: vehicleData?.images?.front || "/car_select.jpg",
+                // Trip details
+                pickupLocation: tripData.pickupLocation || "",
+                destination: tripData.destination || "",
+                // REMOVED: fare: tripData.fare || 0, // Remove this line
+                status: tripData.status,
+                startTime: tripData.startTime,
+                endTime: tripData.endTime,
+                // Review info
+                rating: userRating,
+                review: userReview,
+                createdAt: tripData.createdAt,
+                updatedAt: tripData.updatedAt
+                };
+                
+                tripsList.push(tripHistoryItem);
+            }
+            }
+            
+            // Sort by endTime (most recent first) and limit to 5
+            const sortedTrips = tripsList.sort((a, b) => {
+            const timeA = a.endTime?.toMillis?.() || a.endTime?.seconds * 1000 || new Date(a.endTime).getTime() || 0;
+            const timeB = b.endTime?.toMillis?.() || b.endTime?.seconds * 1000 || new Date(b.endTime).getTime() || 0;
+            return timeB - timeA; // Descending (newest first)
+            }).slice(0, 5); // Keep only 5 most recent
+            
+            setTripHistory(sortedTrips);
+            
+        } catch (error) {
+            console.error("Error loading trip history:", error);
+        } finally {
+            setLoadingTripHistory(false);
+        }
+    };
+
     // Function to handle contact again - goes to car hire page with contact-driver anchor
     const handleContactAgain = (driverId: string, vehicleId?: string) => {
         // Pass driver ID and optionally vehicle ID as query parameters
@@ -197,6 +307,12 @@ export default function UserProfilePageUi() {
         } else {
             router.push(`/user/car-hire?driver=${driverId}#contact-driver`);
         }
+    };
+
+    // Handle rate trip - redirects to car hire page
+    const handleRateTrip = (driverId: string, vehicleId: string) => {
+        // Navigate to car hire page and scroll to search-results div
+        router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
     };
 
     if (loading) {
@@ -226,7 +342,7 @@ export default function UserProfilePageUi() {
             <Toaster position="top-right" />
             
             {/* Header with Free Ride Status */}
-            <div className="bg-white shadow-xl rounded-2xl p-6 mb-8">
+            <div className="bg-white shadow-xl rounded-2xl p-4 md:p-6 mb-8">
 
                 {/* VIP card */}
                 {
@@ -521,6 +637,44 @@ export default function UserProfilePageUi() {
                                 Connect with Drivers
                             </button>
                         </div>
+                    )}
+                </section>
+                
+                {/* NEW: Trip History Section */}
+                <section className="mt-8 px-2 sm:px-8 w-full bg-white shadow-lg rounded-xl border border-gray-200 p-4 sm:p-6">
+                    <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Trip History</h2>
+                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
+                        {tripHistory.length} trips
+                    </span>
+                    </div>
+                    
+                    {loadingTripHistory ? (
+                    <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="text-gray-600 mt-2">Loading trip history...</p>
+                    </div>
+                    ) : tripHistory.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {tripHistory.map((trip, index) => (
+                        <TripHistoryCard
+                            key={trip.id || index}
+                            trip={trip}
+                            onRateTrip={() => handleRateTrip(trip.driverId, trip.vehicleId)}
+                        />
+                        ))}
+                    </div>
+                    ) : (
+                    <div className="text-center py-8 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-dashed border-gray-300">
+                        <div className="text-gray-400 text-5xl mb-3">🚗</div>
+                        <p className="text-gray-500 text-sm mb-3">No trip history yet</p>
+                        <button 
+                        onClick={() => router.push('/user/car-hire')}
+                        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2 rounded-lg text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300"
+                        >
+                        Book Your First Trip
+                        </button>
+                    </div>
                     )}
                 </section>
             </div>

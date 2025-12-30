@@ -220,7 +220,7 @@ export default function HomePageUi() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={handleGetStarted}
-                  className="bg-yellow-400 text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+                  className="w-full bg-yellow-400 text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
                 >
                   {user ? "Go to Dashboard" : "Get Started Free"}
                   <FaArrowRight />
@@ -228,7 +228,7 @@ export default function HomePageUi() {
                 
                 <button
                   onClick={handleBookRide}
-                  className="bg-white/20 backdrop-blur-sm border border-white/30 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/30 transition-all duration-300 flex items-center justify-center gap-3"
+                  className="w-full bg-white/20 backdrop-blur-sm border border-white/30 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/30 transition-all duration-300 flex items-center justify-center gap-3"
                 >
                   <FaCar /> Book a Ride
                 </button>
@@ -244,10 +244,10 @@ export default function HomePageUi() {
               )}
             </div>
             
-            <div className="relative">
-              <div className="relative bg-white/10 backdrop-blur-sm rounded-2xl p-3 md:p-6 shadow-2xl">
+            <div className="relative md:mb-[-35px]">
+              <div className="relative bg-white/10 backdrop-blur-sm rounded-2xl p-2 md:p-6 shadow-2xl">
                 {/* Search Card */}
-                <div className="bg-white rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-4 py-6 md:p-6 shadow-lg">
                   <h3 className="text-2xl font-bold text-gray-800 mb-4">Find Your Ride</h3>
                   
                   <form onSubmit={handleSearch} className="space-y-4">

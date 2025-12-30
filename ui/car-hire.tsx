@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import {collection, query, where, getDocs, doc, updateDoc, arrayUnion,
-  arrayRemove,Timestamp, getDoc, writeBatch, serverTimestamp} from "firebase/firestore"
+  arrayRemove,Timestamp, getDoc, writeBatch, serverTimestamp, addDoc} from "firebase/firestore"
 import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
 import { FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt, 
   FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope, 
-  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt} from 'react-icons/fa'
+  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt, FaShieldAlt} from 'react-icons/fa'
 
 import { useRouter ,useSearchParams } from 'next/navigation'
 
@@ -17,6 +17,10 @@ import PreChat from "@/components/PreChat"
 import BookingRequest from "@/components/BookingRequest"
 import EnhancedWhatsApp from "@/components/EnhancedWhatsApp"
 import NotificationBadge from "@/components/BookingRequest/NotificationBadge"
+import SimpleBookingMap from "@/components/map/SimpleBookingMap"
+import TripTracker from "@/components/map/TripTracker"
+import ShareLocation from "@/components/map/ShareLocation"
+import CustomerLocationToggle from "@/components/map/CustomerLocationToggle"
 
 // Interfaces matching your Firebase data structure
 interface VehicleLog {
@@ -84,6 +88,32 @@ interface DriverWithVehicle extends Driver {
   vehicles: VehicleLog[];
 }
 
+interface TripHistory {
+  id?: string;
+  tripId: string;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  driverImage?: string;
+  vehicleId: string;
+  vehicleName: string;
+  vehicleModel: string;
+  vehicleType: string;
+  vehicleImage?: string;
+  // Trip details
+  pickupLocation: string;
+  destination: string;
+  fare: number;
+  status: 'active' | 'completed' | 'cancelled';
+  startTime: any;
+  endTime?: any;
+  // Additional info
+  rating?: number;
+  review?: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
 interface ContactedDriver {
   id?: string;
   driverId: string;
@@ -107,6 +137,36 @@ interface HiredCar {
   hireDate: any;
   lastHired: any;
   timestamp?: any;
+}
+
+interface Trip {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  customerId: string;
+  customerName: string;
+  pickupLocation: string;
+  destination: string;
+  fare: number;
+  status: string;
+  startTime: Timestamp | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  endTime?: Timestamp;
+  // NEW: For real-time tracking
+  driverLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+    timestamp: Timestamp;
+  };
+  routePolyline?: string; // For showing route on map
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+    timestamp: Timestamp;
+  };
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -234,6 +294,7 @@ export default function CarHireUi() {
     const search = searchParams.get('search');
 
     // State for contacted drivers and hired cars from Firebase
+    const [tripHistory, setTripHistory] = useState<TripHistory[]>([]) // Trip history state
     const [contactedDrivers, setContactedDrivers] = useState<ContactedDriver[]>([])
     const [hiredCars, setHiredCars] = useState<HiredCar[]>([])
 
@@ -242,6 +303,28 @@ export default function CarHireUi() {
 
     // Close driver's information page
     const [driverInfo, setDriverInfo] = useState(false)
+
+    // Trip management states
+    // Trip management states
+    const [tripInfo, setTripInfo] = useState<{
+        pickupLocation: string;
+        destination: string;
+        fare: number;
+        status: string;
+        startTime: Timestamp | null;
+        endTime: Timestamp | null;
+        showForm?: boolean; 
+    }>({
+        pickupLocation: '',
+        destination: '',
+        fare: 0,
+        status: 'pending',
+        startTime: null,
+        endTime: null,
+        showForm: false,
+    })
+
+    const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
 
     // Selected driver and vehicle state
     const [selectedDriver, setSelectedDriver] = useState<DriverWithVehicle | null>(null)
@@ -306,6 +389,9 @@ export default function CarHireUi() {
     const [notificationCount, setNotificationCount] = useState(0);
     const [notificationType, setNotificationType] = useState<"driver" | "customer">("customer");
     const [isDriver, setIsDriver] = useState(false);
+
+    //location settings Panel
+    const [showLocationPanel, setShowLocationPanel] = useState(false);
 
 
    // Initialize auth and load history from Firebase
@@ -400,51 +486,127 @@ export default function CarHireUi() {
         }
     }, [quickViewHistory])
 
-    // Load user history from Firebase with 5-item limit
+    // Load user trip history from Firebase with 5-item limit
     const loadUserHistory = async (userId: string) => {
         try {
-            setLoadingHistory(true)
-            const userDocRef = doc(db, "users", userId)
-            const userDoc = await getDoc(userDocRef)
+            setLoadingHistory(true);
+            
+            // Fetch trips where user is the customer
+            const tripsRef = collection(db, "trips");
+            const q = query(
+            tripsRef,
+            where("customerId", "==", userId),
+            where("status", "in", ["completed", "cancelled"]) // Only completed/cancelled trips
+            );
+            
+            const tripsSnapshot = await getDocs(q);
+            
+            const tripsList: TripHistory[] = [];
+            
+            for (const tripDoc of tripsSnapshot.docs) {
+            const tripData = tripDoc.data();
+            
+            // Get driver details
+            const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
+            const driverData = driverDoc.data();
+            
+            // Get vehicle details
+            const vehicleDoc = await getDoc(doc(db, "vehicleLog", tripData.vehicleId));
+            const vehicleData = vehicleDoc.data();
+            
+            // Get user's review for this trip if exists
+            let userRating: number | undefined;
+            let userReview: string | undefined;
+            
+            if (driverData?.comments) {
+                const userComment = driverData.comments.find(
+                (comment: Comment) => comment.userId === userId
+                );
+                if (userComment) {
+                userRating = userComment.rating;
+                userReview = userComment.comment;
+                }
+            }
+            
+            const tripHistoryItem: TripHistory = {
+                id: tripDoc.id,
+                tripId: tripDoc.id,
+                driverId: tripData.driverId,
+                driverName: driverData?.fullName || `${driverData?.firstName} ${driverData?.lastName}`,
+                driverPhone: driverData?.phoneNumber || "",
+                driverImage: driverData?.profileImage,
+                vehicleId: tripData.vehicleId,
+                vehicleName: vehicleData?.carName || "",
+                vehicleModel: vehicleData?.carModel || "",
+                vehicleType: vehicleData?.carType || "",
+                vehicleImage: vehicleData?.images?.front || getDefaultVehicleImage(vehicleData?.carType),
+                // Trip details
+                pickupLocation: tripData.pickupLocation || "",
+                destination: tripData.destination || "",
+                fare: tripData.fare || 0,
+                status: tripData.status,
+                startTime: tripData.startTime,
+                endTime: tripData.endTime,
+                // Review info
+                rating: userRating,
+                review: userReview,
+                createdAt: tripData.createdAt,
+                updatedAt: tripData.updatedAt
+            };
+            
+            tripsList.push(tripHistoryItem);
+            }
+            
+            // Sort by endTime (most recent first) and limit to 5
+            const sortedTrips = tripsList.sort((a, b) => {
+            const timeA = a.endTime?.toMillis?.() || a.endTime?.seconds * 1000 || new Date(a.endTime).getTime() || 0;
+            const timeB = b.endTime?.toMillis?.() || b.endTime?.seconds * 1000 || new Date(b.endTime).getTime() || 0;
+            return timeB - timeA; // Descending (newest first)
+            }).slice(0, 5); // Keep only 5 most recent
+            
+            setTripHistory(sortedTrips);
+            
+            // For backward compatibility, also load old history format
+            const userDocRef = doc(db, "users", userId);
+            const userDoc = await getDoc(userDocRef);
             
             if (userDoc.exists()) {
-                const userData = userDoc.data()
-                
-                // Get contacted drivers and hired cars, sort by timestamp, limit to 5
-                const contactedDriversData: ContactedDriver[] = (userData.contactedDrivers || [])
+            const userData = userDoc.data();
+            
+            const contactedDriversData: ContactedDriver[] = (userData.contactedDrivers || [])
                 .map((item: ContactedDriver) => ({
-                    ...item,
-                    // Ensure we have a timestamp for sorting
-                    timestamp: item.lastContacted || item.contactDate || serverTimestamp()
+                ...item,
+                timestamp: item.lastContacted || item.contactDate || serverTimestamp()
                 }))
                 .sort((a: ContactedDriver, b: ContactedDriver) => {
-                    const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0
-                    const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0
-                    return timeB - timeA // Descending (newest first)
+                const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0;
+                const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0;
+                return timeB - timeA;
                 })
-                .slice(0, 5) // Keep only 5 most recent
-                
-                const hiredCarsData: HiredCar[] = (userData.hiredCars || [])
+                .slice(0, 5);
+            
+            const hiredCarsData: HiredCar[] = (userData.hiredCars || [])
                 .map((item: HiredCar) => ({
-                    ...item,
-                    timestamp: item.lastHired || item.hireDate || serverTimestamp()
+                ...item,
+                timestamp: item.lastHired || item.hireDate || serverTimestamp()
                 }))
                 .sort((a: HiredCar, b: HiredCar) => {
-                    const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0
-                    const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0
-                    return timeB - timeA
+                const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0;
+                const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0;
+                return timeB - timeA;
                 })
-                .slice(0, 5)
-                
-                setContactedDrivers(contactedDriversData)
-                setHiredCars(hiredCarsData)
+                .slice(0, 5);
+            
+            setContactedDrivers(contactedDriversData);
+            setHiredCars(hiredCarsData);
             }
+            
         } catch (error) {
-            console.error("Error loading user history:", error)
+            console.error("Error loading user history:", error);
         } finally {
-            setLoadingHistory(false)
+            setLoadingHistory(false);
         }
-    }
+    };
 
     // Fetch drivers and vehicle data from Firebase
     useEffect(() => {
@@ -522,174 +684,173 @@ export default function CarHireUi() {
     // Fetch Drivers and Vehicles
     const fetchDriversAndVehicles = async () => {
         try {
-            setLoading(true)
-            setError(null)
+            setLoading(true);
+            setError(null);
 
             // Fetch drivers
             const driversQuery = query(
-                collection(db, "users"),
-                where("isDriver", "==", true)
-            )
-            const driversSnapshot = await getDocs(driversQuery)
+            collection(db, "users"),
+            where("isDriver", "==", true)
+            );
+            const driversSnapshot = await getDocs(driversQuery);
             
-            const driversList: Driver[] = []
-            driversSnapshot.forEach((doc) => {
-                const data = doc.data()
-                const driver: Driver = {
-                    id: doc.id,
-                    uid: data.uid || doc.id,
-                    firstName: data.firstName || "",
-                    lastName: data.lastName || "",
-                    fullName: data.fullName || `${data.firstName} ${data.lastName}`,
-                    phoneNumber: data.phoneNumber || "",
-                    email: data.email || "",
-                    city: data.city || "",
-                    state: data.state || "",
-                    country: data.country || "",
-                    verified: data.verified || false,
-                    whatsappPreferred: data.whatsappPreferred || false,
-                    profileImage: data.profileImage || "",
-                    vehicleLog: data.vehicleLog || [],
-                    comments: data.comments || [],
-                    ratings: data.ratings || [],
-                    averageRating: data.averageRating || 0,
-                    totalRatings: data.totalRatings || 0,
-                    customersCarried: data.customersCarried || [],
-                    // VIP FIELDS
-                    vipLevel: data.vipLevel || 0,
-                    purchasedVipLevel: data.purchasedVipLevel || 0,
-                    prestigeLevel: data.prestigeLevel || 0,
-                    referralCount: data.referralCount || 0,
-                    isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
-                }
-                driversList.push(driver)
-            })
-
             // Fetch all vehicles
-            const vehiclesQuery = collection(db, "vehicleLog")
-            const vehiclesSnapshot = await getDocs(vehiclesQuery)
+            const vehiclesQuery = collection(db, "vehicleLog");
+            const vehiclesSnapshot = await getDocs(vehiclesQuery);
             
-            // Create a map of vehicle IDs to vehicle objects
-            const vehicleMap = new Map<string, VehicleLog>()
+            // Create vehicle map - ONLY include available vehicles (not on trip)
+            const vehicleMap = new Map<string, VehicleLog>();
             vehiclesSnapshot.forEach((doc) => {
-                const data = doc.data()
+            const data = doc.data();
+            // Only include available vehicles (not on trip)
+            if (data.status === 'available') {
                 const vehicle: VehicleLog = {
-                    id: doc.id,
-                    carName: data.carName || "",
-                    carModel: data.carModel || "",
-                    carType: data.carType || "",
-                    exteriorColor: data.exteriorColor || "",
-                    passengers: data.passengers || 0,
-                    ac: data.ac || false,
-                    description: data.description || "",
-                    status: data.status || "",
-                    driverId: data.driverId || "",
-                    images: data.images || {},
-                }
-                vehicleMap.set(doc.id, vehicle)
-            })
+                id: doc.id,
+                carName: data.carName || "",
+                carModel: data.carModel || "",
+                carType: data.carType || "",
+                exteriorColor: data.exteriorColor || "",
+                passengers: data.passengers || 0,
+                ac: data.ac || false,
+                description: data.description || "",
+                status: data.status || "available",
+                driverId: data.driverId || "",
+                images: data.images || {},
+                };
+                vehicleMap.set(doc.id, vehicle);
+            }
+            });
 
-            // Combine drivers with their vehicles
-            const driversWithVehiclesList: DriverWithVehicle[] = []
+            // Combine drivers with available vehicles
+            const driversWithVehiclesList: DriverWithVehicle[] = [];
             
-            driversList.forEach(driver => {
-                // Skip if this driver is the current user (prevent self-booking)
-                if (driver.uid === currentUserId) {
-                    return
+            driversSnapshot.forEach(doc => {
+            const data = doc.data();
+            const driver: Driver = {
+                id: doc.id,
+                uid: data.uid || doc.id,
+                firstName: data.firstName || "",
+                lastName: data.lastName || "",
+                fullName: data.fullName || `${data.firstName} ${data.lastName}`,
+                phoneNumber: data.phoneNumber || "",
+                email: data.email || "",
+                city: data.city || "",
+                state: data.state || "",
+                country: data.country || "",
+                verified: data.verified || false,
+                whatsappPreferred: data.whatsappPreferred || false,
+                profileImage: data.profileImage || "",
+                vehicleLog: data.vehicleLog || [],
+                comments: data.comments || [],
+                ratings: data.ratings || [],
+                averageRating: data.averageRating || 0,
+                totalRatings: data.totalRatings || 0,
+                customersCarried: data.customersCarried || [],
+                vipLevel: data.vipLevel || 0,
+                purchasedVipLevel: data.purchasedVipLevel || 0,
+                prestigeLevel: data.prestigeLevel || 0,
+                referralCount: data.referralCount || 0,
+                isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
+            };
+
+            // Skip if this driver is the current user (prevent self-booking)
+            if (driver.uid === currentUserId) {
+                return;
+            }
+
+            // Get available vehicles for this driver
+            const driverVehicles: VehicleLog[] = [];
+            
+            driver.vehicleLog.forEach(vehicleId => {
+                const vehicle = vehicleMap.get(vehicleId);
+                if (vehicle) {
+                driverVehicles.push(vehicle);
                 }
+            });
 
-                // Get vehicle objects for this driver's vehicle IDs
-                const driverVehicles: VehicleLog[] = []
-                
-                driver.vehicleLog.forEach(vehicleId => {
-                    const vehicle = vehicleMap.get(vehicleId)
-                    if (vehicle && vehicle.status === "available") {
-                        driverVehicles.push(vehicle)
-                    }
-                })
-
-                // Also check vehicles by driverId (in case vehicleLog IDs don't match)
-                vehiclesSnapshot.forEach((doc) => {
-                    const data = doc.data()
-                    if (data.driverId === driver.uid && data.status === "available") {
-                        const vehicleExists = driverVehicles.some(v => v.id === doc.id)
-                        if (!vehicleExists) {
-                            const vehicle: VehicleLog = {
-                                id: doc.id,
-                                carName: data.carName || "",
-                                carModel: data.carModel || "",
-                                carType: data.carType || "",
-                                exteriorColor: data.exteriorColor || "",
-                                passengers: data.passengers || 0,
-                                ac: data.ac || false,
-                                description: data.description || "",
-                                status: data.status || "",
-                                driverId: data.driverId || "",
-                                images: data.images || {},
-                            }
-                            driverVehicles.push(vehicle)
-                        }
-                    }
-                })
-
-                if (driverVehicles.length > 0) {
-                    driversWithVehiclesList.push({
-                        ...driver,
-                        vehicles: driverVehicles
-                    })
+            // Also check vehicles by driverId (in case vehicleLog IDs don't match)
+            vehiclesSnapshot.forEach((vehicleDoc) => {
+                const vehicleData = vehicleDoc.data();
+                if (
+                vehicleData.driverId === driver.uid && 
+                vehicleData.status === 'available' &&
+                !driverVehicles.some(v => v.id === vehicleDoc.id)
+                ) {
+                const vehicle: VehicleLog = {
+                    id: vehicleDoc.id,
+                    carName: vehicleData.carName || "",
+                    carModel: vehicleData.carModel || "",
+                    carType: vehicleData.carType || "",
+                    exteriorColor: vehicleData.exteriorColor || "",
+                    passengers: vehicleData.passengers || 0,
+                    ac: vehicleData.ac || false,
+                    description: vehicleData.description || "",
+                    status: vehicleData.status || "available",
+                    driverId: vehicleData.driverId || "",
+                    images: vehicleData.images || {},
+                };
+                driverVehicles.push(vehicle);
                 }
-            })
+            });
+
+            if (driverVehicles.length > 0) {
+                driversWithVehiclesList.push({
+                ...driver,
+                vehicles: driverVehicles
+                });
+            }
+            });
 
             // SORT DRIVERS BY PRIORITY (EXACT ORDER YOU REQUESTED):
             driversWithVehiclesList.sort((a, b) => {
-                // Get VIP level (use the higher of vipLevel or purchasedVipLevel)
-                const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
-                    return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
-                };
-                
-                const aVipLevel = getEffectiveVipLevel(a);
-                const bVipLevel = getEffectiveVipLevel(b);
-                const aIsVIP = aVipLevel > 0;
-                const bIsVIP = bVipLevel > 0;
-                const aVerified = a.verified;
-                const bVerified = b.verified;
-                
-                // 1. VIP with Verified
-                if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
-                if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
-                
-                // 2. VIP without Verified
-                if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
-                    // Both are VIP without verified, compare VIP levels
-                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
-                    // Same VIP level, compare ratings
-                    return (b.averageRating || 0) - (a.averageRating || 0);
-                }
-                if (bIsVIP && !bVerified && !(aIsVIP && aVerified) && !(aIsVIP && aVerified)) {
-                    // Both are VIP without verified, compare VIP levels
-                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
-                    // Same VIP level, compare ratings
-                    return (b.averageRating || 0) - (a.averageRating || 0);
-                }
-                
-                // 3. Verified without VIP
-                if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
-                if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
-                
-                // 4. Others (neither VIP nor verified)
-                // Sort by rating for non-VIP, non-verified drivers
+            // Get VIP level (use the higher of vipLevel or purchasedVipLevel)
+            const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
+                return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
+            };
+            
+            const aVipLevel = getEffectiveVipLevel(a);
+            const bVipLevel = getEffectiveVipLevel(b);
+            const aIsVIP = aVipLevel > 0;
+            const bIsVIP = bVipLevel > 0;
+            const aVerified = a.verified;
+            const bVerified = b.verified;
+            
+            // 1. VIP with Verified
+            if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
+            if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
+            
+            // 2. VIP without Verified
+            if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
+                // Both are VIP without verified, compare VIP levels
+                if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
+                // Same VIP level, compare ratings
                 return (b.averageRating || 0) - (a.averageRating || 0);
-                
-                // If all criteria are equal, maintain original order
+            }
+            if (bIsVIP && !bVerified && !(aIsVIP && aVerified) && !(aIsVIP && aVerified)) {
+                // Both are VIP without verified, compare VIP levels
+                if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
+                // Same VIP level, compare ratings
+                return (b.averageRating || 0) - (a.averageRating || 0);
+            }
+            
+            // 3. Verified without VIP
+            if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
+            if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
+            
+            // 4. Others (neither VIP nor verified)
+            // Sort by rating for non-VIP, non-verified drivers
+            return (b.averageRating || 0) - (a.averageRating || 0);
+            
+            // If all criteria are equal, maintain original order
             });
 
-            setDriversWithVehicles(driversWithVehiclesList)
+            setDriversWithVehicles(driversWithVehiclesList);
 
         } catch (err) {
-            console.error("Error fetching data:", err)
-            setError("Failed to load drivers and vehicles. Please try again.")
+            console.error("Error fetching data:", err);
+            setError("Failed to load drivers and vehicles. Please try again.");
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
     }
 
@@ -1355,6 +1516,231 @@ export default function CarHireUi() {
         window.open(whatsappUrl, '_blank')
     }
 
+    // Start a new trip
+    const startTrip = async (driverId: string, vehicleId: string, pickupLocation: string, destination: string) => {
+        if (!currentUser) {
+            alert('Please sign in to start a trip');
+            return null;
+        }
+
+        if (!pickupLocation || !destination) {
+            alert('Please enter both pickup location and destination');
+            return null;
+        }
+
+        try {
+            // Generate a simple fare based on distance (you can use actual calculation later)
+            const estimatedFare = Math.floor(Math.random() * 5000) + 2000; // 2000-7000 NGN
+
+            const tripData = {
+                driverId,
+                vehicleId,
+                customerId: currentUser.uid,
+                customerName: currentUser.displayName || 'Customer',
+                pickupLocation,
+                destination,
+                fare: estimatedFare,
+                status: 'active',
+                startTime: Timestamp.now(),
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+                // NEW: Initial location (you can get from driver's profile or ask driver to share)
+                driverLocation: {
+                    lat: 9.0765, // Default Nigeria coordinates (Lagos)
+                    lng: 7.3986, // Default Nigeria coordinates (Abuja)
+                    address: 'Starting point',
+                    timestamp: Timestamp.now()
+                }
+            };
+
+            // Add trip to trips collection
+            const tripsRef = collection(db, 'trips');
+            const tripDoc = await addDoc(tripsRef, tripData);
+            
+            // Update vehicle status to 'on-trip'
+            const vehicleRef = doc(db, 'vehicleLog', vehicleId);
+            await updateDoc(vehicleRef, {
+            status: 'on-trip',
+            currentTripId: tripDoc.id
+            });
+
+            // Update driver's customersCarried (add customer ID immediately)
+            const driverRef = doc(db, 'users', driverId);
+            const driverDoc = await getDoc(driverRef);
+            const currentCustomers = driverDoc.data()?.customersCarried || [];
+            
+            if (!currentCustomers.includes(currentUser.uid)) {
+            await updateDoc(driverRef, {
+                customersCarried: [...currentCustomers, currentUser.uid]
+            });
+            }
+
+            // Set active trip locally
+            setActiveTrip({
+                ...tripData,
+                id: tripDoc.id
+            } as Trip);
+
+            // Update the selected driver in local state
+            setSelectedDriver(prev => prev ? {
+            ...prev,
+            customersCarried: [...(prev.customersCarried || []), currentUser.uid]
+            } : null);
+
+            // Refresh drivers list to hide the unavailable vehicle
+            fetchDriversAndVehicles();
+
+            // Show success message
+            alert(`Trip started successfully! Estimated fare: ₦${estimatedFare.toLocaleString()}`);
+            
+            // Update trip info state
+            setTripInfo({
+            pickupLocation,
+            destination,
+            fare: estimatedFare,
+            status: 'active',
+            startTime: Timestamp.now(),
+            endTime: null
+            });
+
+            return tripDoc.id;
+
+        } catch (error) {
+            console.error('Error starting trip:', error);
+            alert('Failed to start trip. Please try again.');
+            return null;
+        }
+    };
+
+    // Complete or cancel trip
+    const updateTripStatus = async (tripId: string, status: 'completed' | 'cancelled') => {
+        if (!tripId || !currentUser) return;
+
+        try {
+            const tripRef = doc(db, 'trips', tripId);
+            const tripDoc = await getDoc(tripRef);
+            
+            if (!tripDoc.exists()) {
+            alert('Trip not found');
+            return;
+            }
+
+            const tripData = tripDoc.data() as Trip;
+            
+            // Check if user is authorized to update this trip
+            if (tripData.customerId !== currentUser.uid && tripData.driverId !== currentUser.uid) {
+            alert('You are not authorized to update this trip');
+            return;
+            }
+
+            const updates: { 
+            status: 'completed' | 'cancelled', 
+            updatedAt: Timestamp,
+            endTime?: Timestamp 
+            } = {
+            status,
+            updatedAt: Timestamp.now()
+            };
+
+            if (status === 'completed') {
+                updates.endTime = Timestamp.now();
+                
+                // Update vehicle status back to available
+                const vehicleRef = doc(db, 'vehicleLog', tripData.vehicleId);
+                await updateDoc(vehicleRef, {
+                    status: 'available',
+                    currentTripId: null
+                });
+                
+                // Refresh drivers list to show the vehicle again
+                fetchDriversAndVehicles();
+                
+                // Refresh trip history
+                if (currentUser) {
+                    loadUserHistory(currentUser.uid);
+                }
+            }
+
+            if (status === 'cancelled') {
+            // Update vehicle status back to available
+            const vehicleRef = doc(db, 'vehicleLog', tripData.vehicleId);
+            await updateDoc(vehicleRef, {
+                status: 'available',
+                currentTripId: null
+            });
+            
+            // Refresh drivers list
+            fetchDriversAndVehicles();
+            }
+
+            await updateDoc(tripRef, updates);
+            
+            // Clear active trip if completed or cancelled
+            if (status === 'completed' || status === 'cancelled') {
+            setActiveTrip(null);
+            setTripInfo({
+                pickupLocation: '',
+                destination: '',
+                fare: 0,
+                status: 'pending',
+                startTime: null,
+                endTime: null
+            });
+            }
+
+            alert(`Trip ${status} successfully!`);
+            
+        } catch (error) {
+            console.error('Error updating trip:', error);
+            alert('Failed to update trip status');
+        }
+    };
+
+    // Check for active trips on component mount
+    useEffect(() => {
+        const checkActiveTrips = async () => {
+            if (!currentUser) return;
+
+            try {
+            const tripsRef = collection(db, 'trips');
+            const q = query(
+                tripsRef,
+                where('customerId', '==', currentUser.uid),
+                where('status', '==', 'active')
+            );
+            
+            const snapshot = await getDocs(q);
+            
+            if (!snapshot.empty) {
+                const tripDoc = snapshot.docs[0];
+                const tripData = tripDoc.data() as Trip;
+                
+                setActiveTrip({
+                ...tripData,
+                id: tripDoc.id
+                });
+                
+                // Set trip info from active trip
+                setTripInfo({
+                pickupLocation: tripData.pickupLocation || '',
+                destination: tripData.destination || '',
+                fare: tripData.fare || 0,
+                status: 'active',
+                startTime: tripData.startTime,
+                endTime: tripData.endTime || null
+                });
+            }
+            } catch (error) {
+            console.error('Error checking active trips:', error);
+            }
+        };
+
+        if (currentUser) {
+            checkActiveTrips();
+        }
+    }, [currentUser]);
+
+
     // Handle regular call
     const handlePhoneCall = (phoneNumber: string) => {
         window.location.href = `tel:${phoneNumber}`
@@ -1381,6 +1767,117 @@ export default function CarHireUi() {
                     <h1 className="mb-2 text-2xl md:text-3xl text-gray-600 font-extrabold">Book a Car</h1>
                     <div className="m-2 p-2 sm:p-2 rounded bg-gray-200 font-semibold text-red-800">
                         <small><span className="font-black">Important Notice:</span> Please make sure you contact drivers, book appointments properly, negotiate on or before services.</small>
+                    </div>
+
+                    <div className="py-8 px-2 relative">
+                        <button
+                            onClick={() => setShowLocationPanel(!showLocationPanel)}
+                            className="w-full md:w-50 md:left-2 left-0 top-0 absolute mt-6 mx-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors text-sm"
+                        >
+                            {showLocationPanel ? 'Hide Location Settings' : 'Show Location Settings'}
+                        </button>
+
+                        {showLocationPanel && (
+                            <div>
+                                {currentUser && (
+                                    <div className="my-8">
+                                        <CustomerLocationToggle 
+                                            userId={currentUser.uid}
+                                            tripId={activeTrip?.id}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Active Trip Banner with Tracker */}
+                                {activeTrip && (
+                                    <div className="m-2 mb-4 rounded-xl overflow-hidden shadow-xl border border-blue-200">
+                                        {/* Banner Header with Gradient */}
+                                        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="bg-white/20 p-2 rounded-full">
+                                                        <FaCar className="text-white text-lg" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-white text-lg">🚗 Active Trip</h3>
+                                                        <p className="text-blue-100 text-sm">Real-time tracking enabled</p>
+                                                    </div>
+                                                </div>
+                                                <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
+                                                    🟢 LIVE
+                                                </span>
+                                            </div>
+                                            
+                                            {/* Route Info */}
+                                            <div className="flex justify-center md:justify-start items-center gap-4 space-y-1 text-white">
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                                                    <span className="truncate">{activeTrip.pickupLocation}</span>
+                                                </div>
+                                                <div><p className="font-bold">to</p></div>
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                                                    <span className="truncate">{activeTrip.destination}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* LIVE TRIP TRACKER WIDGET - ADD THIS */}
+                                        <div className="p-3 bg-white">
+                                            <TripTracker 
+                                                tripId={activeTrip.id}
+                                                driverId={selectedDriver?.id || activeTrip.driverId}
+                                                customerId={currentUser?.uid}
+                                            />
+                                        </div>
+                                        
+                                        {/* Action Buttons */}
+                                        <div className="p-3 bg-white border-t border-gray-100">
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <button
+                                                    onClick={() => updateTripStatus(activeTrip.id, 'completed')}
+                                                    className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
+                                                >
+                                                    <FaCheckCircle />
+                                                    Mark Completed
+                                                </button>
+                                                <button
+                                                    onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
+                                                    className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
+                                                >
+                                                    <FaTimesCircle />
+                                                    Cancel Trip
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Safety Section */}
+                                        <div className="p-3 bg-gradient-to-r from-blue-50 to-blue-100 border-t border-blue-200">
+                                            <div className="flex flex-col md:flex-row items-center justify-between mb-2">
+                                                <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+                                                    <FaShieldAlt className="text-blue-600" />
+                                                    Safety Features
+                                                </h4>
+                                                <ShareLocation
+                                                    tripId={activeTrip.id}
+                                                    driverId={selectedDriver?.id || activeTrip.driverId}
+                                                    driverName={selectedDriver?.fullName || 'Driver'}
+                                                    vehicleDetails={`${selectedVehicle?.carName} ${selectedVehicle?.carModel}`}
+                                                    pickup={activeTrip.pickupLocation}
+                                                    destination={activeTrip.destination}
+                                                    currentUserId={currentUser?.uid}
+                                                />
+                                            </div>
+                                            
+                                            <p className="text-blue-700 text-xs">
+                                                ✅ Your trip is being tracked for safety. Share location with loved ones.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -1441,7 +1938,7 @@ export default function CarHireUi() {
                 )}
 
                 {/* ✅ NEW: Booking Request Section */}
-                <section className="mt-8 mb-8">
+                <section id="book-now" className="mt-8 mb-8">
                     {/* The Top Box */}
                     <div className="max-h-[300rem] overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 px-1 md:p-4 border border-blue-200 mb-6">
                         <div className="px-2 flex flex-col md:flex-row items-center justify-between">
@@ -1938,43 +2435,164 @@ export default function CarHireUi() {
 
                                     {/* Save to History Button with Cooldown Check */}
                                     <div className="mb-4">
-                                        {currentUser ? (
-                                            <>
-                                                <button
-                                                    onClick={handleSaveDriver}
-                                                    disabled={!canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave}
-                                                    className={`w-full py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center ${
-                                                        canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                        ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                                                        : "bg-gray-700 cursor-not-allowed"
-                                                    }`}
-                                                >
-                                                    <FaEye className="mr-2" />
-                                                    {canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                        ? "Completed"
-                                                        : "Save to History (Cooldown)"}
-                                                </button>
-
-                                                <p className="text-gray-400 text-xs mt-2 text-center">
-                                                    Click {'"Completed"'} Button for successful TP
+                                        {activeTrip && activeTrip.driverId === selectedDriver.uid && activeTrip.vehicleId === selectedVehicle.id ? (
+                                            <div className="space-y-3">
+                                            <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3">
+                                                <h4 className="font-bold text-white mb-2">🚗 Active Trip</h4>
+                                                <div className="space-y-1">
+                                                <p className="text-gray-300 text-sm">
+                                                    <span className="font-medium">Pickup:</span> {activeTrip.pickupLocation}
                                                 </p>
-
-                                                <p className="text-gray-400 text-xs mt-1 mb-3 text-center">
-                                                    {canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                        ? <div className="flex flex-col">
-                                                            <span>• Booking details will be added to your dashboard history</span>
-                                                            <span>• 10-minute cooldown between bookings</span>
-                                                            <span>• By clicking the Completed button, you confirm that your movement and transaction with the driver were successful. If you have any complaints about the driver, please flag them.</span>
-                                                        </div>
-                                                        : `⏳ ${canSaveDriver(selectedDriver.uid, selectedVehicle.id).message}`}
+                                                <p className="text-gray-300 text-sm">
+                                                    <span className="font-medium">Destination:</span> {activeTrip.destination}
                                                 </p>
-                                            </>
-                                        ) : (
-                                            <div className="w-full py-3 bg-gray-800 text-gray-400 font-semibold rounded-lg text-center">
-                                                Sign in to save to your history
+                                                <p className="text-gray-300 text-sm">
+                                                    <span className="font-medium">Fare:</span> <span className="text-yellow-300">₦{activeTrip.fare?.toLocaleString()}</span>
+                                                </p>
+                                                <p className="text-gray-300 text-xs mt-2">
+                                                    Trip started: {activeTrip.startTime?.toDate?.()?.toLocaleString() || 'Recently'}
+                                                </p>
+                                                </div>
                                             </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                onClick={() => updateTripStatus(activeTrip.id, 'completed')}
+                                                className="py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-300"
+                                                >
+                                                ✅ Complete Trip
+                                                </button>
+                                                <button
+                                                onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
+                                                className="py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300"
+                                                >
+                                                ❌ Cancel Trip
+                                                </button>
+                                            </div>
+                                            <p className="text-gray-400 text-xs text-center">
+                                                Complete trip when you reach your destination. Cancel if plans change.
+                                            </p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {/* Trip Safety Info Section */}
+                                                <div className="mb-4">
+                                                    <h3 className="text-lg font-bold text-white mb-3 flex justify-center md:justify-start items-center gap-2">
+                                                        <span className="text-blue-400">🛡️</span> Trip Safety Information
+                                                    </h3>
+                                                    
+                                                    {/* Fill Info Link - Only shown when location/destination not set */}
+                                                    {(!tripInfo.pickupLocation || !tripInfo.destination) && (
+                                                        <div className="text-center md:text-left mb-4">
+                                                            <p className="text-gray-400 text-sm mb-2">
+                                                                For your safety and trip tracking, please provide:
+                                                            </p>
+                                                            <button
+                                                                onClick={() => {
+                                                                    // Toggle the form visibility
+                                                                    setTripInfo(prev => ({ 
+                                                                        ...prev, 
+                                                                        showForm: !prev.showForm 
+                                                                    }));
+                                                                }}
+                                                                className="text-blue-400 hover:text-blue-300 underline decoration-2 underline-offset-2 text-sm font-medium transition-colors duration-200"
+                                                            >
+                                                                📝 Fill Info for Safety Travel
+                                                            </button>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Simple map for trip planning - Only shown when form is active */}
+                                                    {(tripInfo.showForm || (tripInfo.pickupLocation && tripInfo.destination)) && (
+                                                        <SimpleBookingMap
+                                                            pickupLocation={tripInfo.pickupLocation}
+                                                            destination={tripInfo.destination}
+                                                            driverLocation={getDriverLocation(selectedDriver)}
+                                                            onLocationSelect={(type: 'pickup' | 'destination', value: string) => {
+                                                                setTripInfo(prev => ({ 
+                                                                    ...prev, 
+                                                                    [type === 'pickup' ? 'pickupLocation' : 'destination']: value 
+                                                                }));
+                                                            }}
+                                                        />
+                                                    )}
+                                                </div>
+                                                
+                                                {/* Start Trip Button - Only enabled when both locations are set */}
+                                                {(tripInfo.pickupLocation && tripInfo.destination) && (
+                                                    <>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!tripInfo.pickupLocation || !tripInfo.destination) {
+                                                                    alert('Please enter both pickup location and destination');
+                                                                    return;
+                                                                }
+                                                                
+                                                                const tripId = await startTrip(
+                                                                    selectedDriver.uid,
+                                                                    selectedVehicle.id,
+                                                                    tripInfo.pickupLocation,
+                                                                    tripInfo.destination
+                                                                );
+                                                                
+                                                                if (tripId) {
+                                                                    // Close the modal after starting trip
+                                                                    setTimeout(() => {
+                                                                        setDriverInfo(false);
+                                                                    }, 1500);
+                                                                }
+                                                            }}
+                                                            className={`w-full py-3 text-white font-semibold rounded-lg transition-all duration-300 mb-2 ${
+                                                                tripInfo.pickupLocation && tripInfo.destination
+                                                                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+                                                                    : 'bg-gray-700 cursor-not-allowed'
+                                                            }`}
+                                                        >
+                                                            🚀 Start Trip for Safety Tracking
+                                                        </button>
+                                                        
+                                                        <p className="text-gray-400 text-xs text-center mb-3">
+                                                            Click "Start Trip" to enable real-time tracking for your safety
+                                                        </p>
+                                                    </>
+                                                )}
+
+                                                {/* Original Save Button (optional - keep if you still want it) */}
+                                                {currentUser && (
+                                                    <div className="mt-4 pt-4 border-t border-gray-700">
+                                                    <button
+                                                        onClick={handleSaveDriver}
+                                                        disabled={!canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave}
+                                                        className={`w-full py-2 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center ${
+                                                        canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
+                                                        ? "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
+                                                        : "bg-gray-800 cursor-not-allowed"
+                                                        }`}
+                                                    >
+                                                        <FaEye className="mr-2" />
+                                                        {canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
+                                                        ? "Mark as Contacted"
+                                                        : "Save (Cooldown)"}
+                                                    </button>
+                                                    <p className="text-gray-400 text-xs mt-1 text-center">
+                                                        Save driver to your history for future reference
+                                                    </p>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
+
+                                    {/* Real-time Trip Tracker - Only show if this is the active trip */}
+                                    {activeTrip && activeTrip.driverId === selectedDriver.uid && activeTrip.vehicleId === selectedVehicle.id && (
+                                        <div className="mt-6">
+                                            <TripTracker 
+                                                tripId={activeTrip.id}
+                                                driverId={selectedDriver.uid}
+                                                customerId={currentUser?.uid}
+                                            />
+                                        </div>
+                                    )}
 
                                     {/* Rating Summary - Only show if driver has ratings */}
                                     {selectedDriver.averageRating !== undefined && selectedDriver.averageRating !== null && selectedDriver.averageRating > 0 ? (
@@ -2009,12 +2627,12 @@ export default function CarHireUi() {
                                 <div>
                                     <div className="mb-4">
                                         <h3 className="text-lg font-bold text-white mb-3">Vehicle Gallery</h3>
-                                        <div className="relative h-64 bg-gray-800 rounded-lg overflow-hidden mb-4">
+                                        <div className="relative h-76 bg-gray-800 rounded-lg overflow-hidden mb-4">
                                             <Image
                                                 src={mainImage}
                                                 alt="Car Image"
                                                 fill
-                                                className="object-contain"
+                                                className="object-contain w-full h-full"
                                             />
                                         </div>
                                         <div className="flex justify-center items-center gap-2 overflow-x-auto pb-2">
@@ -2106,7 +2724,7 @@ export default function CarHireUi() {
                             </div>
 
                             {/* Reviews Section */}
-                            <div className="bg-gray-800 rounded-lg md:px-26 p-2 sm:p-4">
+                            <div id="reviews-section" className="bg-gray-800 rounded-lg md:px-26 p-2 sm:p-4">
                                 <h3 className="text-lg font-bold text-white mb-4">Reviews & Ratings</h3>
                                 
                                 {/* Review Form */}
