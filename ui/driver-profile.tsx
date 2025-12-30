@@ -2,27 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { db, storage } from "@/lib/firebaseConfig";
-import {doc, collection,addDoc,updateDoc, deleteDoc, query,where,
-  onSnapshot,getDoc,Timestamp,arrayUnion,arrayRemove,
+import {
+  doc, collection, addDoc, updateDoc, deleteDoc, query, where,
+  onSnapshot, getDoc, Timestamp, arrayUnion, arrayRemove,
 } from "firebase/firestore";
-
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useParams, useRouter } from "next/navigation";
-
 import TransportNewsPageUi from "../components/news";
 import WordGuessGame from "../components/game";
 import ShareButton from "@/components/sharebutton";
 import LoadingRound from "@/components/re-useable-loading";
 import DriverLocationToggle from "@/components/map/DriverLocationToggle";
 import TripHistoryCard from "@/components/map/TripHistoryCard";
-
 import { toast, Toaster } from "react-hot-toast";
 
 // Capitalize full name
 const capitalizeFullName = (name: string) =>
   name?.split(" ").filter(Boolean)
-      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(" ") || "Professional Driver";
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ") || "Professional Driver";
 
 // VIP Configuration
 const VIP_CONFIG = {
@@ -47,49 +45,49 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number) =
       break;
     }
   }
-  
+
   const vipLevel = Math.min(
     Math.max(purchasedVipLevel, referralBasedLevel),
     VIP_CONFIG.maxLevel
   );
-  
+
   let prestigeLevel = 0;
   if (vipLevel >= VIP_CONFIG.maxLevel) {
     const maxLevelReferrals = VIP_CONFIG.levels[VIP_CONFIG.levels.length - 1].referralsRequired;
     const extraReferrals = referralCount - maxLevelReferrals;
-    
+
     if (extraReferrals > 0) {
       prestigeLevel = Math.floor(extraReferrals / VIP_CONFIG.referralMultiplier);
     }
   }
-  
+
   let nextReferralsNeeded = 0;
   let referralsForNext = 0;
   let progressPercentage = 0;
-  
+
   if (vipLevel < VIP_CONFIG.maxLevel) {
     const nextLevelIndex = vipLevel;
     const nextLevelReq = VIP_CONFIG.levels[nextLevelIndex]?.referralsRequired || 0;
     const currentLevelReq = VIP_CONFIG.levels[vipLevel - 1]?.referralsRequired || 0;
-    
+
     nextReferralsNeeded = Math.max(0, nextLevelReq - referralCount);
     referralsForNext = nextLevelReq;
-    
+
     const referralsInCurrentLevel = referralCount - currentLevelReq;
     const referralsNeededForNext = nextLevelReq - currentLevelReq;
-    progressPercentage = referralsNeededForNext > 0 
-      ? (referralsInCurrentLevel / referralsNeededForNext) * 100 
+    progressPercentage = referralsNeededForNext > 0
+      ? (referralsInCurrentLevel / referralsNeededForNext) * 100
       : 0;
   } else {
-    const baseForCurrentPrestige = VIP_CONFIG.levels[VIP_CONFIG.levels.length - 1].referralsRequired + 
-                                   (prestigeLevel * VIP_CONFIG.referralMultiplier);
+    const baseForCurrentPrestige = VIP_CONFIG.levels[VIP_CONFIG.levels.length - 1].referralsRequired +
+      (prestigeLevel * VIP_CONFIG.referralMultiplier);
     nextReferralsNeeded = Math.max(0, baseForCurrentPrestige + VIP_CONFIG.referralMultiplier - referralCount);
     referralsForNext = baseForCurrentPrestige + VIP_CONFIG.referralMultiplier;
-    
+
     const referralsInCurrentPrestige = referralCount - baseForCurrentPrestige;
     progressPercentage = (referralsInCurrentPrestige / VIP_CONFIG.referralMultiplier) * 100;
   }
-  
+
   return {
     vipLevel,
     prestigeLevel,
@@ -99,8 +97,8 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number) =
     progressPercentage: Math.min(progressPercentage, 100),
     isMaxLevel: vipLevel >= VIP_CONFIG.maxLevel,
     currentLevelName: vipLevel > 0 ? VIP_CONFIG.levels[vipLevel - 1]?.name : "No VIP",
-    nextLevelName: vipLevel < VIP_CONFIG.maxLevel 
-      ? VIP_CONFIG.levels[vipLevel]?.name 
+    nextLevelName: vipLevel < VIP_CONFIG.maxLevel
+      ? VIP_CONFIG.levels[vipLevel]?.name
       : `Prestige LV${prestigeLevel + 1}`,
   };
 };
@@ -110,37 +108,36 @@ const initializeVIPFields = async (driverId: string) => {
   try {
     const userRef = doc(db, "users", driverId);
     const userSnap = await getDoc(userRef);
-    
+
     if (userSnap.exists()) {
       const data = userSnap.data();
       const updates: any = {};
       let needsUpdate = false;
-      
+
       if (data.referralCount === undefined) {
         updates.referralCount = 0;
         needsUpdate = true;
       }
-      
+
       if (data.purchasedVipLevel === undefined) {
         updates.purchasedVipLevel = 0;
         needsUpdate = true;
       }
-      
-      // Always calculate VIP level from current data
+
       const referralCount = data.referralCount || 0;
       const purchasedVipLevel = data.purchasedVipLevel || 0;
       const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
-      
+
       if (data.vipLevel === undefined || data.vipLevel !== vipDetails.vipLevel) {
         updates.vipLevel = vipDetails.vipLevel;
         needsUpdate = true;
       }
-      
+
       if (data.prestigeLevel === undefined || data.prestigeLevel !== vipDetails.prestigeLevel) {
         updates.prestigeLevel = vipDetails.prestigeLevel;
         needsUpdate = true;
       }
-      
+
       if (needsUpdate) {
         await updateDoc(userRef, {
           ...updates,
@@ -154,23 +151,23 @@ const initializeVIPFields = async (driverId: string) => {
 };
 
 // VIP Star Component
-const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: { 
-  level: number, 
-  prestigeLevel?: number, 
-  size?: "sm" | "md" | "lg", 
-  showLabel?: boolean 
+const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
+  level: number,
+  prestigeLevel?: number,
+  size?: "sm" | "md" | "lg",
+  showLabel?: boolean
 }) => {
   if (level <= 0) return null;
-  
+
   const vipDetails = VIP_CONFIG.levels[level - 1];
   if (!vipDetails) return null;
-  
+
   const sizeClasses = {
     sm: "w-4 h-4",
     md: "w-5 h-5",
     lg: "w-6 h-6"
   };
-  
+
   const getStarColor = (color: string) => {
     const colors: any = {
       green: "text-green-500",
@@ -181,7 +178,7 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
     };
     return colors[color] || colors.green;
   };
-  
+
   const getBackgroundColor = (color: string) => {
     const colors: any = {
       green: "bg-gradient-to-br from-green-100 to-green-300 border-green-300",
@@ -192,12 +189,12 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
     };
     return colors[color] || colors.green;
   };
-  
+
   return (
     <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getBackgroundColor(vipDetails.color)} border shadow-sm`}>
       <div className="flex items-center gap-0.5">
         {Array.from({ length: vipDetails.stars }).map((_, i) => (
-          <svg 
+          <svg
             key={i}
             className={`${sizeClasses[size]} ${getStarColor(vipDetails.color)} fill-current`}
             viewBox="0 0 24 24"
@@ -209,14 +206,14 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
       {prestigeLevel > 0 && (
         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
           vipDetails.color === 'black' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-white'
-        }`}>
+          }`}>
           LV{prestigeLevel}
         </span>
       )}
       {showLabel && (
         <span className={`text-xs font-semibold ${
           vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
-        }`}>
+          }`}>
           {vipDetails.name}
         </span>
       )}
@@ -292,9 +289,6 @@ export default function DriverProfilePage() {
   const [interiorFile, setInteriorFile] = useState<File | null>(null);
   const [previews, setPreviews] = useState<{ front?: string; side?: string; back?: string; interior?: string }>({});
 
-  const [completedJobs, setCompletedJobs] = useState<number>(0);
-  const [commentsCount, setCommentsCount] = useState<number>(0);
-  const [ratings, setRatings] = useState<number[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [referralCount, setReferralCount] = useState<number>(0);
   const [vipLevel, setVipLevel] = useState<number>(0);
@@ -302,25 +296,21 @@ export default function DriverProfilePage() {
   const [prestigeLevel, setPrestigeLevel] = useState<number>(0);
   const [customersCarried, setCustomersCarried] = useState<number>(0);
   const [isVerified, setIsVerified] = useState<boolean>(false);
-  
+  const [ratings, setRatings] = useState<number[]>([]);
+
   const [contactedDrivers, setContactedDrivers] = useState<any[]>([]);
   const [selectedMainImage, setSelectedMainImage] = useState<{ [key: string]: string }>({});
 
-  const BONUS_PER_15 = 5000;
-  const completedBonuses = Math.floor(completedJobs / 15) * BONUS_PER_15;
-  const toNextBonus = 15 - (completedJobs % 15);
-  const progressPercentage = ((completedJobs % 15) / 15) * 100;
-  const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
-
-  // Trip History state
   const [tripHistory, setTripHistory] = useState<any[]>([]);
   const [loadingTripHistory, setLoadingTripHistory] = useState(false);
 
+  const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+
   // Check vehicle limits based on VIP level
   const canAddVehicle = () => {
-    if (vipLevel === 0) return vehicles.length < 2; // Regular users: max 2
-    if (vipLevel >= 1 && vipLevel <= 3) return vehicles.length < 10; // Green/Yellow/Purple VIP: max 10
-    if (vipLevel >= 4) return true; // Gold and Black VIP: unlimited
+    if (vipLevel === 0) return vehicles.length < 2;
+    if (vipLevel >= 1 && vipLevel <= 3) return vehicles.length < 10;
+    if (vipLevel >= 4) return true;
     return false;
   };
 
@@ -357,15 +347,12 @@ export default function DriverProfilePage() {
             let vipLevel = data.vipLevel || 0;
             let prestigeLevel = data.prestigeLevel || 0;
 
-            // Calculate VIP level based on referrals and purchases
             const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel);
-            
-            // If calculated VIP is different from stored, update it
+
             if (calculatedVIP.vipLevel !== vipLevel || calculatedVIP.prestigeLevel !== prestigeLevel) {
               vipLevel = calculatedVIP.vipLevel;
               prestigeLevel = calculatedVIP.prestigeLevel;
-              
-              // Update in Firestore
+
               try {
                 await updateDoc(userRef, {
                   vipLevel: vipLevel,
@@ -384,11 +371,11 @@ export default function DriverProfilePage() {
             setPrestigeLevel(prestigeLevel);
             setIsVerified(verified);
             setCustomersCarried(customersCarried.length || 0);
-            
+
             setCity(data.city || "");
             setState(data.state || "");
             setWhatsappPreferred(data.whatsappPreferred || false);
-            
+
             if (data.ratings && Array.isArray(data.ratings)) {
               const ratingsArray: number[] = [];
               data.ratings.forEach((rating: any) => {
@@ -400,7 +387,7 @@ export default function DriverProfilePage() {
               });
               setRatings(ratingsArray);
             }
-            
+
             if (data.comments && Array.isArray(data.comments)) {
               const commentsList: Comment[] = data.comments.map((comment: any, index: number) => ({
                 id: `comment-${index}`,
@@ -411,14 +398,12 @@ export default function DriverProfilePage() {
                 driverId: comment.driverId || driverId
               }));
               setComments(commentsList);
-              setCommentsCount(commentsList.length);
             }
-            
+
             if (data.contactedDrivers) {
               setContactedDrivers(data.contactedDrivers);
             }
 
-            // Show toast when VIP level changes
             const oldVipLevel = driverData?.vipLevel || 0;
             if (vipLevel > oldVipLevel && vipLevel > 0) {
               const newLevelName = VIP_CONFIG.levels[vipLevel - 1]?.name;
@@ -428,12 +413,11 @@ export default function DriverProfilePage() {
               });
             }
 
-            // Load trip history after user data is processed
             loadTripHistory();
           }
         });
 
-        const vehiclesRef = collection(db, "vehicleLog");        
+        const vehiclesRef = collection(db, "vehicleLog");
         const qVehicles = query(vehiclesRef, where("driverId", "==", driverId));
         const unsubVehicles = onSnapshot(qVehicles, snapshot => {
           const list: Vehicle[] = [];
@@ -450,21 +434,10 @@ export default function DriverProfilePage() {
           setVehicles(list);
         });
 
-        const txRef = collection(db, "transactions");
-        const qTx = query(txRef, where("driverId", "==", driverId), where("status", "==", "completed"), where("serviceCompleted", "==", true));
-        const unsubTx = onSnapshot(qTx, snapshot => {
-          const txList: any[] = [];
-          snapshot.forEach(docSnap => {
-            txList.push({ id: docSnap.id, ...docSnap.data() });
-          });
-          setCompletedJobs(txList.length);
-        });
-
         setLoading(false);
         return () => {
           unsubUser();
           unsubVehicles();
-          unsubTx();
         };
       } catch (err) {
         console.error("Error loading profile:", err);
@@ -476,7 +449,7 @@ export default function DriverProfilePage() {
     fetchData();
   }, [driverId]);
 
-  const averageRating = ratings.length > 0 
+  const averageRating = ratings.length > 0
     ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
     : "0.0";
 
@@ -498,103 +471,94 @@ export default function DriverProfilePage() {
 
     try {
       const { collection, query, where, getDocs, doc, getDoc } = await import("firebase/firestore");
-      
-      // Fetch ALL trips for this user (as a customer)
+
       const tripsRef = collection(db, "trips");
       const q = query(tripsRef, where("customerId", "==", driverId));
-      
+
       const tripsSnapshot = await getDocs(q);
-      
+
       const tripsList: any[] = [];
-      
+
       for (const tripDoc of tripsSnapshot.docs) {
-          const tripData = tripDoc.data();
-          
-          // Only show completed or cancelled trips
-          if (tripData.status === "completed" || tripData.status === "cancelled") {
-              // Get driver details
-              const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
-              const driverData = driverDoc.data();
-              
-              // Get vehicle details
-              const vehicleDoc = await getDoc(doc(db, "vehicleLog", tripData.vehicleId));
-              const vehicleData = vehicleDoc.data();
-              
-              // Get driver's average rating from "ratings" field
-              let driverRating = 0;
-              if (driverData?.ratings && Array.isArray(driverData.ratings) && driverData.ratings.length > 0) {
-                  // Calculate average rating
-                  const sum = driverData.ratings.reduce((a: number, b: number) => a + b, 0);
-                  driverRating = sum / driverData.ratings.length;
-              }
-              
-              // Get user's review for this trip if exists
-              let userRating = undefined;
-              let userReview = undefined;
-              
-              if (driverData?.comments) {
-                  const userComment = driverData.comments.find(
-                      (comment: any) => comment.userId === driverId
-                  );
-                  if (userComment) {
-                      userRating = userComment.rating;
-                      userReview = userComment.comment;
-                  }
-              }
-              
-              const tripHistoryItem = {
-                  id: tripDoc.id,
-                  tripId: tripDoc.id,
-                  driverId: tripData.driverId,
-                  driverName: driverData?.fullName || `${driverData?.firstName || ''} ${driverData?.lastName || ''}`.trim() || 'Driver',
-                  driverImage: driverData?.profileImage,
-                  driverRating: driverRating,
-                  vehicleId: tripData.vehicleId,
-                  vehicleName: vehicleData?.carName || "",
-                  vehicleModel: vehicleData?.carModel || "",
-                  vehicleImage: vehicleData?.images?.front || "/car_select.jpg",
-                  pickupLocation: tripData.pickupLocation || "",
-                  destination: tripData.destination || "",
-                  status: tripData.status,
-                  startTime: tripData.startTime,
-                  endTime: tripData.endTime,
-                  rating: userRating,
-                  review: userReview,
-                  createdAt: tripData.createdAt,
-                  updatedAt: tripData.updatedAt
-              };
-              
-              tripsList.push(tripHistoryItem);
+        const tripData = tripDoc.data();
+
+        if (tripData.status === "completed" || tripData.status === "cancelled") {
+          const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
+          const driverData = driverDoc.data();
+
+          const vehicleDoc = await getDoc(doc(db, "vehicleLog", tripData.vehicleId));
+          const vehicleData = vehicleDoc.data();
+
+          let driverRating = 0;
+          if (driverData?.ratings && Array.isArray(driverData.ratings) && driverData.ratings.length > 0) {
+            const sum = driverData.ratings.reduce((a: number, b: number) => a + b, 0);
+            driverRating = sum / driverData.ratings.length;
           }
+
+          let userRating = undefined;
+          let userReview = undefined;
+
+          if (driverData?.comments) {
+            const userComment = driverData.comments.find(
+              (comment: any) => comment.userId === driverId
+            );
+            if (userComment) {
+              userRating = userComment.rating;
+              userReview = userComment.comment;
+            }
+          }
+
+          const tripHistoryItem = {
+            id: tripDoc.id,
+            tripId: tripDoc.id,
+            driverId: tripData.driverId,
+            driverName: driverData?.fullName || `${driverData?.firstName || ''} ${driverData?.lastName || ''}`.trim() || 'Driver',
+            driverImage: driverData?.profileImage,
+            driverRating: driverRating,
+            vehicleId: tripData.vehicleId,
+            vehicleName: vehicleData?.carName || "",
+            vehicleModel: vehicleData?.carModel || "",
+            vehicleImage: vehicleData?.images?.front || "/car_select.jpg",
+            pickupLocation: tripData.pickupLocation || "",
+            destination: tripData.destination || "",
+            status: tripData.status,
+            startTime: tripData.startTime,
+            endTime: tripData.endTime,
+            rating: userRating,
+            review: userReview,
+            createdAt: tripData.createdAt,
+            updatedAt: tripData.updatedAt
+          };
+
+          tripsList.push(tripHistoryItem);
+        }
       }
-      
-      // Sort by endTime (most recent first) and limit to 5
+
       const sortedTrips = tripsList.sort((a, b) => {
-          const timeA = a.endTime?.toMillis?.() || a.endTime?.seconds * 1000 || new Date(a.endTime).getTime() || 0;
-          const timeB = b.endTime?.toMillis?.() || b.endTime?.seconds * 1000 || new Date(b.endTime).getTime() || 0;
-          return timeB - timeA; // Descending (newest first)
-      }).slice(0, 5); // Keep only 5 most recent
-      
+        const timeA = a.endTime?.toMillis?.() || a.endTime?.seconds * 1000 || new Date(a.endTime).getTime() || 0;
+        const timeB = b.endTime?.toMillis?.() || b.endTime?.seconds * 1000 || new Date(b.endTime).getTime() || 0;
+        return timeB - timeA;
+      }).slice(0, 5);
+
       setTripHistory(sortedTrips);
-          
+
     } catch (error) {
       console.error("Error loading trip history:", error);
     } finally {
-        setLoadingTripHistory(false);
+      setLoadingTripHistory(false);
     }
   };
 
-  // Handle rate trip - redirects to car hire page
+  // Handle rate trip
   const handleRateTrip = (driverId: string, vehicleId: string) => {
-      // Navigate to car hire page and scroll to search-results div
-      router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
+    router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
   };
 
   async function uploadFile(file: File, path: string) {
     const sRef = storageRef(storage, path);
     const task = uploadBytesResumable(sRef, file);
     return new Promise<string>((resolve, reject) => {
-      task.on("state_changed", ()=>{}, reject, async () => resolve(await getDownloadURL(task.snapshot.ref)));
+      task.on("state_changed", () => { }, reject, async () => resolve(await getDownloadURL(task.snapshot.ref)));
     });
   }
 
@@ -603,24 +567,20 @@ export default function DriverProfilePage() {
     setSavingVehicle(true);
 
     try {
-      // Comprehensive validation
       const errors: string[] = [];
 
-      // Required field validations
       if (!carName.trim()) errors.push("Vehicle name is required");
       if (!carModel.trim()) errors.push("Vehicle model is required");
       if (!plateNumber.trim()) errors.push("Plate number is required");
       if (!exteriorColor.trim()) errors.push("Exterior color is required");
       if (!interiorColor.trim()) errors.push("Interior color is required");
       if (!carType.trim()) errors.push("Vehicle type is required");
-      
-      // Plate number format validation
+
       const plateRegex = /^[A-Z0-9]{3,10}$/i;
       if (plateNumber.trim() && !plateRegex.test(plateNumber.trim())) {
         errors.push("Plate number should be 3-10 alphanumeric characters");
       }
-      
-      // Color validation
+
       const colorRegex = /^[a-zA-Z\s]{2,20}$/;
       if (exteriorColor.trim() && !colorRegex.test(exteriorColor.trim())) {
         errors.push("Exterior color should be 2-20 letters only");
@@ -628,8 +588,7 @@ export default function DriverProfilePage() {
       if (interiorColor.trim() && !colorRegex.test(interiorColor.trim())) {
         errors.push("Interior color should be 2-20 letters only");
       }
-      
-      // Image validation for new vehicles
+
       if (!editingVehicle) {
         const requiredImages = [
           { file: frontFile, label: "Front view" },
@@ -637,18 +596,16 @@ export default function DriverProfilePage() {
           { file: backFile, label: "Back view" },
           { file: interiorFile, label: "Interior view" }
         ];
-        
+
         requiredImages.forEach(({ file, label }) => {
           if (!file) {
             errors.push(`${label} photo is required`);
           } else {
-            // File type validation
             const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
             if (!validTypes.includes(file.type)) {
               errors.push(`${label} must be a JPG, PNG, or WebP image`);
             }
-            
-            // File size validation (5MB)
+
             if (file.size > 5 * 1024 * 1024) {
               errors.push(`${label} image must be less than 5MB`);
             }
@@ -656,7 +613,6 @@ export default function DriverProfilePage() {
         });
       }
 
-      // For editing, check if files exist and validate them
       if (editingVehicle) {
         const filesToCheck = [
           { file: frontFile, label: "Front view" },
@@ -664,16 +620,14 @@ export default function DriverProfilePage() {
           { file: backFile, label: "Back view" },
           { file: interiorFile, label: "Interior view" }
         ];
-        
+
         filesToCheck.forEach(({ file, label }) => {
           if (file) {
-            // File type validation
             const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
             if (!validTypes.includes(file.type)) {
               errors.push(`${label} must be a JPG, PNG, or WebP image`);
             }
-            
-            // File size validation (5MB)
+
             if (file.size > 5 * 1024 * 1024) {
               errors.push(`${label} image must be less than 5MB`);
             }
@@ -681,12 +635,10 @@ export default function DriverProfilePage() {
         });
       }
 
-      // Check if vehicle limit is reached
       if (!editingVehicle && !canAddVehicle()) {
         errors.push(`Vehicle limit reached! ${getVehicleLimitMessage()}`);
       }
 
-      // Show all errors at once
       if (errors.length > 0) {
         const errorMessage = errors.join('\n• ');
         toast.error(`Please fix the following:\n• ${errorMessage}`, {
@@ -696,22 +648,16 @@ export default function DriverProfilePage() {
         return;
       }
 
-      // Upload files with progress tracking
       const uploadWithProgress = async (file: File | null, path: string, label: string): Promise<string | null> => {
         if (!file) return null;
-        
+
         return new Promise((resolve, reject) => {
           const sRef = storageRef(storage, path);
           const task = uploadBytesResumable(sRef, file);
-          
+
           task.on('state_changed',
-            (snapshot) => {
-              // You could add progress tracking here
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              console.log(`${label} upload is ${progress}% done`);
-            },
+            () => { },
             (error) => {
-              console.error(`Error uploading ${label}:`, error);
               reject(new Error(`Failed to upload ${label}: ${error.message}`));
             },
             async () => {
@@ -727,51 +673,49 @@ export default function DriverProfilePage() {
       };
 
       const timestamp = Date.now();
-      
-      // Upload files in parallel
+
       const uploadPromises = [];
-      
+
       if (frontFile) {
         uploadPromises.push(
           uploadWithProgress(
-            frontFile, 
-            `vehicleLog/${driverId}/${timestamp}_front_${frontFile.name}`, 
+            frontFile,
+            `vehicleLog/${driverId}/${timestamp}_front_${frontFile.name}`,
             "Front view"
           )
         );
       }
-      
+
       if (sideFile) {
         uploadPromises.push(
           uploadWithProgress(
-            sideFile, 
-            `vehicleLog/${driverId}/${timestamp}_side_${sideFile.name}`, 
+            sideFile,
+            `vehicleLog/${driverId}/${timestamp}_side_${sideFile.name}`,
             "Side view"
           )
         );
       }
-      
+
       if (backFile) {
         uploadPromises.push(
           uploadWithProgress(
-            backFile, 
-            `vehicleLog/${driverId}/${timestamp}_back_${backFile.name}`, 
+            backFile,
+            `vehicleLog/${driverId}/${timestamp}_back_${backFile.name}`,
             "Back view"
           )
         );
       }
-      
+
       if (interiorFile) {
         uploadPromises.push(
           uploadWithProgress(
-            interiorFile, 
-            `vehicleLog/${driverId}/${timestamp}_interior_${interiorFile.name}`, 
+            interiorFile,
+            `vehicleLog/${driverId}/${timestamp}_interior_${interiorFile.name}`,
             "Interior view"
           )
         );
       }
 
-      // Wait for all uploads to complete
       const [frontUrl, sideUrl, backUrl, interiorUrl] = await Promise.allSettled(uploadPromises)
         .then((results) => {
           return results.map((result, index) => {
@@ -783,19 +727,17 @@ export default function DriverProfilePage() {
           });
         });
 
-      // Use existing URLs for images that weren't updated
       const finalFrontUrl = frontUrl || editingVehicle?.images.front;
       const finalSideUrl = sideUrl || editingVehicle?.images.side;
       const finalBackUrl = backUrl || editingVehicle?.images.back;
       const finalInteriorUrl = interiorUrl || editingVehicle?.images.interior;
 
-      // Validate that we have all required image URLs
       const missingImages = [];
       if (!finalFrontUrl) missingImages.push("Front view");
       if (!finalSideUrl) missingImages.push("Side view");
       if (!finalBackUrl) missingImages.push("Back view");
       if (!finalInteriorUrl) missingImages.push("Interior view");
-      
+
       if (missingImages.length > 0 && !editingVehicle) {
         throw new Error(`Missing required images: ${missingImages.join(', ')}`);
       }
@@ -811,11 +753,11 @@ export default function DriverProfilePage() {
         exteriorColor: exteriorColor.trim(),
         interiorColor: interiorColor.trim(),
         status: vehicleStatus,
-        images: { 
-          front: finalFrontUrl!, 
-          side: finalSideUrl!, 
-          back: finalBackUrl!, 
-          interior: finalInteriorUrl! 
+        images: {
+          front: finalFrontUrl!,
+          side: finalSideUrl!,
+          back: finalBackUrl!,
+          interior: finalInteriorUrl!
         },
         description: description.trim(),
         createdAt: editingVehicle?.createdAt || Timestamp.now(),
@@ -827,32 +769,29 @@ export default function DriverProfilePage() {
         toast.success("✅ Vehicle updated successfully!");
       } else {
         const newDocRef = await addDoc(collection(db, "vehicleLog"), vehicleDoc);
-        
+
         try {
           const userRef = doc(db, "users", driverId);
-          await updateDoc(userRef, { 
-            vehicleLog: arrayUnion(newDocRef.id), 
-            updatedAt: Timestamp.now() 
+          await updateDoc(userRef, {
+            vehicleLog: arrayUnion(newDocRef.id),
+            updatedAt: Timestamp.now()
           });
         } catch (uErr: any) {
           console.error("Failed to update user's vehicleLog array:", uErr);
-          // Rollback vehicle creation if user update fails
           await deleteDoc(newDocRef);
           throw new Error("Vehicle added but user record couldn't be updated. Please contact support.");
         }
-        
+
         toast.success("✅ Vehicle added successfully!");
       }
 
-      // Reset form
       resetVehicleForm();
       setShowVehicleForm(false);
       setEditingVehicle(null);
-      
+
     } catch (err: any) {
       console.error("Failed to save vehicle:", err);
-      
-      // User-friendly error messages
+
       let errorMessage = "Failed to save vehicle";
       if (err.message.includes("storage/unauthorized")) {
         errorMessage = "Storage access denied. Please contact support.";
@@ -863,7 +802,7 @@ export default function DriverProfilePage() {
       } else if (err.message.includes("network")) {
         errorMessage = "Network error. Please check your connection and try again.";
       }
-      
+
       toast.error(`${errorMessage}: ${err.message}`, {
         duration: 5000,
       });
@@ -896,7 +835,7 @@ export default function DriverProfilePage() {
 
   const removeVehicle = async () => {
     if (!vehicleToDelete) return;
-    
+
     try {
       await deleteDoc(doc(db, "vehicleLog", vehicleToDelete));
       try {
@@ -991,7 +930,7 @@ export default function DriverProfilePage() {
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "Recently";
-    
+
     try {
       if (timestamp.toDate) {
         return timestamp.toDate().toLocaleDateString("en-GB");
@@ -1006,7 +945,6 @@ export default function DriverProfilePage() {
 
   const handleVIPPurchase = async (level: number) => {
     try {
-      // Redirect to purchase page
       router.push(`/user/purchase?level=${level}`);
     } catch (err) {
       console.error("Error redirecting to purchase:", err);
@@ -1015,7 +953,7 @@ export default function DriverProfilePage() {
   };
 
   const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>, file: File | null) => {
-    if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
+    if (file && file.size > 5 * 1024 * 1024) {
       toast.error("File size should be less than 5MB");
       return;
     }
@@ -1026,11 +964,10 @@ export default function DriverProfilePage() {
     try {
       const vehicleRef = doc(db, "vehicleLog", vehicleId);
       await updateDoc(vehicleRef, {
-          status: "available",
-          updatedAt: Timestamp.now()
+        status: "available",
+        updatedAt: Timestamp.now()
       });
       toast.success("Vehicle marked as available!");
-
     } catch (error) {
       console.error("Error updating vehicle status:", error);
       toast.error("Failed to update vehicle status");
@@ -1042,30 +979,28 @@ export default function DriverProfilePage() {
       <LoadingRound />
     </div>
   );
-  
+
   if (!driverId) return (
     <div className="flex justify-center items-center min-h-screen">
       <div className="text-lg lg:text-xl font-semibold text-red-600">Driver ID not found</div>
     </div>
   );
 
-  
-
   return (
     <div className="px-2 py-3 md:p-6 mx-auto">
       <Toaster position="top-right" />
-      
+
       {/* VIP Modal for vehicle limit */}
       {showVIPModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
-            <button 
-              onClick={() => setShowVIPModal(false)} 
+            <button
+              onClick={() => setShowVIPModal(false)}
               className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 text-2xl"
             >
               ×
             </button>
-            
+
             <div className="text-center mb-4">
               <div className="w-16 h-16 mx-auto bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mb-4">
                 <VIPStar level={vipLevel || 1} size="lg" showLabel={false} />
@@ -1074,8 +1009,8 @@ export default function DriverProfilePage() {
                 {vipLevel === 0 ? 'Upgrade to VIP Driver' : 'Upgrade VIP Level'}
               </h3>
               <p className="text-gray-600 mb-4">
-                {vipLevel === 0 
-                  ? "You can only add 2 vehicles as a regular driver. Upgrade to VIP to add more vehicles!" 
+                {vipLevel === 0
+                  ? "You can only add 2 vehicles as a regular driver. Upgrade to VIP to add more vehicles!"
                   : `You can add up to ${vipLevel <= 3 ? '10' : 'unlimited'} vehicles at VIP Level ${vipLevel}. Upgrade to add more!`}
               </p>
             </div>
@@ -1123,13 +1058,13 @@ export default function DriverProfilePage() {
       {showVIPUpgradeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setShowVIPUpgradeModal(false)} 
+            <button
+              onClick={() => setShowVIPUpgradeModal(false)}
               className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 text-2xl"
             >
               ×
             </button>
-            
+
             <div className="text-center mb-6">
               <h3 className="text-2xl font-bold text-gray-800 mb-2">
                 {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become a VIP Driver'}
@@ -1162,8 +1097,7 @@ export default function DriverProfilePage() {
                   <div className="text-sm text-gray-600">Total Referrals</div>
                 </div>
               </div>
-              
-              {/* ALWAYS SHOW PROGRESS BAR - Even for non-VIP users */}
+
               <div className="mt-4">
                 <div className="flex justify-between text-sm mb-1">
                   <span>Progress to {vipLevel > 0 ? vipDetails.nextLevelName : 'Green VIP'}</span>
@@ -1172,13 +1106,13 @@ export default function DriverProfilePage() {
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
+                  <div
+                    className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600"
                     style={{ width: `${vipLevel > 0 ? vipDetails.progressPercentage : (referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100}%` }}
                   ></div>
                 </div>
                 <div className="text-xs text-gray-600 mt-1">
-                  {vipLevel > 0 
+                  {vipLevel > 0
                     ? `${vipDetails.nextReferralsNeeded} more referrals for next level`
                     : `${VIP_CONFIG.levels[0].referralsRequired - referralCount} more referrals to become Green VIP`
                   }
@@ -1193,23 +1127,22 @@ export default function DriverProfilePage() {
                 const isUnlocked = vipLevel >= level.level;
                 const canPurchase = purchasedVipLevel < level.level;
                 const canEarnByReferral = referralCount >= level.referralsRequired;
-                
+
                 return (
-                  <div 
+                  <div
                     key={level.level}
-                    className={`border rounded-xl p-4 transition-all duration-300 ${
-                      isCurrentLevel 
-                        ? 'border-green-500 bg-green-50 ring-2 ring-green-200' 
-                        : isUnlocked
+                    className={`border rounded-xl p-4 transition-all duration-300 ${isCurrentLevel
+                      ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                      : isUnlocked
                         ? 'border-blue-300 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
-                    }`}
+                      }`}
                   >
                     <div className="flex justify-center mb-3">
                       <VIPStar level={level.level} size="lg" showLabel={false} />
                     </div>
                     <h4 className="text-lg font-semibold text-center mb-2">{level.name}</h4>
-                    
+
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Referrals Needed:</span>
@@ -1224,29 +1157,27 @@ export default function DriverProfilePage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Status:</span>
-                        <span className={`font-medium ${
-                          isCurrentLevel ? 'text-green-600' :
+                        <span className={`font-medium ${isCurrentLevel ? 'text-green-600' :
                           isUnlocked ? 'text-blue-600' :
-                          'text-gray-600'
-                        }`}>
+                            'text-gray-600'
+                          }`}>
                           {isCurrentLevel ? 'Current' : isUnlocked ? 'Unlocked' : 'Locked'}
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <button
                         onClick={() => handleVIPPurchase(level.level)}
                         disabled={!canPurchase}
-                        className={`w-full py-2 rounded-lg font-medium transition-all ${
-                          !canPurchase
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
-                        }`}
+                        className={`w-full py-2 rounded-lg font-medium transition-all ${!canPurchase
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
+                          }`}
                       >
                         {!canPurchase ? 'Already Unlocked' : 'Purchase Now'}
                       </button>
-                      
+
                       {!canEarnByReferral && level.level > vipLevel && (
                         <div className="text-xs text-center text-gray-500">
                           Or get {level.referralsRequired - referralCount} more referrals
@@ -1258,7 +1189,6 @@ export default function DriverProfilePage() {
               })}
             </div>
 
-            {/* VIP Info Section */}
             <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4 mb-6">
               <h4 className="font-semibold text-purple-800 mb-2">How VIP Works:</h4>
               <ul className="text-sm text-gray-700 space-y-2">
@@ -1281,18 +1211,17 @@ export default function DriverProfilePage() {
               </ul>
             </div>
 
-            {/* Referral Section */}
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 mb-6">
               <h4 className="font-semibold text-amber-800 mb-2">Earn VIP Through Referrals</h4>
               <p className="text-sm text-gray-700 mb-3">
-                {vipLevel > 0 
+                {vipLevel > 0
                   ? `You have ${referralCount} referrals. Need ${vipDetails.nextReferralsNeeded} more for next level!`
                   : `You have ${referralCount} referrals. Need ${VIP_CONFIG.levels[0].referralsRequired - referralCount} more to become Green VIP!`
                 }
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
-                  <ShareButton 
+                  <ShareButton
                     userId={driverId}
                     title="Book a Professional Driver on Nomopoventures!"
                     text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
@@ -1319,13 +1248,13 @@ export default function DriverProfilePage() {
         </div>
       )}
 
-      {/* Live Location Toggle Section - ADDED HERE */}
+      {/* Live Location Toggle Section */}
       <div className="mb-6">
-        <DriverLocationToggle 
+        <DriverLocationToggle
           driverId={driverId}
           vehicleId={vehicles.length > 0 ? vehicles[0].id : undefined}
         />
-        
+
         <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <h4 className="font-medium text-blue-800 mb-2">How This Helps You:</h4>
           <ul className="text-sm text-gray-700 space-y-1">
@@ -1392,9 +1321,9 @@ export default function DriverProfilePage() {
               <div className="relative">
                 <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-full overflow-hidden border-4 border-gray-100 shadow-sm">
                   {driverData?.profileImage ? (
-                    <img 
-                      src={driverData.profileImage} 
-                      alt="Driver Profile" 
+                    <img
+                      src={driverData.profileImage}
+                      alt="Driver Profile"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -1410,7 +1339,7 @@ export default function DriverProfilePage() {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
@@ -1420,7 +1349,7 @@ export default function DriverProfilePage() {
                     <VIPStar level={vipLevel} prestigeLevel={prestigeLevel} size="md" showLabel={true} />
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-gray-600 text-sm">
                     📍 {driverData?.city || "City not specified"}, {driverData?.state || "State not specified"}
@@ -1432,12 +1361,12 @@ export default function DriverProfilePage() {
                     ✏️
                   </button>
                 </div>
-                
+
                 {editingLocation && (
                   <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex flex-col sm:flex-row gap-2 mb-2">
                       <div className="flex-1">
-                        <input 
+                        <input
                           type="text"
                           value={city}
                           onChange={(e) => setCity(e.target.value)}
@@ -1446,7 +1375,7 @@ export default function DriverProfilePage() {
                         />
                       </div>
                       <div className="flex-1">
-                        <input 
+                        <input
                           type="text"
                           value={state}
                           onChange={(e) => setState(e.target.value)}
@@ -1472,16 +1401,15 @@ export default function DriverProfilePage() {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="flex items-center gap-3 text-sm">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${isVerified 
-                    ? 'bg-green-100 text-green-800' 
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${isVerified
+                    ? 'bg-green-100 text-green-800'
                     : 'bg-gray-100 text-gray-600'}`}>
                     {isVerified ? 'Verified Driver' : 'Unverified'}
                   </span>
                 </div>
 
-                {/* ALWAYS SHOW VIP PROGRESS BAR - Even for non-VIP users */}
                 <div className="mt-3">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs font-medium text-gray-700">
@@ -1492,16 +1420,16 @@ export default function DriverProfilePage() {
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600" 
-                      style={{ 
-                        width: `${vipLevel > 0 ? vipDetails.progressPercentage : 
-                          Math.min((referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100, 100)}%` 
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600"
+                      style={{
+                        width: `${vipLevel > 0 ? vipDetails.progressPercentage :
+                          Math.min((referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100, 100)}%`
                       }}
                     ></div>
                   </div>
                   <div className="text-xs text-gray-600 mt-1">
-                    {vipLevel > 0 
+                    {vipLevel > 0
                       ? `${vipDetails.nextReferralsNeeded} more referrals for next level`
                       : `${VIP_CONFIG.levels[0].referralsRequired - referralCount} more referrals to become Green VIP`
                     }
@@ -1520,8 +1448,8 @@ export default function DriverProfilePage() {
                   <div>
                     <p className="text-sm font-medium text-gray-700">WhatsApp Preferred</p>
                     <p className="text-xs text-gray-500">
-                      {whatsappPreferred 
-                        ? "Passengers can contact you via WhatsApp" 
+                      {whatsappPreferred
+                        ? "Passengers can contact you via WhatsApp"
                         : "Passengers contact you via regular calls"}
                     </p>
                   </div>
@@ -1554,11 +1482,11 @@ export default function DriverProfilePage() {
               <p className="text-xs font-semibold text-purple-700 mb-1">Referrals</p>
               <p className="text-xl lg:text-2xl font-bold">{referralCount}</p>
               <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                <div 
-                  className="h-1.5 rounded-full bg-green-500" 
-                  style={{ 
-                    width: `${vipLevel > 0 ? vipDetails.progressPercentage : 
-                      Math.min((referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100, 100)}%` 
+                <div
+                  className="h-1.5 rounded-full bg-green-500"
+                  style={{
+                    width: `${vipLevel > 0 ? vipDetails.progressPercentage :
+                      Math.min((referralCount / VIP_CONFIG.levels[0].referralsRequired) * 100, 100)}%`
                   }}
                 ></div>
               </div>
@@ -1571,9 +1499,9 @@ export default function DriverProfilePage() {
               <p className="text-xs font-semibold text-indigo-700 mb-1">Vehicles</p>
               <p className="text-xl lg:text-2xl font-bold">{vehicles.length}</p>
               <p className="text-xs text-gray-500 mt-1">
-                {vipLevel === 0 
+                {vipLevel === 0
                   ? `${Math.max(0, 2 - vehicles.length)} more available`
-                  : vipLevel <= 3 
+                  : vipLevel <= 3
                     ? `${Math.max(0, 10 - vehicles.length)} more available`
                     : 'Unlimited'
                 }
@@ -1586,13 +1514,13 @@ export default function DriverProfilePage() {
         <div className="mt-6 pt-4 border-t border-gray-100">
           <div className="flex flex-col lg:flex-row justify-between items-center gap-3">
             <div className="w-full lg:w-auto">
-              <ShareButton 
+              <ShareButton
                 userId={driverId}
                 title="Book a Professional Driver on Nomopoventures!"
                 text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
               />
             </div>
-            
+
             <div className="flex flex-col md:flex-row gap-2 w-full lg:w-auto">
               <button
                 onClick={handleAddVehicleClick}
@@ -1600,14 +1528,14 @@ export default function DriverProfilePage() {
               >
                 Add Vehicle {!canAddVehicle() && `(${vehicles.length} added)`}
               </button>
-              
+
               <button
                 onClick={() => setShowVIPUpgradeModal(true)}
                 className="flex-1 lg:flex-none bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-colors text-sm font-medium"
               >
                 {vipLevel > 0 ? 'Upgrade VIP' : 'Become VIP'}
               </button>
-              
+
               <button
                 onClick={() => setGame(true)}
                 className="flex-1 lg:flex-none bg-purple-600 text-white px-4 py-2.5 rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
@@ -1624,9 +1552,9 @@ export default function DriverProfilePage() {
             <div className="flex-shrink-0">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-100 rounded-full overflow-hidden">
                 {driverData?.profileImage ? (
-                  <img 
-                    src={driverData.profileImage} 
-                    alt="Current Profile" 
+                  <img
+                    src={driverData.profileImage}
+                    alt="Current Profile"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -1639,8 +1567,8 @@ export default function DriverProfilePage() {
             <div className="flex-1">
               <h3 className="text-sm font-medium text-gray-700 mb-1">Update Profile Image</h3>
               <p className="text-xs text-gray-500 mb-2">A professional photo helps build trust with passengers</p>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept="image/*"
                 className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 onChange={async (e) => {
@@ -1649,13 +1577,13 @@ export default function DriverProfilePage() {
                     try {
                       const timestamp = Date.now();
                       const url = await uploadFile(file, `driverProfiles/${driverId}/${timestamp}_profile.jpg`);
-                      
+
                       const userRef = doc(db, "users", driverId);
                       await updateDoc(userRef, {
                         profileImage: url,
                         updatedAt: Timestamp.now()
                       });
-                      
+
                       toast.success("Profile image updated successfully!");
                     } catch (err) {
                       console.error("Error uploading profile image:", err);
@@ -1673,25 +1601,23 @@ export default function DriverProfilePage() {
       {showVehicleForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
           <div className="bg-[white] rounded-lg shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
-            <button 
+            <button
               onClick={() => {
                 setShowVehicleForm(false);
                 setEditingVehicle(null);
                 resetVehicleForm();
-              }} 
+              }}
               className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 text-2xl"
             >
               ×
             </button>
-            
+
             <h3 className="text-xl font-bold text-gray-800 mb-4">
               {editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}
             </h3>
-            
-            {/* Add Vehicle Form */}
+
             <form onSubmit={submitVehicle} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Vehicle Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Vehicle Name <span className="text-red-500">*</span>
@@ -1706,7 +1632,6 @@ export default function DriverProfilePage() {
                   />
                 </div>
 
-                {/* Vehicle Model */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Vehicle Model <span className="text-red-500">*</span>
@@ -1721,7 +1646,6 @@ export default function DriverProfilePage() {
                   />
                 </div>
 
-                {/* Plate Number */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Plate Number <span className="text-red-500">*</span>
@@ -1736,7 +1660,6 @@ export default function DriverProfilePage() {
                   />
                 </div>
 
-                {/* Vehicle Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Vehicle Type <span className="text-red-500">*</span>
@@ -1757,7 +1680,6 @@ export default function DriverProfilePage() {
                   </select>
                 </div>
 
-                {/* Exterior Color */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Exterior Color <span className="text-red-500">*</span>
@@ -1772,7 +1694,6 @@ export default function DriverProfilePage() {
                   />
                 </div>
 
-                {/* Interior Color */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Interior Color <span className="text-red-500">*</span>
@@ -1787,7 +1708,6 @@ export default function DriverProfilePage() {
                   />
                 </div>
 
-                {/* Passengers */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Passengers <span className="text-red-500">*</span>
@@ -1806,7 +1726,6 @@ export default function DriverProfilePage() {
                   </select>
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Status
@@ -1823,7 +1742,6 @@ export default function DriverProfilePage() {
                 </div>
               </div>
 
-              {/* AC Checkbox */}
               <div className="flex items-center">
                 <input
                   type="checkbox"
@@ -1837,7 +1755,6 @@ export default function DriverProfilePage() {
                 </label>
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description (Optional)
@@ -1851,15 +1768,13 @@ export default function DriverProfilePage() {
                 />
               </div>
 
-              {/* Vehicle Images */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Vehicle Images <span className="text-red-500">*</span>
                   <span className="text-xs text-gray-500 ml-2">(All 4 photos required, max 5MB each)</span>
                 </label>
-                
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {/* Front View */}
                   <div className="text-center">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Front View</label>
                     <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
@@ -1881,7 +1796,6 @@ export default function DriverProfilePage() {
                     </div>
                   </div>
 
-                  {/* Side View */}
                   <div className="text-center">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Side View</label>
                     <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
@@ -1903,7 +1817,6 @@ export default function DriverProfilePage() {
                     </div>
                   </div>
 
-                  {/* Back View */}
                   <div className="text-center">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Back View</label>
                     <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
@@ -1925,7 +1838,6 @@ export default function DriverProfilePage() {
                     </div>
                   </div>
 
-                  {/* Interior View */}
                   <div className="text-center">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Interior View</label>
                     <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden hover:border-blue-400 transition-colors">
@@ -1949,7 +1861,6 @@ export default function DriverProfilePage() {
                 </div>
               </div>
 
-              {/* Form Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
@@ -2017,29 +1928,25 @@ export default function DriverProfilePage() {
         ) : (
           <div className="md:py-5 grid grid-cols-1 md:grid-cols-3 overflow-x-auto gap-4 max-h-[65rem]">
             {vehicles.map((v) => (
-              <div 
-                key={v.id} 
+              <div
+                key={v.id}
                 className="bg-gray-100 border border-gray-200 rounded-xl p-3 hover:shadow-md transition-shadow"
               >
-                
                 <div className="relative w-full h-40 rounded-lg overflow-hidden mb-3">
-                  <img 
+                  <img
                     src={selectedMainImage[v.id!] || v.images.front}
                     className="w-full h-full object-cover"
                     alt={v.carName}
                   />
-                  
-                  {/* car card info */}
+
                   <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      v.status === 'available' ? 'bg-green-100 text-green-800' :
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'available' ? 'bg-green-100 text-green-800' :
                       v.status === 'unavailable' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
                       {v.status ? `${v.status.charAt(0).toUpperCase()}${v.status.slice(1)}` : 'Available'}
                     </span>
-                    
-                    {/* ADD THIS BUTTON - Only show if vehicle is NOT available */}
+
                     {v.status !== 'available' && v.id && (
                       <button
                         onClick={() => markVehicleAsAvailable(v.id!)}
@@ -2049,48 +1956,42 @@ export default function DriverProfilePage() {
                       </button>
                     )}
                   </div>
-
                 </div>
 
-                {/* Thumbnail Images */}
                 <div className="flex justify-center items-center gap-2 mb-3 border-b border-gray-200 pb-1">
                   <img
                     src={v.images.front}
-                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
-                      selectedMainImage[v.id!] === v.images.front
-                        ? "border-blue-500 border-2"
-                        : "border-gray-300"
-                    }`}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.front
+                      ? "border-blue-500 border-2"
+                      : "border-gray-300"
+                      }`}
                     onClick={() => handleThumbnailClick(v.id!, v.images.front)}
                     alt="Front view"
                   />
                   <img
                     src={v.images.side}
-                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
-                      selectedMainImage[v.id!] === v.images.side
-                        ? "border-blue-500 border-2"
-                        : "border-gray-300"
-                    }`}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.side
+                      ? "border-blue-500 border-2"
+                      : "border-gray-300"
+                      }`}
                     onClick={() => handleThumbnailClick(v.id!, v.images.side)}
                     alt="Side view"
                   />
                   <img
                     src={v.images.back}
-                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
-                      selectedMainImage[v.id!] === v.images.back
-                        ? "border-blue-500 border-2"
-                        : "border-gray-300"
-                    }`}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.back
+                      ? "border-blue-500 border-2"
+                      : "border-gray-300"
+                      }`}
                     onClick={() => handleThumbnailClick(v.id!, v.images.back)}
                     alt="Back view"
                   />
                   <img
                     src={v.images.interior}
-                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${
-                      selectedMainImage[v.id!] === v.images.interior
-                        ? "border-blue-500 border-2"
-                        : "border-gray-300"
-                    }`}
+                    className={`w-12 h-12 rounded-md object-cover border cursor-pointer transition-all ${selectedMainImage[v.id!] === v.images.interior
+                      ? "border-blue-500 border-2"
+                      : "border-gray-300"
+                      }`}
                     onClick={() => handleThumbnailClick(v.id!, v.images.interior)}
                     alt="Interior view"
                   />
@@ -2134,7 +2035,6 @@ export default function DriverProfilePage() {
                   </p>
                 )}
 
-                {/* Delete and Edit Button section */}
                 <div className="flex justify-between pt-3 border-t border-gray-100 border-t border-gray-200">
                   <button
                     onClick={() => startEdit(v)}
@@ -2159,7 +2059,7 @@ export default function DriverProfilePage() {
       <div className="mb-6">
         <section className="bg-white shadow-lg rounded-xl p-4 lg:p-6">
           <h2 className="text-lg lg:text-xl font-semibold mb-4">Drivers You Contacted</h2>
-          
+
           {contactedDrivers.length === 0 ? (
             <div className="text-center py-6">
               <div className="text-gray-400 text-4xl mb-2">👨‍✈️</div>
@@ -2200,44 +2100,43 @@ export default function DriverProfilePage() {
           )}
         </section>
 
-        {/* NEW: Trip History Section */}
+        {/* Trip History Section */}
         <section className="mt-8 px-2 sm:px-8 w-full bg-white shadow-lg rounded-xl border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Trip History</h2>
-          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Trip History</h2>
+            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
               {tripHistory.length} trips
-          </span>
+            </span>
           </div>
-          
+
           {loadingTripHistory ? (
-          <div className="text-center py-8">
+            <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               <p className="text-gray-600 mt-2">Loading trip history...</p>
-          </div>
+            </div>
           ) : tripHistory.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {tripHistory.map((trip, index) => (
-              <TripHistoryCard
+                <TripHistoryCard
                   key={trip.id || index}
                   trip={trip}
                   onRateTrip={() => handleRateTrip(trip.driverId, trip.vehicleId)}
-              />
+                />
               ))}
-          </div>
+            </div>
           ) : (
-          <div className="text-center py-8 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-dashed border-gray-300">
+            <div className="text-center py-8 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-dashed border-gray-300">
               <div className="text-gray-400 text-5xl mb-3">🚗</div>
               <p className="text-gray-500 text-sm mb-3">No trip history yet</p>
-              <button 
-              onClick={() => router.push('/user/car-hire')}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2 rounded-lg text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300"
+              <button
+                onClick={() => router.push('/user/car-hire')}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2 rounded-lg text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300"
               >
-              Book Your First Trip
+                Book Your First Trip
               </button>
-          </div>
+            </div>
           )}
         </section>
-
       </div>
 
       {/* Comments Section */}
@@ -2250,7 +2149,7 @@ export default function DriverProfilePage() {
             </div>
           )}
         </div>
-        
+
         {comments.length === 0 ? (
           <p className="text-gray-200 text-center py-4">No comments yet.</p>
         ) : (
@@ -2285,11 +2184,10 @@ export default function DriverProfilePage() {
       <section className="bg-white shadow-lg rounded-xl p-4 mb-6">
         <h2 className="text-lg lg:text-xl font-semibold mb-4">Grow Your Driver Business</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Share to Earn Card */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl overflow-hidden">
             <div className="h-32 lg:h-40 bg-blue-100 overflow-hidden">
-              <img 
-                src="/driverShareProfile.jpeg" 
+              <img
+                src="/driverShareProfile.jpeg"
                 alt="Driver Sharing Profile"
                 className="w-full h-full object-cover"
               />
@@ -2312,22 +2210,21 @@ export default function DriverProfilePage() {
                   </div>
                 ))}
               </div>
-             
+
               <div className="mt-6 w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all text-center text-xs lg:text-sm">
-                  <ShareButton 
-                      userId={driverId}
-                      title="Book a Professional Driver on Nomopoventures!"
-                      text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
-                  />
+                <ShareButton
+                  userId={driverId}
+                  title="Book a Professional Driver on Nomopoventures!"
+                  text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
+                />
               </div>
             </div>
           </div>
 
-          {/* VIP Upgrade Card */}
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl overflow-hidden">
             <div className="h-32 lg:h-40 bg-yellow-100 overflow-hidden">
-              <img 
-                src="/vipcard.avif" 
+              <img
+                src="/vipcard.avif"
                 alt="VIP Driver Benefits"
                 className="w-full h-full object-cover"
               />
@@ -2372,7 +2269,7 @@ export default function DriverProfilePage() {
         </h2>
 
         <p className="text-xs lg:text-sm lg:text-base text-gray-300 mb-4 leading-relaxed">
-          For complaints, enquiries, reports and much more — our team is available 
+          For complaints, enquiries, reports and much more — our team is available
           <span className="text-white font-semibold"> 24/7</span>.
         </p>
 
