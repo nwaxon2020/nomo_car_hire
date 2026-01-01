@@ -759,10 +759,10 @@ export default function UserProfilePageUi() {
 
             {/* Transport News Section */}
             <div className="bg-white mt-8 p-2">
-                <h1 className="py-3 text-2xl sm:text-3xl font-bold mb-4 text-center text-gray-800">
+                <h2 className="text-center md:text-left text-lg md:text-2xl font-bold">Latest Transport News</h2>
+                <p className="text-sm mb-3 text-center md:text-left text-gray-600">
                     Latest Transport, Flight, Pricing, Shipping, & Other News
-                </h1><hr />
-
+                </p>
                 <div className="p-2 py-3 w-full rounded max-h-[30rem] overflow-y-auto">
                     <TransportNewsPageUi />
                 </div>

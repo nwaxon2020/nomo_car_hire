@@ -2363,8 +2363,11 @@ export default function DriverProfilePage() {
 
       {/* Transport News */}
       <div className="bg-white mt-6 p-3 lg:p-4 rounded-xl shadow">
-        <h2 className="text-lg lg:text-2xl font-bold mb-3">Latest Transport News</h2>
-        <div className="max-h-[45rem] lg:max-h-90 overflow-y-auto p-2">
+        <h2 className="text-center md:text-left text-lg md:text-2xl font-bold">Latest Transport News</h2>
+        <p className="text-sm mb-3 text-center md:text-left text-gray-600">
+          Latest Transport, Flight, Pricing, Shipping, & Other News
+        </p>
+        <div className="max-h-[45rem] md:max-h-120 overflow-y-auto p-2">
           <TransportNewsPageUi />
         </div>
       </div>
