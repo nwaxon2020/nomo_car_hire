@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation" // Add useSearchParams
+import { useRouter, useSearchParams } from "next/navigation"
 import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
@@ -23,18 +23,19 @@ const VIP_CONFIG = {
 
 export default function PurchasePage() {
   const router = useRouter()
-  const searchParams = useSearchParams() // ✅ Get URL params
+  const searchParams = useSearchParams()
   
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [userData, setUserData] = useState<any>(null)
   const [selectedLevel, setSelectedLevel] = useState<number>(1)
   const [userId, setUserId] = useState<string | null>(null)
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [confirmationData, setConfirmationData] = useState<{level: number, name: string, price: number} | null>(null)
 
   const [benefit, showBenefit] = useState(false)
 
   useEffect(() => {
-    // Get level from URL query parameter first
     const levelFromUrl = searchParams.get("level")
     if (levelFromUrl) {
       const level = parseInt(levelFromUrl)
@@ -45,7 +46,6 @@ export default function PurchasePage() {
     
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        // User not logged in - redirect to login
         toast.error("Please log in to purchase VIP")
         router.push(`/login?redirect=${encodeURIComponent('/purchase')}`)
         return
@@ -61,7 +61,6 @@ export default function PurchasePage() {
           const data = userSnap.data()
           setUserData(data)
           
-          // If no level from URL, check user's current VIP level
           if (!levelFromUrl && data.purchasedVipLevel) {
             setSelectedLevel(data.purchasedVipLevel)
           }
@@ -79,29 +78,35 @@ export default function PurchasePage() {
     })
 
     return () => unsubscribe()
-  }, [router, searchParams]) // ✅ Add searchParams to dependencies
+  }, [router, searchParams])
 
-  const handlePurchase = async (level: number) => {
-    if (processing || !userId) return
-
+  const initiatePurchase = (level: number) => {
     const vipLevel = VIP_CONFIG.levels.find(l => l.level === level)
     if (!vipLevel) {
       toast.error("Invalid VIP level")
       return
     }
 
-    // In a real app, integrate with payment gateway here
+    setConfirmationData({
+      level: vipLevel.level,
+      name: vipLevel.name,
+      price: vipLevel.price
+    })
+    setShowConfirmation(true)
+  }
+
+  const handlePurchase = async () => {
+    if (!confirmationData || processing || !userId) return
+
     setProcessing(true)
+    setShowConfirmation(false)
     
     try {
       const userRef = doc(db, "users", userId)
-
-      // Calculate expiry date (1 year from now)
       const now = new Date()
       const expiryDate = new Date(now)
       expiryDate.setFullYear(expiryDate.getFullYear() + 1)
 
-      // Check if user already has VIP and extend expiry if renewing
       const userSnap = await getDoc(userRef)
       const currentData = userSnap.data()
       
@@ -109,25 +114,35 @@ export default function PurchasePage() {
       let newPurchaseDate = now
 
       if (currentData?.vipExpiryDate && currentData.vipExpiryDate.toDate() > now) {
-        // Extend from current expiry date
         const currentExpiry = currentData.vipExpiryDate.toDate()
         currentExpiry.setFullYear(currentExpiry.getFullYear() + 1)
         newExpiryDate = currentExpiry
         newPurchaseDate = currentData.vipPurchaseDate?.toDate() || now
       }
 
-      // Update user's VIP status
+      const paymentId = `PAY-${Date.now()}`
+      const newPurchaseRecord = {
+        level: confirmationData.level,
+        paymentId: paymentId,
+        price: confirmationData.price,
+        purchaseDate: Timestamp.fromDate(now),
+        previousLevel: currentData?.purchasedVipLevel || 0
+      }
+
+      const existingHistory = currentData?.vipPurchaseHistory || []
+      const updatedHistory = [...existingHistory, newPurchaseRecord]
+
       await updateDoc(userRef, {
-        purchasedVipLevel: level,
-        vipLevel: level,
+        purchasedVipLevel: confirmationData.level,
+        vipLevel: confirmationData.level,
         vipPurchaseDate: Timestamp.fromDate(newPurchaseDate),
         vipExpiryDate: Timestamp.fromDate(newExpiryDate),
+        vipPurchaseHistory: updatedHistory,
         updatedAt: Timestamp.now()
       })
 
-      toast.success(`🎉 Successfully purchased ${vipLevel.name}! Valid for 1 year.`)
+      toast.success(`🎉 Successfully purchased ${confirmationData.name}! Valid for 1 year.`)
       
-      // Redirect back to appropriate profile page
       setTimeout(() => {
         if (currentData?.isDriver) {
           router.push(`/user/driver-profile/${userId}?purchaseSuccess=true`)
@@ -141,7 +156,13 @@ export default function PurchasePage() {
       toast.error("Failed to process purchase")
     } finally {
       setProcessing(false)
+      setConfirmationData(null)
     }
+  }
+
+  const cancelPurchase = () => {
+    setShowConfirmation(false)
+    setConfirmationData(null)
   }
 
   if (loading) {
@@ -156,9 +177,59 @@ export default function PurchasePage() {
     <div className="mx-auto max-w-[1100px] min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6">
       <Toaster position="top-right" />
       
+      {/* Confirmation Modal */}
+      {showConfirmation && confirmationData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-4 md:p-6 animate-scaleIn">
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-2xl">₦</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Purchase</h3>
+              <p className="text-sm md:text-base text-gray-600">Are you sure you want to purchase this VIP package?</p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-2 md:p-4 mb-6">
+              <div className="text-sm md:text-base flex justify-between items-center mb-3">
+                <span className="text-gray-600">VIP Package:</span>
+                <span className="font-semibold text-gray-900">{confirmationData.name}</span>
+              </div>
+              <div className="text-sm md:text-base flex justify-between items-center mb-3">
+                <span className="text-gray-600">Amount:</span>
+                <span className="text-lg md:text-xl font-bold text-gray-900">₦{confirmationData.price.toLocaleString()}</span>
+              </div>
+              <div className="text-sm md:text-base flex justify-between items-center">
+                <span className="text-gray-600">Duration:</span>
+                <span className="font-medium text-gray-900">1 Year</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={cancelPurchase}
+                disabled={processing}
+                className="text-sm md:text-base flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePurchase}
+                disabled={processing}
+                className="text-sm md:text-base flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50"
+              >
+                {processing ? 'Processing...' : 'Yes, Proceed'}
+              </button>
+            </div>
+
+            <p className="text-center text-xs text-gray-500 mt-4">
+              By proceeding, you agree to our Terms of Service
+            </p>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-6xl mx-auto">
 
-        {/* Header */}
         <div className="mb-8">
           <div className="flex flex-col gap-4 justify-between items-start mb-6">
             <div className="w-full flex gap-6 justify-between items-start">
@@ -177,8 +248,6 @@ export default function PurchasePage() {
                 ← Back
               </button>
             </div>
-            {/* BENEFITS SECTION - ADDED AT THE TOP */}
-            {/* Mobie view Only */}
             <p className="md:hidden cursor-pointer text-blue-600 font-semibold" onClick={()=> showBenefit(!benefit)}>{benefit? "Close": "Learn More!!!"}</p>
             {benefit && <div className="md:hidden bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3 shadow-lg">
               <h2 className="md:text-xl font-bold text-purple-800 mb-4">🚀 Why Upgrade to VIP?</h2>
@@ -255,7 +324,6 @@ export default function PurchasePage() {
             </div>
           </div>
 
-          {/* Current Status */}
           {userData && (
             <div className="bg-white rounded-xl shadow p-3 mb-8">
               <h2 className="md:text-lg font-semibold text-gray-800 mb-3">Your Current Status</h2>
@@ -285,7 +353,6 @@ export default function PurchasePage() {
             </div>
           )}
 
-          {/* VIP Levels Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {VIP_CONFIG.levels.map((level) => {
               const isCurrentLevel = userData?.purchasedVipLevel === level.level
@@ -298,7 +365,6 @@ export default function PurchasePage() {
                     isSelected ? 'border-blue-500 border-2 scale-[1.02]' : 'border-gray-200 hover:border-gray-300'
                   } ${isCurrentLevel ? 'border-green-500' : ''}`}
                 >
-                  {/* Level Header */}
                   <div 
                     className={`h-2 ${
                       level.color === 'green' ? 'bg-green-500' :
@@ -356,7 +422,7 @@ export default function PurchasePage() {
                       </button>
 
                       <button
-                        onClick={() => handlePurchase(level.level)}
+                        onClick={() => initiatePurchase(level.level)}
                         disabled={processing || (isCurrentLevel && userData?.vipExpiryDate?.toDate() > new Date())}
                         className={`w-full py-2 rounded-lg font-medium transition-colors ${
                           isCurrentLevel && userData?.vipExpiryDate?.toDate() > new Date()
@@ -378,7 +444,6 @@ export default function PurchasePage() {
             })}
           </div>
 
-          {/* Payment Section */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg p-6 mb-8 border border-blue-200">
             <h2 className="md:text-xl text-center md:text-left font-semibold text-gray-800 mb-4">Complete Your Purchase</h2>
             <div className="space-y-4">
@@ -400,7 +465,7 @@ export default function PurchasePage() {
               </div>
               <div className="pt-4 border-t border-blue-200">
                 <button
-                  onClick={() => handlePurchase(selectedLevel)}
+                  onClick={() => initiatePurchase(selectedLevel)}
                   disabled={processing}
                   className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-sm md:text-base hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                 >
@@ -413,7 +478,6 @@ export default function PurchasePage() {
             </div>
           </div>
 
-          {/* ENHANCED FAQ SECTION - More Attractive */}
           <div className="bg-white rounded-xl shadow-lg p-3 md:p-6 border border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-6">FAQ</h2>
             
@@ -472,36 +536,10 @@ export default function PurchasePage() {
                 </p>
               </div>
             </div>
-            
-            {/* Additional Benefits Summary */}
-            {/* <div className="mt-8 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-              <h3 className="font-bold text-green-800 mb-3 text-lg">🎁 Additional Benefits of VIP:</h3>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-700">
-                <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span> Priority customer support
-                </li>
-                <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span> Exclusive driver training resources
-                </li>
-                <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span> Featured in "Top Drivers" section
-                </li>
-                <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span> Higher commission rates on bookings
-                </li>
-                <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span> Early access to new features
-                </li>
-                <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span> Verified badge on profile
-                </li>
-              </ul>
-            </div> */}
           </div>
         </div>
       </div>
 
-      {/* Close Page Button */}
       <div className="text-center">
         <button
           onClick={() => router.back()}
@@ -510,6 +548,23 @@ export default function PurchasePage() {
           CLOSE
         </button>
       </div>
+
+      {/* Add CSS for animation */}
+      <style jsx>{`
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .animate-scaleIn {
+          animation: scaleIn 0.2s ease-out;
+        }
+      `}</style>
 
     </div>
   )

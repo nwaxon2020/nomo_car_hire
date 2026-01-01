@@ -1104,7 +1104,7 @@ export default function DriverProfilePage() {
       {/* VIP Upgrade Selection Modal */}
       {showVIPUpgradeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full px-4 py-6 md:p-6 relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setShowVIPUpgradeModal(false)}
               className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 text-2xl"
@@ -1113,10 +1113,10 @@ export default function DriverProfilePage() {
             </button>
 
             <div className="text-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
                 {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become a VIP Driver'}
               </h3>
-              <p className="text-gray-600">Earn through referrals or purchase to level up!</p>
+              <p className="text-sm md:text-base text-gray-600">Earn through referrals or purchase to level up!</p>
             </div>
 
             {/* Current VIP Status */}
