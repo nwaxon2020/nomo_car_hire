@@ -40,9 +40,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     pathname.startsWith("/register") ||
     pathname.startsWith("/forgot-password") ||
     pathname === "/user/driver-register" ||
-    pathname === "/user/register" ||
-    pathname === "/purchase"; // ✅ FIXED: removed startsWith, use exact match
-
+    pathname === "/user/purchase"; 
+    
   const { unreadCount } = useUnreadChats();
 
   const getFirstName = (name: string | null | undefined) => {
