@@ -6,6 +6,9 @@ import { authAdmin } from "@/lib/firebaseAdmin";
 const SESSION_DURATION_MS = 60 * 60 * 24 * 7 * 1000;
 
 export async function POST(request: Request) {
+
+  const isProduction = process.env.NODE_ENV === "production";
+
   try {
     // Parse request body
     const { idToken } = await request.json();
@@ -30,14 +33,25 @@ export async function POST(request: Request) {
     });
 
     // Set secure HTTP-only cookie
+    /*response.cookies.set({
+       name: "session",
+       value: sessionCookie,
+       httpOnly: true,
+       secure: process.env.NODE_ENV === "production",
+       maxAge: SESSION_DURATION_MS / 1000,  Convert to seconds
+       path: "/",
+       sameSite: "lax",
+     });
+     */
+
     response.cookies.set({
       name: "session",
       value: sessionCookie,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: SESSION_DURATION_MS / 1000, // Convert to seconds
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: SESSION_DURATION_MS / 1000,
       path: "/",
-      sameSite: "lax",
     });
 
     return response;
@@ -71,13 +85,13 @@ export async function POST(request: Request) {
 }
 
 // Handle CORS preflight requests
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
-}
+/* export async function OPTIONS() {
+   return new NextResponse(null, {
+     status: 200,
+     headers: {
+       "Access-Control-Allow-Origin": "*",
+       "Access-Control-Allow-Methods": "POST, OPTIONS",
+       "Access-Control-Allow-Headers": "Content-Type, Authorization",
+     },
+   });
+}*/

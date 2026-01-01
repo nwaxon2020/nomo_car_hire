@@ -1,25 +1,11 @@
-
-
-
-
-
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
-  const session = req.cookies.get("session")?.value || null;
-  const pathname = req.nextUrl.pathname;
+  const session = req.cookies.get("session")?.value;
 
-  // Public pages (user does NOT need to login)
-  const publicRoutes = ["/", "/login", "/signup", "/forgot-password", "/about"];
-
-  // Allow public pages
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
-  }
-
-  // Protect all /user pages
-  if (pathname.startsWith("/user") && !session) {
+  // If trying to access /user/* without a session → redirect to login
+  if (!session) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
@@ -27,5 +13,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/user/:path*"],
+  matcher: ["/user/:path*"], // ✅ ONLY protect /user routes
 };
