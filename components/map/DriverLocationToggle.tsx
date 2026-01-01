@@ -16,6 +16,8 @@ import {
   FaPhone
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import { storage } from '@/lib/firebaseConfig'; // Import storage
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 interface DriverLocationToggleProps {
   driverId: string;
@@ -40,11 +42,28 @@ export default function DriverLocationToggle({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [activeTime, setActiveTime] = useState(0);
   const [phoneNumber, setPhoneNumber] = useState<string>('');
+  const [driverData, setDriverData] = useState<any>(null); // Added missing state
   const auth = getAuth();
   const currentUser = auth.currentUser;
 
   // Check if current user is this driver
   const isCurrentDriver = currentUser?.uid === driverId;
+
+  // Setting Open and Close variable
+  const [settings, setSettings] = useState(false);
+
+  // Upload function
+  async function uploadFile(file: File, path: string) {
+    const sRef = storageRef(storage, path);
+    const task = uploadBytesResumable(sRef, file);
+    return new Promise<string>((resolve, reject) => {
+      task.on("state_changed", 
+        () => { }, 
+        reject, 
+        async () => resolve(await getDownloadURL(task.snapshot.ref))
+      );
+    });
+  }
 
   // Load driver data
   useEffect(() => {
@@ -57,6 +76,7 @@ export default function DriverLocationToggle({
         
         if (driverDoc.exists()) {
           const data = driverDoc.data();
+          setDriverData(data); // Store driver data
           
           // DIRECT ACCESS - phoneNumber field as you specified
           const driverPhone = data.phoneNumber;
@@ -383,8 +403,8 @@ export default function DriverLocationToggle({
             <FaCar className="text-xl" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Live Location Sharing</h2>
-            <p className="text-gray-600 text-sm">
+            <h2 className="md:text-xl font-bold text-gray-900">Live Location Sharing</h2>
+            <p className="text-gray-600 text-xs md:text-sm">
               Share your real-time location with customers
             </p>
           </div>
@@ -421,108 +441,176 @@ export default function DriverLocationToggle({
         </div>
       )}
 
-      {/* Phone Number Display */}
-      <div className={`mb-4 p-4 rounded-lg border ${phoneNumber ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${phoneNumber ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-              <FaPhone />
-            </div>
-            <div>
-              <h4 className="font-bold text-gray-800">Phone Number</h4>
-              {phoneNumber ? (
-                <p className="text-green-700">
-                  ✓ Verified: <span className="font-semibold">{phoneNumber}</span>
-                </p>
-              ) : (
-                <p className="text-red-700">
-                  ❌ Required for location sharing
-                </p>
+      {/* Location & Phone number */}
+      {settings && <div>
+          {/* Phone Number Display */}
+          <div className={`mb-4 p-4 rounded-lg border ${phoneNumber ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${phoneNumber ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                  <FaPhone />
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-800 text-sm md:text-base">Phone Number</h4>
+                  {phoneNumber ? (
+                    <p className="text-sm md:text-base text-green-700">
+                      ✓ Verified: <span className="font-semibold">{phoneNumber}</span>
+                    </p>
+                  ) : (
+                    <p className="text-red-700">
+                      ❌ Required for location sharing
+                    </p>
+                  )}
+                </div>
+              </div>
+              {phoneNumber && (
+                <button 
+                  onClick={() => window.location.href = '/profile/edit'}
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Change
+                </button>
               )}
             </div>
           </div>
-          {phoneNumber && (
-            <button 
-              onClick={() => window.location.href = '/profile/edit'}
-              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-            >
-              Change
-            </button>
-          )}
-        </div>
-      </div>
 
-      {/* Location Status */}
-      {isLocationOn && currentLocation && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex items-center gap-2 mb-3">
-            <FaCheckCircle className="text-blue-600" />
-            <h4 className="font-bold text-blue-800">Location is Live</h4>
-          </div>
-          
-          <div className="space-y-3">
-            {currentLocation.address && (
-              <div className="bg-white p-3 rounded-lg border border-blue-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <FaMapMarkerAlt className="text-blue-500" />
-                  <span className="text-sm font-medium text-gray-700">Current Address</span>
+          {/* Profile Image Update */}
+          <div className="mb-4 p-4 rounded-lg border bg-gray-50 border-gray-200">
+            <div className="flex flex-col lg:flex-row items-center gap-3">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-100 rounded-full overflow-hidden">
+                  {driverData?.profileImage ? (
+                    <img
+                      src={driverData.profileImage}
+                      alt="Current Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-600">
+                      <span className="text-lg">👤</span>
+                    </div>
+                  )}
                 </div>
-                <p className="text-gray-800 text-sm">{currentLocation.address}</p>
               </div>
-            )}
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white p-3 rounded-lg border border-blue-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <FaClock className="text-blue-500" />
-                  <span className="text-sm font-medium text-gray-700">Active Time</span>
-                </div>
-                <p className="text-gray-800 font-semibold">{formatActiveTime(activeTime)}</p>
-              </div>
-              
-              <div className="bg-white p-3 rounded-lg border border-blue-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <FaSignal className="text-blue-500" />
-                  <span className="text-sm font-medium text-gray-700">Accuracy</span>
-                </div>
-                <p className="text-gray-800 font-semibold">{getAccuracyLevel(currentLocation.accuracy)}</p>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">Update Profile Image</h3>
+                <p className="text-xs text-gray-500 mb-2">A professional photo helps build trust with passengers</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file && driverId) {
+                      try {
+                        const timestamp = Date.now();
+                        const url = await uploadFile(file, `driverProfiles/${driverId}/${timestamp}_profile.jpg`);
+  
+                        const userRef = doc(db, "users", driverId);
+                        await updateDoc(userRef, {
+                          profileImage: url,
+                          updatedAt: Timestamp.now()
+                        });
+  
+                        toast.success("Profile image updated successfully!");
+                        
+                        // Update local state
+                        setDriverData((prev: any) => ({
+                          ...prev,
+                          profileImage: url
+                        }));
+                      } catch (err) {
+                        console.error("Error uploading profile image:", err);
+                        toast.error("Failed to upload profile image");
+                      }
+                    }
+                  }}
+                />
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Main Control Button */}
-      <button
-        onClick={isLocationOn ? stopLocationTracking : startLocationTracking}
-        disabled={isLoading || (!phoneNumber && !isLocationOn)}
-        className={`w-full py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-          isLoading 
-            ? 'bg-gray-300 text-gray-600 cursor-not-allowed' 
-            : !phoneNumber && !isLocationOn
-              ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-              : isLocationOn 
-                ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white'
-                : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-        }`}
-      >
-        {isLoading ? (
-          <>
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            Starting...
-          </>
-        ) : isLocationOn ? (
-          <>
-            <FaStopCircle />
-            Stop Sharing Location
-          </>
-        ) : (
-          <>
-            <FaLocationArrow />
-            Start Sharing Location
-          </>
-        )}
-      </button>
+          {/* Location Status */}
+          {isLocationOn && currentLocation && (
+            <div className="text-sm md:text-base mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-2 mb-3">
+                <FaCheckCircle className="text-blue-600" />
+                <h4 className="font-bold text-blue-800">Location is Live</h4>
+              </div>
+              
+              <div className="space-y-3">
+                {currentLocation.address && (
+                  <div className="bg-white p-3 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FaMapMarkerAlt className="text-blue-500" />
+                      <span className="text-sm font-medium text-gray-700">Current Address</span>
+                    </div>
+                    <p className="text-gray-800 text-sm">{currentLocation.address}</p>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white p-3 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FaClock className="text-blue-500" />
+                      <span className="text-sm font-medium text-gray-700">Active Time</span>
+                    </div>
+                    <p className="text-gray-800 font-semibold">{formatActiveTime(activeTime)}</p>
+                  </div>
+                  
+                  <div className="bg-white p-3 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FaSignal className="text-blue-500" />
+                      <span className="text-sm font-medium text-gray-700">Accuracy</span>
+                    </div>
+                    <p className="text-gray-800 font-semibold">{getAccuracyLevel(currentLocation.accuracy)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Control Button */}
+          <button
+            onClick={isLocationOn ? stopLocationTracking : startLocationTracking}
+            disabled={isLoading || (!phoneNumber && !isLocationOn)}
+            className={`text-sm md:text-base mb-8 w-full py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
+              isLoading 
+                ? 'bg-gray-300 text-gray-600 cursor-not-allowed' 
+                : !phoneNumber && !isLocationOn
+                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                  : isLocationOn 
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white'
+                    : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+            }`}
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                Starting...
+              </>
+            ) : isLocationOn ? (
+              <>
+                <FaStopCircle />
+                Stop Sharing Location
+              </>
+            ) : (
+              <>
+                <FaLocationArrow />
+                Start Sharing Location
+              </>
+            )}
+          </button>
+        </div>
+      }
+
+      {/* Setting open and close button */}
+      <div className="text-right">
+        <button onClick={()=> setSettings(!settings)} className="border rounded-lg px-4 py-1 text-right cursor-pointer text-gray-400">
+          <span className="text-black text-xs md:text-sm font-semibold">{settings?"Close":"Open Settings"}</span>
+        </button>
+      </div>
+
     </div>
   );
 }

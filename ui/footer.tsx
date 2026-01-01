@@ -353,14 +353,14 @@ export default function Footer() {
           
           <div className="relative">
             {/* Header */}
-            <div className="text-center mb-8 sm:mb-10">
+            <div className="text-center md:text-left mb-8 sm:mb-10">
               <div className="inline-flex items-center justify-center w-12 sm:w-16 h-12 sm:h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl shadow-lg mb-3 sm:mb-4">
                 <FaGem className="text-white text-xl sm:text-2xl" />
               </div>
               <h3 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 sm:mb-3">
                 Premium Experiences
               </h3>
-              <p className="text-blue-700 max-w-2xl mx-auto text-sm sm:text-lg">
+              <p className="text-blue-700 text-sm md:text-lg">
                 Join thousands who trust us for exceptional service
               </p>
             </div>

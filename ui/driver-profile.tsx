@@ -16,6 +16,25 @@ import DriverLocationToggle from "@/components/map/DriverLocationToggle";
 import TripHistoryCard from "@/components/map/TripHistoryCard";
 import { toast, Toaster } from "react-hot-toast";
 
+// Helper functions for persisting VIP level across sessions
+const getStoredVipLevel = (driverId: string): number | null => {
+  try {
+    const stored = localStorage.getItem(`driver-${driverId}-vipLevel`);
+    return stored ? parseInt(stored) : null;
+  } catch {
+    // localStorage might be unavailable (SSR, private browsing)
+    return null;
+  }
+};
+
+const setStoredVipLevel = (driverId: string, level: number) => {
+  try {
+    localStorage.setItem(`driver-${driverId}-vipLevel`, level.toString());
+  } catch {
+    // Ignore localStorage errors (SSR, private browsing)
+  }
+};
+
 // Capitalize full name
 const capitalizeFullName = (name: string) =>
   name?.split(" ").filter(Boolean)
@@ -35,8 +54,8 @@ const VIP_CONFIG = {
   referralMultiplier: 5,
 };
 
-// Helper function to calculate VIP details
-const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number) => {
+// Helper function to calculate VIP details with expiry
+const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, vipExpiryDate?: Timestamp) => {
   let referralBasedLevel = 0;
   for (let i = 0; i < VIP_CONFIG.levels.length; i++) {
     if (referralCount >= VIP_CONFIG.levels[i].referralsRequired) {
@@ -46,8 +65,14 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number) =
     }
   }
 
+  // Check if VIP has expired
+  const isExpired = vipExpiryDate ? vipExpiryDate.toDate() < new Date() : false;
+  
+  // If expired, reset purchased VIP level to 0
+  const effectivePurchasedLevel = isExpired ? 0 : purchasedVipLevel;
+
   const vipLevel = Math.min(
-    Math.max(purchasedVipLevel, referralBasedLevel),
+    Math.max(effectivePurchasedLevel, referralBasedLevel),
     VIP_CONFIG.maxLevel
   );
 
@@ -96,12 +121,13 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number) =
     referralsForNext,
     progressPercentage: Math.min(progressPercentage, 100),
     isMaxLevel: vipLevel >= VIP_CONFIG.maxLevel,
+    isExpired,
     currentLevelName: vipLevel > 0 ? VIP_CONFIG.levels[vipLevel - 1]?.name : "No VIP",
     nextLevelName: vipLevel < VIP_CONFIG.maxLevel
       ? VIP_CONFIG.levels[vipLevel]?.name
       : `Prestige LV${prestigeLevel + 1}`,
   };
-};
+}; //chnaged.......................1
 
 // Initialize VIP fields if they don't exist
 const initializeVIPFields = async (driverId: string) => {
@@ -124,9 +150,22 @@ const initializeVIPFields = async (driverId: string) => {
         needsUpdate = true;
       }
 
+      // Check if VIP has expired and reset if needed
+      const now = new Date();
+      if (data.vipExpiryDate && data.vipExpiryDate.toDate() < now) {
+        updates.purchasedVipLevel = 0;
+        updates.vipLevel = 0;
+        updates.vipExpiryDate = null;
+        updates.vipPurchaseDate = null;
+        needsUpdate = true;
+        
+        // Also reset prestige level if needed
+        updates.prestigeLevel = 0;
+      }
+
       const referralCount = data.referralCount || 0;
-      const purchasedVipLevel = data.purchasedVipLevel || 0;
-      const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+      const purchasedVipLevel = updates.purchasedVipLevel !== undefined ? updates.purchasedVipLevel : data.purchasedVipLevel || 0;
+      const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel, data.vipExpiryDate);
 
       if (data.vipLevel === undefined || data.vipLevel !== vipDetails.vipLevel) {
         updates.vipLevel = vipDetails.vipLevel;
@@ -148,14 +187,15 @@ const initializeVIPFields = async (driverId: string) => {
   } catch (error) {
     console.error("Error initializing VIP fields:", error);
   }
-};
+}; //chnaged.......................2
 
 // VIP Star Component
-const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
+const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true, isExpired = false }: {
   level: number,
   prestigeLevel?: number,
   size?: "sm" | "md" | "lg",
-  showLabel?: boolean
+  showLabel?: boolean,
+  isExpired?: boolean
 }) => {
   if (level <= 0) return null;
 
@@ -191,12 +231,15 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
   };
 
   return (
-    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getBackgroundColor(vipDetails.color)} border shadow-sm`}>
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getBackgroundColor(vipDetails.color)} border shadow-sm ${isExpired ? 'opacity-60' : ''}`}>
+      {isExpired && (
+        <span className="text-xs text-red-600 font-semibold mr-1">EXPIRED</span>
+      )}
       <div className="flex items-center gap-0.5">
         {Array.from({ length: vipDetails.stars }).map((_, i) => (
           <svg
             key={i}
-            className={`${sizeClasses[size]} ${getStarColor(vipDetails.color)} fill-current`}
+            className={`${sizeClasses[size]} ${getStarColor(vipDetails.color)} fill-current ${isExpired ? 'opacity-50' : ''}`}
             viewBox="0 0 24 24"
           >
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
@@ -215,11 +258,12 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true }: {
           vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
           }`}>
           {vipDetails.name}
+          {isExpired && ' (Expired)'}
         </span>
       )}
     </div>
   );
-};
+};// Changed........................4
 
 interface Vehicle {
   id?: string;
@@ -347,12 +391,28 @@ export default function DriverProfilePage() {
             let vipLevel = data.vipLevel || 0;
             let prestigeLevel = data.prestigeLevel || 0;
 
+            // Get stored VIP level for this driver
+            const storedVipLevel = getStoredVipLevel(driverId);
+            
+            // Calculate what the VIP level should be
             const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel);
-
+            
+            // Check if we need to update the VIP level in Firestore
             if (calculatedVIP.vipLevel !== vipLevel || calculatedVIP.prestigeLevel !== prestigeLevel) {
               vipLevel = calculatedVIP.vipLevel;
               prestigeLevel = calculatedVIP.prestigeLevel;
-
+              
+              // Show congratulatory toast ONLY if this is a real level-up
+              // (storedVipLevel is null on first load, so no toast on initial page load)
+              if (storedVipLevel !== null && vipLevel > storedVipLevel) {
+                const newLevelName = VIP_CONFIG.levels[vipLevel - 1]?.name;
+                toast.success(`🎉 Congratulations! You've reached ${newLevelName}!`, {
+                  duration: 5000,
+                  icon: '⭐',
+                });
+              }
+              
+              // Update VIP level in Firestore
               try {
                 await updateDoc(userRef, {
                   vipLevel: vipLevel,
@@ -363,7 +423,11 @@ export default function DriverProfilePage() {
                 console.error("Error updating VIP levels:", updateError);
               }
             }
+            
+            // Always update localStorage with current VIP level
+            setStoredVipLevel(driverId, vipLevel);
 
+            // Update state with the data
             setDriverData({ ...data, profileImage, fullName });
             setReferralCount(referralCount);
             setVipLevel(vipLevel);
@@ -402,15 +466,6 @@ export default function DriverProfilePage() {
 
             if (data.contactedDrivers) {
               setContactedDrivers(data.contactedDrivers);
-            }
-
-            const oldVipLevel = driverData?.vipLevel || 0;
-            if (vipLevel > oldVipLevel && vipLevel > 0) {
-              const newLevelName = VIP_CONFIG.levels[vipLevel - 1]?.name;
-              toast.success(`🎉 Congratulations! You've reached ${newLevelName}!`, {
-                duration: 5000,
-                icon: '⭐',
-              });
             }
 
             loadTripHistory();
@@ -553,14 +608,6 @@ export default function DriverProfilePage() {
   const handleRateTrip = (driverId: string, vehicleId: string) => {
     router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
   };
-
-  async function uploadFile(file: File, path: string) {
-    const sRef = storageRef(storage, path);
-    const task = uploadBytesResumable(sRef, file);
-    return new Promise<string>((resolve, reject) => {
-      task.on("state_changed", () => { }, reject, async () => resolve(await getDownloadURL(task.snapshot.ref)));
-    });
-  }
 
   const submitVehicle = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1319,6 +1366,7 @@ export default function DriverProfilePage() {
           <div className="lg:w-1/2">
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4 mb-4">
               <div className="relative">
+                {/* Profile Image */}
                 <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-full overflow-hidden border-4 border-gray-100 shadow-sm">
                   {driverData?.profileImage ? (
                     <img
@@ -1340,6 +1388,7 @@ export default function DriverProfilePage() {
                 )}
               </div>
 
+              {/* Infos */}
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
@@ -1462,6 +1511,86 @@ export default function DriverProfilePage() {
                 </button>
               </div>
             </div>
+
+            {/* VIP Expiry Status */}
+            {driverData?.vipExpiryDate && vipLevel > 0 && (
+              <div className="mb-4 p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                      <span className="text-amber-600">⏰</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">VIP Status</p>
+                      <p className="text-xs text-amber-600">
+                        {(() => {
+                          const expiryDate = driverData.vipExpiryDate.toDate()
+                          const now = new Date()
+                          const diffTime = expiryDate.getTime() - now.getTime()
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+                          
+                          if (diffDays <= 0) {
+                            return "VIP has expired"
+                          } else if (diffDays <= 7) {
+                            return `Expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`
+                          } else if (diffDays <= 30) {
+                            const weeks = Math.floor(diffDays / 7)
+                            return `Expires in ${weeks} week${weeks !== 1 ? 's' : ''}`
+                          } else {
+                            const months = Math.floor(diffDays / 30)
+                            return `Valid for ${months} month${months !== 1 ? 's' : ''}`
+                          }
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  {(() => {
+                    const expiryDate = driverData.vipExpiryDate.toDate()
+                    const now = new Date()
+                    const diffDays = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    
+                    if (diffDays <= 30) {
+                      return (
+                        <button
+                          onClick={() => router.push(`/user/purchase?level=${vipLevel}`)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-colors"
+                        >
+                          Renew
+                        </button>
+                      )
+                    }
+                    return null
+                  })()}
+                </div>
+                
+                {/* Progress bar for expiry */}
+                {(() => {
+                  const expiryDate = driverData.vipExpiryDate.toDate()
+                  const purchaseDate = driverData.vipPurchaseDate?.toDate() || new Date()
+                  const now = new Date()
+                  
+                  const totalDuration = 365 * 24 * 60 * 60 * 1000 // 1 year in milliseconds
+                  const elapsed = now.getTime() - purchaseDate.getTime()
+                  const percentage = Math.min((elapsed / totalDuration) * 100, 100)
+                  
+                  return (
+                    <div className="mt-2">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-amber-700">Time remaining</span>
+                        <span className="text-amber-700">{Math.round(100 - percentage)}%</span>
+                      </div>
+                      <div className="w-full bg-amber-200 rounded-full h-1.5">
+                        <div 
+                          className="h-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500" 
+                          style={{ width: `${100 - percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+            {/* Change..................................................3 */}
           </div>
 
           {/* Stats Grid */}
@@ -1546,55 +1675,6 @@ export default function DriverProfilePage() {
           </div>
         </div>
 
-        {/* Profile Image Update */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="flex flex-col lg:flex-row items-center gap-3">
-            <div className="flex-shrink-0">
-              <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-100 rounded-full overflow-hidden">
-                {driverData?.profileImage ? (
-                  <img
-                    src={driverData.profileImage}
-                    alt="Current Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-600">
-                    <span className="text-lg">👤</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-medium text-gray-700 mb-1">Update Profile Image</h3>
-              <p className="text-xs text-gray-500 mb-2">A professional photo helps build trust with passengers</p>
-              <input
-                type="file"
-                accept="image/*"
-                className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file && driverId) {
-                    try {
-                      const timestamp = Date.now();
-                      const url = await uploadFile(file, `driverProfiles/${driverId}/${timestamp}_profile.jpg`);
-
-                      const userRef = doc(db, "users", driverId);
-                      await updateDoc(userRef, {
-                        profileImage: url,
-                        updatedAt: Timestamp.now()
-                      });
-
-                      toast.success("Profile image updated successfully!");
-                    } catch (err) {
-                      console.error("Error uploading profile image:", err);
-                      toast.error("Failed to upload profile image");
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Add Vehicle Form */}
