@@ -77,11 +77,25 @@ interface Driver {
   customersCarried?: string[];
   // VIP FIELDS BASED ON YOUR SYSTEM
   isVip?: boolean;
-  vipLevel?: number; // Calculated level (0-5)
-  purchasedVipLevel?: number; // Purchased level (0-5)
-  prestigeLevel?: number; // For level 5+
+  vipLevel?: number;
+  purchasedVipLevel?: number;
+  prestigeLevel?: number;
   referralCount?: number;
-  vipBadge?: string; // This might not exist, we'll calculate it
+  vipBadge?: string;
+  
+  // ADD THESE LOCATION FIELDS
+  location?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    address?: string;
+    timestamp?: any; // Firestore Timestamp
+    isSharing: boolean;
+    vehicleId?: string;
+  };
+  isLocationActive?: boolean;
+  locationSharedAt?: any; // Firestore Timestamp
+  lastLocationUpdate?: any; // Firestore Timestamp
 }
 
 interface DriverWithVehicle extends Driver {
@@ -727,6 +741,7 @@ export default function CarHireUi() {
             
             driversSnapshot.forEach(doc => {
                 const data = doc.data();
+                // In fetchDrivers
                 const driver: Driver = {
                     id: doc.id,
                     uid: data.uid || doc.id,
@@ -747,11 +762,18 @@ export default function CarHireUi() {
                     averageRating: data.averageRating || 0,
                     totalRatings: data.totalRatings || 0,
                     customersCarried: data.customersCarried || [],
+                    isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
                     vipLevel: data.vipLevel || 0,
                     purchasedVipLevel: data.purchasedVipLevel || 0,
                     prestigeLevel: data.prestigeLevel || 0,
                     referralCount: data.referralCount || 0,
-                    isVip: (data.vipLevel || 0) > 0 || (data.purchasedVipLevel || 0) > 0,
+                    vipBadge: data.vipBadge || "",
+                    
+                    // LOCATION FIELDS
+                    location: data.location || undefined,
+                    isLocationActive: data.isLocationActive || false,
+                    locationSharedAt: data.locationSharedAt || undefined,
+                    lastLocationUpdate: data.lastLocationUpdate || undefined,
                 };
 
                 // Skip if this driver is the current user (prevent self-booking)
@@ -856,10 +878,33 @@ export default function CarHireUi() {
         }
     }
 
-    // Filter drivers by location, category, AC, and verification
+    // Filter drivers by location, category, AC, verification, and location sharing status
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
         return driver.vehicles
         .filter((vehicle) => {
+            // Check if driver has location sharing enabled
+            const locationSharingOn = 
+                (driver.location && driver.location.isSharing === true) || 
+                driver.isLocationActive === true;
+            
+            // Skip driver if location sharing is not enabled
+            if (!locationSharingOn) {
+                return false;
+            }
+            
+            // Check if location was updated recently (e.g., within last 30 minutes)
+            // This prevents showing drivers who turned on location but then went offline
+            if (driver.lastLocationUpdate) {
+                const lastUpdate = driver.lastLocationUpdate.toDate(); // Convert Firestore Timestamp
+                const now = new Date();
+                const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+                
+                // Don't show drivers who haven't updated location in over 30 minutes
+                if (minutesSinceUpdate > 30) {
+                    return false;
+                }
+            }
+            
             const locationMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
                                 driver.state?.toLowerCase().includes(searchLocation.toLowerCase()) ||
                                 searchLocation === ""

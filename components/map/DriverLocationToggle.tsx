@@ -396,7 +396,7 @@ export default function DriverLocationToggle({
   }
 
   return (
-    <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
+    <div className="px-4 py-6 md:p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={`p-3 rounded-full ${isLocationOn ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
@@ -405,7 +405,7 @@ export default function DriverLocationToggle({
           <div>
             <h2 className="md:text-xl font-bold text-gray-900">Live Location Sharing</h2>
             <p className="text-gray-600 text-xs md:text-sm">
-              Share your real-time location with customers
+              {isLocationOn? "Location On": <><span className="font-semibold text-gray-400">Location Off - </span>Turn on your location to become visible to passengers</>}
             </p>
           </div>
         </div>
