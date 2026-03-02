@@ -1,3 +1,4 @@
+// app/dashboard/layout.tsx (or wherever your SidebarPageUi is)
 "use client";
 
 import { useState, useEffect } from "react";
@@ -26,22 +27,15 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [isDriver, setIsDriver] = useState(false);
-  const [displayName, setDisplayName] = useState("fetching...");
+  const [displayName, setDisplayName] = useState("");
   const [photoURL, setPhotoURL] = useState("/profile.png");
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
 
-  // FIXED: Properly check for purchase page
-  const hideSidebar =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register") ||
-    pathname.startsWith("/forgot-password") ||
-    pathname === "/user/driver-register" ||
-    pathname === "/user/purchase"; 
-    
   const { unreadCount } = useUnreadChats();
 
   const getFirstName = (name: string | null | undefined) => {
@@ -59,14 +53,19 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       setAuthChecking(true);
 
       if (!user) {
-        // FIX: Don't redirect if on purchase page
-        if (!hideSidebar) {
-          router.push("/login");
-        }
+        // User is not authenticated - redirect to login
+        console.log("No authenticated user, redirecting to login");
+        setIsAuthenticated(false);
         setAuthChecking(false);
+        
+        // Redirect to login page with return URL
+        const returnUrl = encodeURIComponent(pathname);
+        router.push(`/login?redirect=${returnUrl}`);
         return;
       }
 
+      // User is authenticated
+      setIsAuthenticated(true);
       setUserId(user.uid);
 
       try {
@@ -103,7 +102,24 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     });
 
     return () => unsub();
-  }, [router, hideSidebar]);
+  }, [router, pathname]);
+
+  // Handle loading state
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Verifying authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authenticated, don't render anything (redirect already happened)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const dashboardRoute = isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`;
 
@@ -132,99 +148,86 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     }
   };
 
-  if (authChecking && !hideSidebar) {
-    return (
-      <div className="flex min-h-screen bg-gray-100 items-center justify-center">
-        <div className="text-gray-700">Loading...</div>
-      </div>
-    );
-  }
-
   return (
     <>
       <Script
         src="https://js.paystack.co/v1/inline.js"
         strategy="beforeInteractive"
       />
-      {/* ADDEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD */}
 
       <div className="flex min-h-screen bg-gray-100">
-        {/* MOBILE TOGGLE - Only show if not on purchase page */}
-        {!hideSidebar && !authChecking && (
-          <div className="md:hidden absolute top-6 right-4 z-50">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-white text-2xl"
-            >
-              {sidebarOpen ? <FaTimes /> : <FaBars />}
-            </button>
-          </div>
-        )}
-
-        {/* SIDEBAR - Only show if not on purchase page */}
-        {!hideSidebar && !authChecking && (
-          <aside
-            className={`z-30 border-r border-gray-50 sm:border-0 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col 
-              transform transition-transform duration-300
-              ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-              md:translate-x-0 md:static`}
+        {/* MOBILE TOGGLE */}
+        <div className="md:hidden absolute top-6 right-4 z-50">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="text-white text-2xl"
           >
-            <div className="p-6 bg-gray-900 flex flex-col items-center">
-              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white mb-4">
-                <img
-                  src={photoURL}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "/profile.png";
-                  }}
-                />
-              </div>
+            {sidebarOpen ? <FaTimes /> : <FaBars />}
+          </button>
+        </div>
 
-              {displayName === "fetching..." ? (
-                <div className="text-xl font-semibold">
-                  <LoadingDots />
-                </div>
-              ) : (
-                <h2 className="text-xl font-bold">
-                  <small className="font-normal text-sm">Hello{" "}</small>
-                  {displayName}
-                </h2>
-              )}
+        {/* SIDEBAR */}
+        <aside
+          className={`z-30 border-r border-gray-50 sm:border-0 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col 
+            transform transition-transform duration-300
+            ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+            md:translate-x-0 md:static`}
+        >
+          <div className="p-6 bg-gray-900 flex flex-col items-center">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white mb-4">
+              <img
+                src={photoURL}
+                alt="Profile"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/profile.png";
+                }}
+              />
             </div>
 
-            <nav className="flex-1 mt-6 flex flex-col">
-              {menuItems.map((item: any) => (
-                <button
-                  key={item.name}
-                  onClick={() => {
-                    if (item.name === "Logout") {
-                      handleLogout();
-                    } else if (item.href) {
-                      router.push(item.href);
-                      setSidebarOpen(false);
-                    }
-                  }}
-                  className={`flex items-center w-full px-6 py-3 hover:bg-green-800 transition-colors relative
-                    ${pathname === item.href ? "bg-gray-800 font-bold" : "font-semibold"}`}
-                >
-                  <span className="mr-3 text-lg">
-                    {item.icon}
+            {displayName === "fetching..." ? (
+              <div className="text-xl font-semibold">
+                <LoadingDots />
+              </div>
+            ) : (
+              <h2 className="text-xl font-bold">
+                <small className="font-normal text-sm">Hello </small>
+                {displayName}
+              </h2>
+            )}
+          </div>
+
+          <nav className="flex-1 mt-6 flex flex-col">
+            {menuItems.map((item: any) => (
+              <button
+                key={item.name}
+                onClick={() => {
+                  if (item.name === "Logout") {
+                    handleLogout();
+                  } else if (item.href) {
+                    router.push(item.href);
+                    setSidebarOpen(false);
+                  }
+                }}
+                className={`flex items-center w-full px-6 py-3 hover:bg-green-800 transition-colors relative
+                  ${pathname === item.href ? "bg-gray-800 font-bold" : "font-semibold"}`}
+              >
+                <span className="mr-3 text-lg">
+                  {item.icon}
+                </span>
+                {item.name}
+
+                {item.name === "Chat" && unreadCount > 0 && (
+                  <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
-                  {item.name}
+                )}
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-                  {item.name === "Chat" && unreadCount > 0 && (
-                    <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
-          </aside>
-        )}
-
-        {/* MAIN CONTENT - EXACTLY AS YOUR ORIGINAL */}
+        {/* MAIN CONTENT */}
         <main className="flex-1 p-4 px-1 md:px-2">
           {msg && (
             <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4 text-center">
