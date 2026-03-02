@@ -18,9 +18,8 @@ import {
   increment,
   collection,
   getDocs,
-  serverTimestamp // ← ADDED THIS IMPORT
+  serverTimestamp 
 } from "firebase/firestore";
-import axios from "axios";
 import Link from "next/link";
 import LoadingRound from "@/components/re-useable-loading";
 
@@ -28,7 +27,7 @@ export default function LoginUi() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const referralShortId = searchParams.get("ref"); // ?ref=xxxxxxx
+  const referralShortId = searchParams.get("ref");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,40 +43,21 @@ export default function LoginUi() {
   const [referrerId, setReferrerId] = useState<string | null>(null);
   const [referrerData, setReferrerData] = useState<any>(null);
 
-  // Referral constants
   const POINTS_PER_REFERRAL = 2;
   const POINTS_REQUIRED_PER_FREE_RIDE = 20;
 
-  // Token exchange function from first code
- const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
+  // FIXED: No more Axios/Cookie API calls. Just direct redirect.
+  const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
     try {
-      const idToken = await userCredential.user.getIdToken();
-      
-      // We use axios to hit your /api/login route
-      const response = await axios.post("/api/login", 
-        { idToken },
-        { 
-          withCredentials: true, // Crucial for setting cookies
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-
-      if (response.data.success) {
-        // Use window.location.href for a hard refresh to ensure 
-        // the new session cookie is picked up by Middleware/Layouts
-        window.location.href = "/"; 
-      } else {
-        throw new Error("Login API returned success: false");
-      }
-    } catch (err: any) {
-      console.error("Token exchange error:", err);
-      // Detailed error logging to help you see if it's a 500 or 401
-      const status = err.response?.status;
-      setError(`Session failed (${status || 'Network Error'}). Please try again.`);
+      // Firebase Client SDK handles the session automatically in the browser.
+      // This works on Vercel exactly like it does on Localhost.
+      router.push("/");
+    } catch (err) {
+      console.error("Redirect error:", err);
+      setError("Login successful, but redirect failed.");
     }
   };
 
-  // Error mapping function from first code
   const mapFirebaseError = (msg: string) => {
     if (msg.includes("auth/invalid-credential")) return "Invalid email or password.";
     if (msg.includes("auth/user-not-found")) return "No account found.";
@@ -86,7 +66,6 @@ export default function LoginUi() {
     return "Something went wrong.";
   };
 
-  // FIND REFERRER
   useEffect(() => {
     if (referralShortId && referralShortId.length === 8) {
       findReferrerByShortId(referralShortId);
@@ -97,10 +76,7 @@ export default function LoginUi() {
     try {
       const usersRef = collection(db, "users");
       const querySnapshot = await getDocs(usersRef);
-
-      const refDoc = querySnapshot.docs.find((doc) =>
-        doc.id.endsWith(shortId)
-      );
+      const refDoc = querySnapshot.docs.find((doc) => doc.id.endsWith(shortId));
 
       if (refDoc) {
         setReferrerId(refDoc.id);
@@ -111,29 +87,18 @@ export default function LoginUi() {
     }
   };
 
-  // Get referral short ID
   const getReferralShortId = (uid: string) => uid.slice(-8);
 
-  // ✅ UPDATED: Create clean user data WITH NOTIFICATION FIELDS
-  const createUserData = (
-    baseData: any,
-    authType: string,
-    referrerFullId: string | null
-  ) => {
+  const createUserData = (baseData: any, authType: string, referrerFullId: string | null) => {
     const userShortId = getReferralShortId(baseData.uid);
-
     return {
       ...baseData,
       authType,
-      createdAt: serverTimestamp(), // ← CHANGED to serverTimestamp
-
-      // App Required Data
+      createdAt: serverTimestamp(),
       isDriver: false,
       vip: false,
       hiredCars: [],
       contactedDrivers: [],
-
-      // Referral system
       referralShortId: userShortId,
       referredBy: referrerFullId,
       referralPoints: 0,
@@ -142,15 +107,11 @@ export default function LoginUi() {
       freeRides: 0,
       lastFreeRideEarned: null,
       totalPointsEarned: 0,
-
-      // ✅ NEW: NOTIFICATION FIELDS (same as signup)
       notificationEnabled: true,
       notifications: [],
       hasUnreadNotifications: false,
       lastNotification: null,
       fcmToken: "",
-      
-      // ✅ NEW: PROFILE FIELDS
       city: "",
       phone: "",
       rating: 0,
@@ -158,17 +119,10 @@ export default function LoginUi() {
       earnings: 0,
       isEmailVerified: authType === "google" ? true : false,
       lastActive: serverTimestamp(),
-      
-      // Preferences
-      preferences: {
-        theme: "light",
-        language: "en",
-        currency: "NGN"
-      }
+      preferences: { theme: "light", language: "en", currency: "NGN" }
     };
   };
 
-  // ✅ UPDATED: Award points to referrer with notification
   const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
     try {
       await updateDoc(doc(db, "users", referrerFullId), {
@@ -184,24 +138,18 @@ export default function LoginUi() {
 
       const refDoc = await getDoc(doc(db, "users", referrerFullId));
       const refData = refDoc.data();
-      const updatedPoints =
-        (refData?.referralPoints || 0) + POINTS_PER_REFERRAL;
+      const updatedPoints = (refData?.referralPoints || 0) + POINTS_PER_REFERRAL;
 
       if (updatedPoints % POINTS_REQUIRED_PER_FREE_RIDE === 0) {
         const freeRides = Math.floor(updatedPoints / POINTS_REQUIRED_PER_FREE_RIDE);
-        
         await updateDoc(doc(db, "users", referrerFullId), {
           freeRides: freeRides,
           lastFreeRideEarned: new Date(),
-        });
-
-        // ✅ ADDED: Send notification about free ride
-        await updateDoc(doc(db, "users", referrerFullId), {
           notifications: arrayUnion({
             id: Date.now().toString(),
             type: "free_ride_earned",
             title: "🎉 Free Ride Earned!",
-            message: `You earned a free ride from referral! You now have ${freeRides} free ride(s).`,
+            message: `You earned a free ride! You now have ${freeRides} free ride(s).`,
             timestamp: new Date().toISOString(),
             read: false,
             actionUrl: "/user/bookings"
@@ -214,12 +162,8 @@ export default function LoginUi() {
     }
   };
 
-  // ✅ NEW: Helper function to ensure user has notification fields
   const ensureNotificationFields = async (userId: string, userData: any) => {
-    // Check if user has notification fields (for existing users before this update)
     if (!userData.hasOwnProperty('notificationEnabled')) {
-      console.log(`🔄 Adding notification fields to existing user: ${userId}`);
-      
       await updateDoc(doc(db, "users", userId), {
         notificationEnabled: true,
         notifications: userData.notifications || [],
@@ -227,40 +171,28 @@ export default function LoginUi() {
         lastNotification: null,
         fcmToken: "",
         lastActive: serverTimestamp(),
-        // Add other missing fields with default values
-        ...(userData.city === undefined && { city: "" }),
-        ...(userData.phone === undefined && { phone: "" }),
-        ...(userData.rating === undefined && { rating: 0 }),
-        ...(userData.totalTrips === undefined && { totalTrips: 0 }),
-        ...(userData.earnings === undefined && { earnings: 0 }),
-        ...(userData.preferences === undefined && { 
-          preferences: {
-            theme: "light",
-            language: "en",
-            currency: "NGN"
-          }
-        })
+        city: userData.city || "",
+        phone: userData.phone || "",
+        rating: userData.rating || 0,
+        totalTrips: userData.totalTrips || 0,
+        earnings: userData.earnings || 0,
+        preferences: userData.preferences || { theme: "light", language: "en", currency: "NGN" }
       });
-      
-      console.log(`✅ Notification fields added to user: ${userId}`);
     }
   };
 
-  // Handle resend verification email
   const handleResendVerification = async () => {
     const user = auth.currentUser;
     if (user && !user.emailVerified) {
       try {
         await sendEmailVerification(user);
-        setVerificationMessage("Verification email sent! Please check your inbox.");
+        setVerificationMessage("Verification email sent!");
       } catch (error: any) {
-        console.error("Error sending verification email:", error);
-        setVerificationMessage(`Failed to send verification email: ${error.message}`);
+        setVerificationMessage("Failed to send verification email.");
       }
     }
   };
 
-  // ✅ UPDATED: HANDLE EMAIL LOGIN with notification check
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoadingLogin(true);
@@ -272,27 +204,23 @@ export default function LoginUi() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // Check if email is verified after login
       if (!user.emailVerified) {
-        setVerificationMessage("Please verify your email address to continue.");
+        setVerificationMessage("Please verify your email address.");
         setShowVerificationBanner(true);
         setLoadingLogin(false);
       } else {
-        // ✅ Check and update notification fields for existing user
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
         
         if (userDoc.exists()) {
           await ensureNotificationFields(user.uid, userDoc.data());
-          
-          // ✅ Send login notification
           await updateDoc(userRef, {
             lastActive: serverTimestamp(),
             notifications: arrayUnion({
               id: Date.now().toString(),
               type: "login",
               title: "👋 Welcome Back!",
-              message: `You logged in at ${new Date().toLocaleTimeString()}`,
+              message: `Logged in at ${new Date().toLocaleTimeString()}`,
               timestamp: new Date().toISOString(),
               read: false,
               actionUrl: "/"
@@ -300,7 +228,6 @@ export default function LoginUi() {
             hasUnreadNotifications: true
           });
         }
-        
         await exchangeTokenAndRedirect(userCredential);
       }
     } catch (err: any) {
@@ -309,99 +236,34 @@ export default function LoginUi() {
     }
   };
 
-  // ✅ UPDATED: HANDLE GOOGLE LOGIN with complete notification setup
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError("");
-    setVerificationMessage("");
-    setShowVerificationBanner(false);
-
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-
       const userRef = doc(db, "users", user.uid);
       const snap = await getDoc(userRef);
 
-      // If user doesn't exist, create new user with ALL fields
       if (!snap.exists()) {
-        const baseData = {
+        const completeUserData = createUserData({
           uid: user.uid,
           fullName: user.displayName || "Google User",
           email: user.email,
           profileImage: user.photoURL || "/profile.png",
-          isDriver: false,
-          vip: false,
-          isEmailVerified: true, // Google users are verified
-        };
-
-        const completeUserData = createUserData(
-          baseData,
-          "google",
-          referrerId
-        );
+          isEmailVerified: true,
+        }, "google", referrerId);
 
         await setDoc(userRef, completeUserData);
-
-        if (referrerId) {
-          await awardReferralPoints(referrerId, user.uid);
-        }
-
-        // ✅ Send welcome notification to new Google user
-        await updateDoc(userRef, {
-          notifications: arrayUnion({
-            id: Date.now().toString(),
-            type: "welcome",
-            title: "👋 Welcome to Nomo Cars!",
-            message: "Thanks for joining with Google! Complete your profile.",
-            timestamp: new Date().toISOString(),
-            read: false,
-            actionUrl: "/user/profile"
-          }),
-          hasUnreadNotifications: true
-        });
-
-        console.log(`✅ New Google user created with notification fields: ${user.email}`);
-
+        if (referrerId) await awardReferralPoints(referrerId, user.uid);
       } else {
-        // User already exists
-        const userData = snap.data();
-        
-        // ✅ Ensure existing user has notification fields
-        await ensureNotificationFields(user.uid, userData);
-        
-        // ✅ Update last login and profile image
-        await updateDoc(userRef, {
-          lastActive: serverTimestamp(),
-          profileImage: user.photoURL || userData.profileImage,
-          // Update name if it was empty
-          ...(user.displayName && !userData.fullName && { 
-            fullName: user.displayName 
-          })
-        });
-
-        // ✅ Send login notification to existing user
-        await updateDoc(userRef, {
-          notifications: arrayUnion({
-            id: Date.now().toString(),
-            type: "login",
-            title: "👋 Welcome Back!",
-            message: `You logged in with Google at ${new Date().toLocaleTimeString()}`,
-            timestamp: new Date().toISOString(),
-            read: false,
-            actionUrl: "/"
-          }),
-          hasUnreadNotifications: true
-        });
-
-        console.log(`✅ Existing Google user updated: ${user.email}`);
+        await ensureNotificationFields(user.uid, snap.data());
+        await updateDoc(userRef, { lastActive: serverTimestamp() });
       }
 
-      // Exchange token and redirect
       await exchangeTokenAndRedirect(result);
     } catch (err: any) {
-      console.error("Google login error:", err);
-      setError("Google sign-in failed. Please try again.");
+      setError("Google sign-in failed.");
       setGoogleLoading(false);
     }
   };
@@ -411,137 +273,45 @@ export default function LoginUi() {
       <div className="bg-gray-50 shadow-xl rounded-2xl p-8 max-w-md w-full border border-gray-200">
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Welcome Back</h1>
 
-        {/* Referral Banner */}
         {referralShortId && referrerData && (
-          <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="bg-green-100 p-2 rounded-lg">
-                <span className="text-green-600 font-bold text-lg">🎁</span>
-              </div>
-              <div>
-                <p className="font-semibold text-green-800">
-                  Logging in through {referrerData.fullName?.toUpperCase() || 'Someone'}'s referral!
-                </p>
-                <p className="text-sm text-green-700">
-                  Complete your profile to get the full experience!
-                </p>
-              </div>
-            </div>
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="font-semibold text-green-800 text-center">
+              🎁 Referral from {referrerData.fullName?.toUpperCase()}!
+            </p>
           </div>
         )}
 
-        {/* Regular error messages */}
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4 text-center">
-            {error}
-          </div>
-        )}
+        {error && <div className="bg-red-100 text-red-700 px-4 py-3 rounded-xl mb-4 text-center border border-red-400">{error}</div>}
 
-        {/* Email verification message - appears ONLY after login attempt with unverified email */}
-        {showVerificationBanner && verificationMessage && (
+        {showVerificationBanner && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700">{verificationMessage}</p>
-                {verificationMessage.includes("Please verify your email") && (
-                  <button
-                    onClick={handleResendVerification}
-                    className="mt-2 text-sm font-medium text-yellow-700 hover:text-yellow-600 underline"
-                  >
-                    Resend verification email
-                  </button>
-                )}
-              </div>
-            </div>
+            <p className="text-sm text-yellow-700">{verificationMessage}</p>
+            <button onClick={handleResendVerification} className="mt-2 text-sm font-medium underline">Resend email</button>
           </div>
         )}
 
-        {/* Email Login Form */}
         <form onSubmit={handleLogin} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email Address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500"
-          />
-
-          {/* Password input with show/hide toggle from first code */}
+          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" />
           <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500"
-            />
-
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-3 text-gray-600"
-            >
-              {showPassword ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.59 6.59m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                </svg>
-              )}
+            <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-600">
+              {showPassword ? "Hide" : "Show"}
             </button>
           </div>
-
-          <button
-            type="submit"
-            disabled={loadingLogin}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition font-semibold flex items-center justify-center"
-          >
+          <button type="submit" disabled={loadingLogin} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition font-semibold flex items-center justify-center">
             {loadingLogin ? <LoadingRound /> : "Login"}
           </button>
         </form>
 
-        {/* Divider */}
-        <div className="text-xs font-semibold text-center my-2 text-gray-500">OR</div>
+        <div className="text-xs text-center my-4 text-gray-500">OR</div>
 
-        {/* GOOGLE LOGIN BUTTON */}
-        <button
-          onClick={handleGoogleLogin}
-          disabled={googleLoading}
-          className="w-full bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition font-semibold flex items-center justify-center"
-        >
+        <button onClick={handleGoogleLogin} disabled={googleLoading} className="w-full bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition font-semibold flex items-center justify-center">
           {googleLoading ? <LoadingRound /> : "Continue with Google"}
         </button>
 
         <p className="text-center text-sm mt-6">
-          <Link href="/forgot-password" className="text-blue-700 hover:underline font-semibold">
-            Forgot password?
-          </Link>
+          <Link href="/signup" className="text-purple-700 hover:underline font-semibold ml-1">Sign Up</Link>
         </p>
-
-        <p className="text-center text-sm mt-4">
-          Don't have an account?
-          <Link href="/signup" className="text-purple-700 hover:underline font-semibold ml-1">
-            Sign Up
-          </Link>
-        </p>
-
-        {/* NEW: Notification Info */}
-        <div className="mt-6 p-3 bg-gray-100 border border-gray-300 rounded-lg">
-          <p className="text-xs text-gray-600 text-center">
-            📢 By logging in, you'll receive important notifications about bookings, 
-            offers, and safety updates.
-          </p>
-        </div>
       </div>
     </div>
   );
