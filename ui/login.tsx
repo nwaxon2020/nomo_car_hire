@@ -49,14 +49,31 @@ export default function LoginUi() {
   const POINTS_REQUIRED_PER_FREE_RIDE = 20;
 
   // Token exchange function from first code
-  const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
+ const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
     try {
       const idToken = await userCredential.user.getIdToken();
-      await axios.post("/api/login", { idToken });
-      router.push("/");
-    } catch (err) {
+      
+      // We use axios to hit your /api/login route
+      const response = await axios.post("/api/login", 
+        { idToken },
+        { 
+          withCredentials: true, // Crucial for setting cookies
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+
+      if (response.data.success) {
+        // Use window.location.href for a hard refresh to ensure 
+        // the new session cookie is picked up by Middleware/Layouts
+        window.location.href = "/"; 
+      } else {
+        throw new Error("Login API returned success: false");
+      }
+    } catch (err: any) {
       console.error("Token exchange error:", err);
-      setError("Failed to establish a secure session.");
+      // Detailed error logging to help you see if it's a 500 or 401
+      const status = err.response?.status;
+      setError(`Session failed (${status || 'Network Error'}). Please try again.`);
     }
   };
 
