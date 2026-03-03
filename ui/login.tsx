@@ -46,12 +46,12 @@ export default function LoginUi() {
   const POINTS_PER_REFERRAL = 2;
   const POINTS_REQUIRED_PER_FREE_RIDE = 20;
 
-  // FIXED: No more Axios/Cookie API calls. Just direct redirect.
+  // FIXED: Using window.location.href to force a clean session load
   const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
     try {
       // Firebase Client SDK handles the session automatically in the browser.
-      // This works on Vercel exactly like it does on Localhost.
-      router.push("/");
+      // Forced refresh ensures all layouts and components recognize the new user.
+      window.location.href = "/";
     } catch (err) {
       console.error("Redirect error:", err);
       setError("Login successful, but redirect failed.");

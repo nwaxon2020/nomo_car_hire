@@ -1,4 +1,3 @@
-// app/dashboard/layout.tsx (or wherever your SidebarPageUi is)
 "use client";
 
 import { useState, useEffect } from "react";
@@ -32,10 +31,9 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+  
   const router = useRouter();
   const pathname = usePathname();
-
   const { unreadCount } = useUnreadChats();
 
   const getFirstName = (name: string | null | undefined) => {
@@ -50,23 +48,19 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      setAuthChecking(true);
-
       if (!user) {
-        // User is not authenticated - redirect to login
-        console.log("No authenticated user, redirecting to login");
+        // Only redirect if Firebase is certain no user session exists
+        console.log("No session found, redirecting...");
         setIsAuthenticated(false);
-        setAuthChecking(false);
-        
-        // Redirect to login page with return URL
         const returnUrl = encodeURIComponent(pathname);
-        router.push(`/login?redirect=${returnUrl}`);
+        router.replace(`/login?redirect=${returnUrl}`);
+        setAuthChecking(false);
         return;
       }
 
-      // User is authenticated
-      setIsAuthenticated(true);
+      // User exists
       setUserId(user.uid);
+      setIsAuthenticated(true);
 
       try {
         const ref = doc(db, "users", user.uid);
@@ -78,24 +72,22 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         if (snap.exists()) {
           const data = snap.data();
           setIsDriver(data.isDriver === true);
-
+          
           if (data.isDriver) {
             finalName = getFirstName(data.firstName || user.displayName);
           } else {
             const full = data.fullName || user.displayName || "User";
             finalName = getFirstName(full);
           }
-
           photo = data.profileImage || user.photoURL || "/profile.png";
         } else {
           finalName = getFirstName(user.displayName);
         }
 
-        finalName = capitalize(finalName);
-        setDisplayName(finalName);
+        setDisplayName(capitalize(finalName));
         setPhotoURL(photo);
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Data fetch error:", error);
       } finally {
         setAuthChecking(false);
       }
@@ -104,34 +96,26 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsub();
   }, [router, pathname]);
 
-  // Handle loading state
+  // Prevent UI flickering by showing a clean loading state
   if (authChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Verifying authentication...</p>
+          <p className="text-gray-600 font-medium">Verifying Account...</p>
         </div>
       </div>
     );
   }
 
-  // If not authenticated, don't render anything (redirect already happened)
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   const dashboardRoute = isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`;
 
   const menuItems = [
     { name: "Home", href: "/", icon: <FaHome /> },
     { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
-    {
-      name: "Chat",
-      href: "/user/chat",
-      icon: <FaRegCommentDots />,
-      unreadCount
-    },
+    { name: "Chat", href: "/user/chat", icon: <FaRegCommentDots />, unreadCount },
     { name: "Hire a Car", href: "/user/car-hire", icon: <FaCar /> },
     !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
     { name: "About", href: "/about", icon: <FaInfoCircle /> },
@@ -142,83 +126,47 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     try {
       await signOut(auth);
       setMsg("Logging Out!");
-      setTimeout(() => router.push("/login"), 1500);
+      setTimeout(() => window.location.href = "/login", 1000);
     } catch (error) {
-      alert("Failed to log out.");
+      alert("Logout failed.");
     }
   };
 
   return (
     <>
-      <Script
-        src="https://js.paystack.co/v1/inline.js"
-        strategy="beforeInteractive"
-      />
-
+      <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
       <div className="flex min-h-screen bg-gray-100">
-        {/* MOBILE TOGGLE */}
         <div className="md:hidden absolute top-6 right-4 z-50">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-white text-2xl"
-          >
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white text-2xl">
             {sidebarOpen ? <FaTimes /> : <FaBars />}
           </button>
         </div>
 
-        {/* SIDEBAR */}
-        <aside
-          className={`z-30 border-r border-gray-50 sm:border-0 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col 
-            transform transition-transform duration-300
-            ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-            md:translate-x-0 md:static`}
-        >
+        <aside className={`z-30 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static`}>
           <div className="p-6 bg-gray-900 flex flex-col items-center">
             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white mb-4">
-              <img
-                src={photoURL}
-                alt="Profile"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "/profile.png";
-                }}
-              />
+              <img src={photoURL} alt="Profile" className="w-full h-full object-cover" />
             </div>
-
-            {displayName === "fetching..." ? (
-              <div className="text-xl font-semibold">
-                <LoadingDots />
-              </div>
-            ) : (
-              <h2 className="text-xl font-bold">
-                <small className="font-normal text-sm">Hello </small>
-                {displayName}
-              </h2>
-            )}
+            <h2 className="text-xl font-bold text-center">
+              <small className="block font-normal text-xs text-gray-400">Welcome,</small>
+              {displayName}
+            </h2>
           </div>
 
-          <nav className="flex-1 mt-6 flex flex-col">
+          <nav className="flex-1 mt-6">
             {menuItems.map((item: any) => (
               <button
                 key={item.name}
                 onClick={() => {
-                  if (item.name === "Logout") {
-                    handleLogout();
-                  } else if (item.href) {
-                    router.push(item.href);
-                    setSidebarOpen(false);
-                  }
+                  if (item.name === "Logout") handleLogout();
+                  else if (item.href) { router.push(item.href); setSidebarOpen(false); }
                 }}
-                className={`flex items-center w-full px-6 py-3 hover:bg-green-800 transition-colors relative
-                  ${pathname === item.href ? "bg-gray-800 font-bold" : "font-semibold"}`}
+                className={`flex items-center w-full px-6 py-4 hover:bg-green-800 transition-colors relative ${pathname === item.href ? "bg-gray-800 border-l-4 border-green-500" : ""}`}
               >
-                <span className="mr-3 text-lg">
-                  {item.icon}
-                </span>
+                <span className="mr-3 text-lg">{item.icon}</span>
                 {item.name}
-
                 {item.name === "Chat" && unreadCount > 0 && (
-                  <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                  <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -227,14 +175,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           </nav>
         </aside>
 
-        {/* MAIN CONTENT */}
-        <main className="flex-1 p-4 px-1 md:px-2">
-          {msg && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4 text-center">
-              {msg}
-            </div>
-          )}
-
+        <main className="flex-1 p-4">
+          {msg && <div className="bg-green-100 text-green-700 p-3 rounded-lg mb-4 text-center border border-green-300">{msg}</div>}
           {children}
         </main>
       </div>
