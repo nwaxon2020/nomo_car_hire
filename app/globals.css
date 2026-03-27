@@ -35,27 +35,11 @@ body {
 
 /* Baground for home page with image */
 /* Background for home page with image + dark overlay */
+/* Keep only structural stuff if needed, but remove the image lines */
 #bg-home {
-  min-height: 100vh;
-  width: 100%;
-  
-  /* Image + dark transparent overlay */
-  background-image: 
-    linear-gradient(
-      rgba(0, 0, 0, 0.65),
-      rgba(0, 0, 0, 0.65)
-    ),
-    url("/home_bg.jpg"); /* change to your image path */
-
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
-  color: #fff;
 }
 
 

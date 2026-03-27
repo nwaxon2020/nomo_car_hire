@@ -46,11 +46,8 @@ export default function LoginUi() {
   const POINTS_PER_REFERRAL = 2;
   const POINTS_REQUIRED_PER_FREE_RIDE = 20;
 
-  // FIXED: Using window.location.href to force a clean session load
   const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
     try {
-      // Firebase Client SDK handles the session automatically in the browser.
-      // Forced refresh ensures all layouts and components recognize the new user.
       window.location.href = "/";
     } catch (err) {
       console.error("Redirect error:", err);
@@ -181,6 +178,40 @@ export default function LoginUi() {
     }
   };
 
+  const handleSmartNotification = async (userId: string, currentData: any) => {
+    const userRef = doc(db, "users", userId);
+    let notifications = [...(currentData.notifications || [])];
+    
+    const now = new Date();
+    const loginTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const loginIndex = notifications.findIndex(n => n.type === "login");
+
+    const newLoginEntry = {
+      id: Date.now().toString(),
+      type: "login",
+      title: "👋 Welcome Back!",
+      message: `Logged in at ${loginTime}`,
+      timestamp: now.toISOString(),
+      read: false,
+      actionUrl: "/"
+    };
+
+    if (loginIndex !== -1) {
+      notifications[loginIndex] = newLoginEntry;
+    } else {
+      notifications.unshift(newLoginEntry);
+    }
+
+    const trimmedNotifications = notifications.slice(0, 15);
+
+    await updateDoc(userRef, {
+      lastActive: serverTimestamp(),
+      notifications: trimmedNotifications,
+      hasUnreadNotifications: true
+    });
+  };
+
   const handleResendVerification = async () => {
     const user = auth.currentUser;
     if (user && !user.emailVerified) {
@@ -213,20 +244,9 @@ export default function LoginUi() {
         const userDoc = await getDoc(userRef);
         
         if (userDoc.exists()) {
-          await ensureNotificationFields(user.uid, userDoc.data());
-          await updateDoc(userRef, {
-            lastActive: serverTimestamp(),
-            notifications: arrayUnion({
-              id: Date.now().toString(),
-              type: "login",
-              title: "👋 Welcome Back!",
-              message: `Logged in at ${new Date().toLocaleTimeString()}`,
-              timestamp: new Date().toISOString(),
-              read: false,
-              actionUrl: "/"
-            }),
-            hasUnreadNotifications: true
-          });
+          const userData = userDoc.data();
+          await ensureNotificationFields(user.uid, userData);
+          await handleSmartNotification(user.uid, userData);
         }
         await exchangeTokenAndRedirect(userCredential);
       }
@@ -257,8 +277,9 @@ export default function LoginUi() {
         await setDoc(userRef, completeUserData);
         if (referrerId) await awardReferralPoints(referrerId, user.uid);
       } else {
-        await ensureNotificationFields(user.uid, snap.data());
-        await updateDoc(userRef, { lastActive: serverTimestamp() });
+        const userData = snap.data();
+        await ensureNotificationFields(user.uid, userData);
+        await handleSmartNotification(user.uid, userData);
       }
 
       await exchangeTokenAndRedirect(result);
@@ -269,48 +290,62 @@ export default function LoginUi() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-4">
-      <div className="bg-gray-50 shadow-xl rounded-2xl p-8 max-w-md w-full border border-gray-200">
-        <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Welcome Back</h1>
+    <div className="min-h-screen flex items-center justify-center bg-white p-4 pt-0">
+      <div className="bg-gray-50 shadow-xl rounded-lg md:rounded-2xl p-4 md:p-8 max-w-md w-full border border-gray-200">
+        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800 uppercase tracking-tighter">Welcome Back</h1>
 
         {referralShortId && referrerData && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="font-semibold text-green-800 text-center">
+            <p className="font-semibold text-green-800 text-center uppercase text-[10px] tracking-widest">
               🎁 Referral from {referrerData.fullName?.toUpperCase()}!
             </p>
           </div>
         )}
 
-        {error && <div className="bg-red-100 text-red-700 px-4 py-3 rounded-xl mb-4 text-center border border-red-400">{error}</div>}
+        {error && <div className="bg-red-100 text-red-700 px-4 py-3 rounded-xl mb-4 text-center border border-red-400 font-bold text-[10px] uppercase tracking-widest">{error}</div>}
 
         {showVerificationBanner && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-            <p className="text-sm text-yellow-700">{verificationMessage}</p>
-            <button onClick={handleResendVerification} className="mt-2 text-sm font-medium underline">Resend email</button>
+            <p className="text-[10px] text-yellow-700 font-black uppercase tracking-widest">{verificationMessage}</p>
+            <button onClick={handleResendVerification} className="mt-2 text-[9px] font-black underline uppercase">Resend email</button>
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
-          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" />
+          <input type="email" placeholder="EMAIL ADDRESS" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none uppercase text-xs font-bold bg-white" />
+          
           <div className="relative">
-            <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-600">
+            <input type={showPassword ? "text" : "password"} placeholder="PASSWORD" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none uppercase text-xs font-bold bg-white" />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 text-[10px] font-black uppercase hover:text-blue-600 transition">
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
-          <button type="submit" disabled={loadingLogin} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition font-semibold flex items-center justify-center">
+
+          <div className="flex justify-end -mt-2">
+            <Link href="/forgot-password" title="reset password link" className="text-[10px] font-black text-blue-600 uppercase tracking-tighter hover:underline">
+              Forgot Password?
+            </Link>
+          </div>
+
+          <button type="submit" disabled={loadingLogin} className="w-full bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 transition font-black uppercase tracking-widest flex items-center justify-center">
             {loadingLogin ? <LoadingRound /> : "Login"}
           </button>
         </form>
 
-        <div className="text-xs text-center my-4 text-gray-500">OR</div>
+        <div className="text-[10px] text-center my-6 text-gray-400 font-black tracking-widest uppercase">OR</div>
 
-        <button onClick={handleGoogleLogin} disabled={googleLoading} className="w-full bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition font-semibold flex items-center justify-center">
-          {googleLoading ? <LoadingRound /> : "Continue with Google"}
+        <button onClick={handleGoogleLogin} disabled={googleLoading} className="w-full bg-white border-2 border-gray-100 text-gray-700 py-3 rounded-xl hover:border-red-400 transition font-black uppercase text-xs flex items-center justify-center gap-2">
+          {googleLoading ? <LoadingRound /> : (
+            <>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="Google" />
+              Continue with Google
+            </>
+          )}
         </button>
 
-        <p className="text-center text-sm mt-6">
-          <Link href="/signup" className="text-purple-700 hover:underline font-semibold ml-1">Sign Up</Link>
+        <p className="text-center text-[10px] mt-8 font-black text-gray-400 uppercase tracking-widest">
+          Don't have an account? 
+          <Link href="/signup" className="text-blue-600 hover:underline ml-2 font-black italic">Sign Up</Link>
         </p>
       </div>
     </div>

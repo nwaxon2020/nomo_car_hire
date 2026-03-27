@@ -5,8 +5,9 @@ import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 
 // UI
-import Nav from "@/ui/nav";
-import Footer from "@/ui/footer";
+import Nav from "@/components/nav";
+import Footer from "@/components/footer";
+import { Toaster } from "react-hot-toast"; // 1. Import Toaster
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -96,6 +97,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <body className="antialiased">
+        {/* 2. Add Toaster here so it works globally */}
+        <Toaster position="top-center" reverseOrder={false} />
+        
         <Nav />
         <hr className="text-white" />
         <main>{children}</main>

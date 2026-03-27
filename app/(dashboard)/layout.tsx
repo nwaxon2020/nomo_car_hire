@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import LoadingDots from "@/components/loading";
 import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 import Script from "next/script";
 
@@ -16,6 +15,8 @@ import {
   FaBars,
   FaTimes,
   FaRegCommentDots,
+  FaHeadphones,
+  FaChevronDown,
 } from "react-icons/fa";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -24,6 +25,7 @@ import { doc, getDoc } from "firebase/firestore";
 
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false); // New state for dropdown
   const [msg, setMsg] = useState("");
   const [isDriver, setIsDriver] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -49,7 +51,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        // Only redirect if Firebase is certain no user session exists
         console.log("No session found, redirecting...");
         setIsAuthenticated(false);
         const returnUrl = encodeURIComponent(pathname);
@@ -58,7 +59,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         return;
       }
 
-      // User exists
       setUserId(user.uid);
       setIsAuthenticated(true);
 
@@ -96,7 +96,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsub();
   }, [router, pathname]);
 
-  // Prevent UI flickering by showing a clean loading state
   if (authChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -112,13 +111,24 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
   const dashboardRoute = isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`;
 
-  const menuItems = [
+  // Updated menuItems to include sub-links for About
+  const menuItems: any[] = [
     { name: "Home", href: "/", icon: <FaHome /> },
     { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
     { name: "Chat", href: "/user/chat", icon: <FaRegCommentDots />, unreadCount },
     { name: "Hire a Car", href: "/user/car-hire", icon: <FaCar /> },
     !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
-    { name: "About", href: "/about", icon: <FaInfoCircle /> },
+    { 
+      name: "About", 
+      icon: <FaInfoCircle />, 
+      isDropdown: true,
+      subItems: [
+        { name: "About Us", href: "/about" },
+        { name: "FAQ", href: "/faq" },
+        { name: "Location", href: "/location" },
+      ]
+    },
+    { name: "Contact Us", href: "/contact", icon: <FaHeadphones /> },
     { name: "Logout", icon: <FaSignOutAlt /> },
   ].filter(Boolean);
 
@@ -142,7 +152,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           </button>
         </div>
 
-        <aside className={`z-30 fixed top-0 left-0 w-60 bg-black text-white min-h-screen flex flex-col transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static`}>
+        <aside className={`z-30 fixed top-0 left-0 w-50 bg-black text-white min-h-screen flex flex-col transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static`}>
           <div className="p-6 bg-gray-900 flex flex-col items-center">
             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white mb-4">
               <img src={photoURL} alt="Profile" className="w-full h-full object-cover" />
@@ -155,27 +165,56 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
           <nav className="flex-1 mt-6">
             {menuItems.map((item: any) => (
-              <button
-                key={item.name}
-                onClick={() => {
-                  if (item.name === "Logout") handleLogout();
-                  else if (item.href) { router.push(item.href); setSidebarOpen(false); }
-                }}
-                className={`flex items-center w-full px-6 py-4 hover:bg-green-800 transition-colors relative ${pathname === item.href ? "bg-gray-800 border-l-4 border-green-500" : ""}`}
+              <div 
+                key={item.name} 
+                className="relative"
+                onMouseEnter={() => item.isDropdown && setAboutOpen(true)}
+                onMouseLeave={() => item.isDropdown && setAboutOpen(false)}
               >
-                <span className="mr-3 text-lg">{item.icon}</span>
-                {item.name}
-                {item.name === "Chat" && unreadCount > 0 && (
-                  <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
+                <button
+                  onClick={() => {
+                    if (item.name === "Logout") handleLogout();
+                    else if (item.isDropdown) setAboutOpen(!aboutOpen);
+                    else if (item.href) { router.push(item.href); setSidebarOpen(false); }
+                  }}
+                  className={`flex items-center w-full px-6 py-4 hover:bg-green-800 transition-colors relative ${pathname === item.href ? "bg-gray-800 border-l-4 border-green-500" : ""}`}
+                >
+                  <span className="mr-3 text-lg">{item.icon}</span>
+                  <span className="flex-1 text-left">{item.name}</span>
+                  {item.name === "Chat" && unreadCount > 0 && (
+                    <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                  {item.isDropdown && (
+                    <FaChevronDown className={`text-xs transition-transform duration-200 ${aboutOpen ? "rotate-180" : ""}`} />
+                  )}
+                </button>
+
+                {/* Dropdown Menu */}
+                {item.isDropdown && aboutOpen && (
+                  <div className="bg-zinc-900 md:bg-gray-900 w-full">
+                    {item.subItems.map((sub: any) => (
+                      <button
+                        key={sub.name}
+                        onClick={() => {
+                          router.push(sub.href);
+                          setSidebarOpen(false);
+                          setAboutOpen(false);
+                        }}
+                        className={`w-full pl-14 pr-6 py-3 text-sm text-gray-300 hover:text-white hover:bg-green-700 text-left transition-colors ${pathname === sub.href ? "text-green-500 font-bold" : ""}`}
+                      >
+                        {sub.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </button>
+              </div>
             ))}
           </nav>
         </aside>
 
-        <main className="flex-1 p-4">
+        <main className="flex-1 p-1">
           {msg && <div className="bg-green-100 text-green-700 p-3 rounded-lg mb-4 text-center border border-green-300">{msg}</div>}
           {children}
         </main>
