@@ -3,10 +3,10 @@
 
 import { useState } from "react";
 import { Share2, X } from "lucide-react";
-import { 
-  FaWhatsapp, 
-  FaFacebook, 
-  FaTwitter, 
+import {
+  FaWhatsapp,
+  FaFacebook,
+  FaTwitter,
   FaCopy
 } from "react-icons/fa";
 
@@ -18,7 +18,7 @@ interface ShareButtonProps {
 
 import { usePathname } from "next/navigation";
 
-export default function ShareButton({ 
+export default function ShareButton({
   userId = "",
   title = "Get a Free Ride on Nomopoventures!",
   text = "Join me on Nomopoventures for amazing rides!"
@@ -38,10 +38,10 @@ export default function ShareButton({
 
   // ✅ Create signup link with 8-char short ID
   const getReferralUrl = () => {
-    const baseUrl = typeof window !== "undefined" 
-      ? window.location.origin 
+    const baseUrl = typeof window !== "undefined"
+      ? window.location.origin
       : "https://yourdomain.com";
-    
+
     const shortId = getShortId();
     if (shortId) {
       return `${baseUrl}/signup?ref=${shortId}`;
@@ -52,7 +52,7 @@ export default function ShareButton({
   const referralUrl = getReferralUrl();
   const shortId = getShortId();
   const displayId = shortId ? shortId.toUpperCase() : "NO-ID";
-  
+
   // ✅ Share text with short ID
   const shareText = `${text}\n\nUse my referral ID: ${displayId}\n\nSign up here: ${referralUrl}\n\nGet 2 points per referral! 10 points = 1 free ride! 🚗✨`;
 
@@ -125,7 +125,7 @@ export default function ShareButton({
     <>
       {/* Text link style */}
       {
-        pathname.startsWith ("/user/driver-profile/")? <button
+        pathname.startsWith("/user/driver-profile/") ? <button
           onClick={handleNativeShare}
           className="mx-auto text-white hover:text-white transition-colors flex items-center gap-1"
         >
@@ -133,14 +133,14 @@ export default function ShareButton({
           Share Link & Upgrade VIP status
         </button> :
 
-        <button
-          onClick={handleNativeShare}
-          className="mx-auto text-green-800 font-semibold hover:underline hover:text-green-900 transition-colors flex items-center gap-1"
-        >
-          <Share2 size={14} />
-          Share Link to get Free Ride
-        </button> 
-      
+          <button
+            onClick={handleNativeShare}
+            className="mx-auto text-green-500 font-semibold hover:underline hover:text-green-300 transition-colors flex items-center gap-1"
+          >
+            <Share2 size={14} />
+            Share Link to get Free Ride
+          </button>
+
       }
 
       {/* Simple modal */}
@@ -158,7 +158,7 @@ export default function ShareButton({
                 </button>
               </div>
             </div>
-            
+
             <div className="p-3 space-y-1">
               {shareOptions.map((option) => (
                 <button
@@ -171,7 +171,7 @@ export default function ShareButton({
                 </button>
               ))}
             </div>
-            
+
             {/* Referral info */}
             <div className="p-3 border-t bg-gray-50">
               <p className="text-xs text-gray-600 mb-1">Your referral ID:</p>

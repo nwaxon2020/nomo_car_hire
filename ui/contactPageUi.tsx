@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { 
-  FiMail, FiPhone, FiMapPin, FiSend, FiMessageSquare, 
-  FiUser, FiTrash2, FiAlertCircle 
+import {
+  FiMail, FiPhone, FiMapPin, FiSend, FiMessageSquare,
+  FiUser, FiTrash2, FiAlertCircle
 } from 'react-icons/fi';
-import TransportNewsPageUi from '@/components/news';
-import toast from 'react-hot-toast'; 
+import TransportNewsPageUi from '@/components/transportNews';
+import toast from 'react-hot-toast';
 import { db, auth } from '@/lib/firebaseConfig';
-import { 
-  collection, addDoc, query, where, onSnapshot, 
-  serverTimestamp, updateDoc, doc, increment, Timestamp, arrayUnion 
+import {
+  collection, addDoc, query, where, onSnapshot,
+  serverTimestamp, updateDoc, doc, increment, Timestamp, arrayUnion
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -21,7 +21,7 @@ const ContactPageUi = () => {
   const [loading, setLoading] = useState(false);
   const [userMessages, setUserMessages] = useState<any[]>([]);
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
-  
+
   const [formData, setFormData] = useState({ name: '', phone: '', message: '' });
 
   const [contactInfo, setContactInfo] = useState({
@@ -89,7 +89,7 @@ const ContactPageUi = () => {
       await updateDoc(doc(db, "admin_metadata", "counters"), { unreadComplaints: increment(1) }).catch(() => null);
 
       toast.success("Ticket created successfully!", { id: loadId });
-      setFormData(prev => ({ ...prev, message: '' })); 
+      setFormData(prev => ({ ...prev, message: '' }));
       setView('replies');
     } catch (error) {
       toast.error("Failed to send.", { id: loadId });
@@ -109,7 +109,7 @@ const ContactPageUi = () => {
           text: text,
           timestamp: new Date().toISOString()
         }),
-        status: 'pending' 
+        status: 'pending'
       });
       setReplyText({ ...replyText, [ticketId]: '' });
       toast.success("Reply sent");
@@ -167,7 +167,7 @@ const ContactPageUi = () => {
   return (
     <div className="bg-[#F5F5F5] min-h-screen pt-4 pb-20 px-3 md:px-6 font-sans">
       <div className="max-w-7xl mx-auto">
-        
+
         {deleteId && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-[#0B2A4A]/60 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
@@ -191,7 +191,7 @@ const ContactPageUi = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
           <ContactDetails isMobile={false} />
-          
+
           <div className="bg-white px-2 py-8 md:p-12 rounded-md md:rounded-xl shadow-xl border border-gray-100 min-h-[500px]">
             <div className="flex justify-center mb-8">
               <div className="bg-[#0B2A4A] p-1 rounded-md md:rounded-xl flex gap-1">
@@ -212,11 +212,11 @@ const ContactPageUi = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-1">
                       <label className="text-[9px] font-black uppercase text-gray-400 flex items-center gap-1"><FiUser /> Name</label>
-                      <input required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Full Name" className="w-full bg-gray-50 border border-gray-200 rounded-md md:rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-600 outline-none" />
+                      <input required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Full Name" className="w-full bg-gray-50 border border-gray-200 rounded-md md:rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-600 outline-none" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-black uppercase text-gray-400 flex items-center gap-1"><FiPhone /> Phone</label>
-                      <input required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="+234..." className="w-full bg-gray-50 border border-gray-200 rounded-md md:rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-600 outline-none" />
+                      <input required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+234..." className="w-full bg-gray-50 border border-gray-200 rounded-md md:rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-600 outline-none" />
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -225,7 +225,7 @@ const ContactPageUi = () => {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase text-gray-400 flex items-center gap-1"><FiMessageSquare /> Message</label>
-                    <textarea required value={formData.message} onChange={(e) => setFormData({...formData, message: e.target.value})} placeholder="How can we help?" className="w-full bg-gray-50 border border-gray-200 rounded-md md:rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-600 outline-none h-28" />
+                    <textarea required value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} placeholder="How can we help?" className="w-full bg-gray-50 border border-gray-200 rounded-md md:rounded-xl px-4 py-3 text-xs font-bold focus:border-blue-600 outline-none h-28" />
                   </div>
                   <button type="submit" disabled={loading} className="w-full bg-[#0B2A4A] text-white py-4 rounded-md md:rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 hover:bg-blue-600 shadow-lg transition-all disabled:opacity-50">
                     {loading ? "Processing..." : <><FiSend /> Create Ticket</>}
@@ -261,13 +261,13 @@ const ContactPageUi = () => {
 
                         {canReply && (
                           <div className="mt-4 flex gap-2 sticky bottom-0 bg-white py-2">
-                            <input 
-                              value={replyText[ticket.id] || ''} 
-                              onChange={(e) => setReplyText({...replyText, [ticket.id]: e.target.value})}
-                              placeholder="Type your reply..." 
-                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[10px] font-bold focus:border-blue-600 outline-none" 
+                            <input
+                              value={replyText[ticket.id] || ''}
+                              onChange={(e) => setReplyText({ ...replyText, [ticket.id]: e.target.value })}
+                              placeholder="Type your reply..."
+                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[10px] font-bold focus:border-blue-600 outline-none"
                             />
-                            <button 
+                            <button
                               onClick={() => handleReply(ticket.id)}
                               className="bg-blue-600 text-white p-2 rounded-lg hover:bg-[#0B2A4A] transition-all"
                             >
@@ -285,7 +285,7 @@ const ContactPageUi = () => {
           </div>
         </div>
       </div>
-      <TransportNewsPageUi/>
+      <TransportNewsPageUi />
     </div>
   );
 };

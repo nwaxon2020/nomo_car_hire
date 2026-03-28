@@ -8,8 +8,8 @@ import {
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useParams, useRouter } from "next/navigation";
-import TransportNewsPageUi from "../components/news";
-import WordGuessGame from "../components/game";
+import TransportNewsPageUi from "../components/transportNews";
+import WordGuessGame from "../components/wordGuessGame";
 import ShareButton from "@/components/sharebutton";
 import LoadingRound from "@/components/re-useable-loading";
 import DriverLocationToggle from "@/components/map/DriverLocationToggle";
@@ -67,7 +67,7 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, v
 
   // Check if VIP has expired
   const isExpired = vipExpiryDate ? vipExpiryDate.toDate() < new Date() : false;
-  
+
   // If expired, reset purchased VIP level to 0
   const effectivePurchasedLevel = isExpired ? 0 : purchasedVipLevel;
 
@@ -158,7 +158,7 @@ const initializeVIPFields = async (driverId: string) => {
         updates.vipExpiryDate = null;
         updates.vipPurchaseDate = null;
         needsUpdate = true;
-        
+
         // Also reset prestige level if needed
         updates.prestigeLevel = 0;
       }
@@ -247,15 +247,13 @@ const VIPStar = ({ level, prestigeLevel = 0, size = "md", showLabel = true, isEx
         ))}
       </div>
       {prestigeLevel > 0 && (
-        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-          vipDetails.color === 'black' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-white'
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${vipDetails.color === 'black' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-white'
           }`}>
           LV{prestigeLevel}
         </span>
       )}
       {showLabel && (
-        <span className={`text-xs font-semibold ${
-          vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
+        <span className={`text-xs font-semibold ${vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
           }`}>
           {vipDetails.name}
           {isExpired && ' (Expired)'}
@@ -393,15 +391,15 @@ export default function DriverProfilePage() {
 
             // Get stored VIP level for this driver
             const storedVipLevel = getStoredVipLevel(driverId);
-            
+
             // Calculate what the VIP level should be
             const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel);
-            
+
             // Check if we need to update the VIP level in Firestore
             if (calculatedVIP.vipLevel !== vipLevel || calculatedVIP.prestigeLevel !== prestigeLevel) {
               vipLevel = calculatedVIP.vipLevel;
               prestigeLevel = calculatedVIP.prestigeLevel;
-              
+
               // Show congratulatory toast ONLY if this is a real level-up
               // (storedVipLevel is null on first load, so no toast on initial page load)
               if (storedVipLevel !== null && vipLevel > storedVipLevel) {
@@ -411,7 +409,7 @@ export default function DriverProfilePage() {
                   icon: '⭐',
                 });
               }
-              
+
               // Update VIP level in Firestore
               try {
                 await updateDoc(userRef, {
@@ -423,7 +421,7 @@ export default function DriverProfilePage() {
                 console.error("Error updating VIP levels:", updateError);
               }
             }
-            
+
             // Always update localStorage with current VIP level
             setStoredVipLevel(driverId, vipLevel);
 
@@ -1528,7 +1526,7 @@ export default function DriverProfilePage() {
                           const now = new Date()
                           const diffTime = expiryDate.getTime() - now.getTime()
                           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                          
+
                           if (diffDays <= 0) {
                             return "VIP has expired"
                           } else if (diffDays <= 7) {
@@ -1548,7 +1546,7 @@ export default function DriverProfilePage() {
                     const expiryDate = driverData.vipExpiryDate.toDate()
                     const now = new Date()
                     const diffDays = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                    
+
                     if (diffDays <= 30) {
                       return (
                         <button
@@ -1562,17 +1560,17 @@ export default function DriverProfilePage() {
                     return null
                   })()}
                 </div>
-                
+
                 {/* Progress bar for expiry */}
                 {(() => {
                   const expiryDate = driverData.vipExpiryDate.toDate()
                   const purchaseDate = driverData.vipPurchaseDate?.toDate() || new Date()
                   const now = new Date()
-                  
+
                   const totalDuration = 365 * 24 * 60 * 60 * 1000 // 1 year in milliseconds
                   const elapsed = now.getTime() - purchaseDate.getTime()
                   const percentage = Math.min((elapsed / totalDuration) * 100, 100)
-                  
+
                   return (
                     <div className="mt-2">
                       <div className="flex justify-between text-xs mb-1">
@@ -1580,8 +1578,8 @@ export default function DriverProfilePage() {
                         <span className="text-amber-700">{Math.round(100 - percentage)}%</span>
                       </div>
                       <div className="w-full bg-amber-200 rounded-full h-1.5">
-                        <div 
-                          className="h-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500" 
+                        <div
+                          className="h-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
                           style={{ width: `${100 - percentage}%` }}
                         ></div>
                       </div>
@@ -2367,9 +2365,6 @@ export default function DriverProfilePage() {
         <p className="px-4 text-sm mb-3 text-center md:text-left text-gray-600">
           Latest Transport, Flight, Pricing, Shipping, & Other News
         </p>
-        <div className="max-h-[45rem] md:max-h-120 overflow-y-auto p-2">
-          <TransportNewsPageUi />
-        </div>
       </div>
     </div>
   );

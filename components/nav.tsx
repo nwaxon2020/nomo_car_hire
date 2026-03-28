@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation"; 
+import { useRouter, usePathname } from "next/navigation";
 import { auth, db } from "@/lib/firebaseConfig";
 import { signOut } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from "firebase/firestore";
-import { FiHeadphones, FiGrid, FiChevronUp, FiLogOut, FiLogIn, FiUser, FiChevronDown } from "react-icons/fi"; 
+import { FiHeadphones, FiGrid, FiChevronUp, FiLogOut, FiLogIn, FiUser, FiChevronDown } from "react-icons/fi";
 import { FaUsers, FaUserShield, FaHome } from "react-icons/fa";
 
 export default function Nav() {
@@ -14,12 +14,12 @@ export default function Nav() {
   const [user, setUser] = useState<any>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isStaff, setIsStaff] = useState(false);
-  const [cmsLogo, setCmsLogo] = useState<any>(null); 
+  const [cmsLogo, setCmsLogo] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const pathname = usePathname(); 
+  const pathname = usePathname();
 
-  const hiddenPathPrefixes = ["/user", "/login", "/register"]; 
+  const hiddenPathPrefixes = ["/user", "/login", "/register"];
   const isHiddenRoute = hiddenPathPrefixes.some(prefix => pathname.startsWith(prefix));
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function Nav() {
       if (authUser) {
         try {
           const userQuery = query(
-            collection(db, "users"), 
+            collection(db, "users"),
             where("uid", "==", authUser.uid)
           );
           const userSnap = await getDocs(userQuery);
@@ -40,10 +40,8 @@ export default function Nav() {
             const userData = userSnap.docs[0].data();
             setUser({ ...authUser, ...userData });
             setProfileImage(
-              userData.profileImage || 
-              userData.idPhotoURL || 
-              userData.photoURL || 
-              authUser.photoURL || 
+              userData.profileImage ||
+              authUser.photoURL ||
               null
             );
 
@@ -93,21 +91,21 @@ export default function Nav() {
 
   const getUserDisplayName = () => {
     if (!user) return "User";
-    const nameSource = user.firstName || user.fullName || user.userName || user.displayName || "";
+    const nameSource = user.firstName || user.fullName || user.displayName || "";
     if (!nameSource) return "User";
     const cleanFirstName = nameSource.trim().split(/\s+/)[0];
     return cleanFirstName || "User";
   };
 
-  const isPrivileged = 
-    user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY || 
-    user?.isAdmin === true || 
+  const isPrivileged =
+    user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY ||
+    user?.isAdmin === true ||
     isStaff === true;
 
   return (
     <nav className="text-center relative">
       <div className="flex justify-between items-center p-4 pr-1 sm:px-6 bg-gray-900 z-20 relative">
-        
+
         <Link href={"/"} className="p-1 flex gap-2 items-center bg-white rounded-sm">
           <h2 className="md:text-xl font-extrabold italic text-blue-700 drop-shadow-md">
             {cmsLogo?.brandName || "Nomo"} <span className="text-yellow-500">{cmsLogo?.brandSuffix || "Cars"}</span>
@@ -117,14 +115,14 @@ export default function Nav() {
         </Link>
 
         <div className="flex justify-between items-center gap-4 md:gap-12">
-          
+
           {!isHiddenRoute && (
             <Link href={"/contact"} className="md:hidden flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
               <FiHeadphones size={20} />
               <span className="text-[11px] font-bold uppercase tracking-widest">Contact</span>
             </Link>
           )}
-          
+
           {!isHiddenRoute && (
             <button onClick={() => setMenuOpen(!menuOpen)} className="sm:hidden flex items-center gap-2 text-white">
               {menuOpen ? <FiChevronUp size={20} /> : <FiGrid size={20} />}
@@ -135,9 +133,9 @@ export default function Nav() {
             <FiGrid size={20} />
             <span className="text-[11px] font-bold uppercase tracking-widest">Home</span>
           </Link>
-          
+
           <Link href="/join-us" className="hidden md:flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
-            <FaUsers size={20} /> 
+            <FaUsers size={20} />
             <span className="text-[11px] font-bold uppercase tracking-widest">Join our team</span>
           </Link>
 
@@ -150,7 +148,7 @@ export default function Nav() {
             <div className="flex items-center gap-3 relative" ref={dropdownRef}>
               {user ? (
                 <div className="relative flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
                     className="flex items-center gap-2 group focus:outline-none"
                   >
@@ -171,15 +169,15 @@ export default function Nav() {
                   {adminDropdownOpen && (
                     <div className="hidden md:block absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl py-2 z-[60] border border-gray-100">
                       {isPrivileged && (
-                        <Link 
-                          href="/admin" 
+                        <Link
+                          href="/admin"
                           onClick={() => setAdminDropdownOpen(false)}
                           className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-bold"
                         >
                           <FaUserShield size={16} /> Admin Panel
                         </Link>
                       )}
-                      <button 
+                      <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold"
                       >
@@ -222,11 +220,11 @@ export default function Nav() {
                     <p className="text-gray-400 text-xs truncate">{user.email}</p>
                   </div>
                 </div>
-                
+
                 <Link href="/" className="my-2 md:my-0 flex items-center gap-3 text-white text-[11px] font-bold uppercase tracking-widest" onClick={() => setMenuOpen(false)}>
                   <FaHome size={18} className="text-blue-500" /> Home
                 </Link>
-                
+
                 {isPrivileged && (
                   <Link href="/admin" className="my-2 md:my-0 flex items-center gap-3 text-blue-400 text-[11px] font-bold uppercase tracking-widest border-l-2 border-blue-500 pl-2" onClick={() => setMenuOpen(false)}>
                     <FaUserShield size={18} /> Admin Panel

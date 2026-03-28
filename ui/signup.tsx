@@ -8,12 +8,12 @@ import {
   sendEmailVerification,
   signInWithPopup,
 } from "firebase/auth";
-import { 
-  setDoc, 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  arrayUnion, 
+import {
+  setDoc,
+  doc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
   increment,
   collection,
   getDocs,
@@ -56,15 +56,15 @@ export default function SignUpUi() {
   const findReferrerByShortId = async (shortId: string) => {
     try {
       console.log(`🔍 Looking for referrer with short ID: ${shortId}`);
-      
+
       const usersRef = collection(db, "users");
       const querySnapshot = await getDocs(usersRef);
-      
+
       // Find user whose UID ends with the short ID
-      const referrerDoc = querySnapshot.docs.find(doc => 
+      const referrerDoc = querySnapshot.docs.find(doc =>
         doc.id.endsWith(shortId)
       );
-      
+
       if (referrerDoc) {
         const data = referrerDoc.data();
         setReferrerData(data);
@@ -93,13 +93,20 @@ export default function SignUpUi() {
   // ✅ Award referral points using referrer's FULL UID - UPDATED FOR 20 POINTS PER FREE RIDE
   const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
     try {
-      console.log(`🎯 Awarding ${POINTS_PER_REFERRAL} points to: ${referrerFullId} from new user: ${newUserId}`);
-      
-      // Update referrer's document
-      await updateDoc(doc(db, "users", referrerFullId), {
+      const referrerRef = doc(db, "users", referrerFullId);
+      const referrerSnap = await getDoc(referrerRef);
+
+      if (!referrerSnap.exists()) return;
+
+      const referrerData = referrerSnap.data();
+      const isDriver = referrerData.isDriver || false;
+      const currentPoints = (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
+
+      // 1. Update basic referral stats for everyone
+      await updateDoc(referrerRef, {
         referrals: arrayUnion({
           userId: newUserId,
-          date: new Date(),
+          date: new Date().toISOString(),
           points: POINTS_PER_REFERRAL,
           status: "completed"
         }),
@@ -107,45 +114,43 @@ export default function SignUpUi() {
         referralCount: increment(1),
       });
 
-      // Check if referrer earned a free ride (20 points required)
-      const referrerRef = doc(db, "users", referrerFullId);
-      const referrerSnap = await getDoc(referrerRef);
-      
-      if (referrerSnap.exists()) {
-        const referrerData = referrerSnap.data();
-        const currentPoints = (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
-        // CHANGED: Now requires 20 points per free ride instead of 10
-        const freeRides = Math.floor(currentPoints / POINTS_REQUIRED_PER_FREE_RIDE);
-        
-        // CHANGED: Check for 20 points threshold instead of 10
-        if (currentPoints >= POINTS_REQUIRED_PER_FREE_RIDE && 
-            currentPoints % POINTS_REQUIRED_PER_FREE_RIDE === 0) {
-          await updateDoc(doc(db, "users", referrerFullId), {
-            freeRides: freeRides,
-            lastFreeRideEarned: new Date(),
+      // 2. Check for the 20-point Milestone
+      if (currentPoints >= 20 && currentPoints % 20 === 0) {
+        if (isDriver) {
+          // --- REWARD FOR DRIVERS: VIP STAR ---
+          await updateDoc(referrerRef, {
+            driverVip: true,
+            notifications: arrayUnion({
+              id: Date.now().toString(),
+              type: "vip_earned",
+              title: "🌟 VIP Star Activated!",
+              message: "Your referrals earned you a VIP Star! You'll now appear at the top of search results.",
+              timestamp: new Date().toISOString(),
+              read: false,
+              actionUrl: `/user/driver-profile/${referrerFullId}`
+            }),
+            hasUnreadNotifications: true
           });
-          
-          // ADDED: Notification for free ride earned
-          await updateDoc(doc(db, "users", referrerFullId), {
+          console.log(`🌟 VIP Star awarded to driver: ${referrerData.fullName}`);
+        } else {
+          // --- REWARD FOR CUSTOMERS: FREE RIDE ---
+          const newFreeRideCount = (referrerData.freeRides || 0) + 1;
+          await updateDoc(referrerRef, {
+            freeRides: newFreeRideCount,
             notifications: arrayUnion({
               id: Date.now().toString(),
               type: "free_ride_earned",
-              title: "🎉 Free Ride Earned!",
-              message: `You earned a free ride! You now have ${freeRides} free ride(s).`,
+              title: "🎉 Free ₦5,000 Ride Earned!",
+              message: `You hit 20 points! You now have ${newFreeRideCount} free ride(s) worth ₦5,000 each.`,
               timestamp: new Date().toISOString(),
               read: false,
               actionUrl: "/user/bookings"
             }),
             hasUnreadNotifications: true
           });
-          
-          console.log(`🏆 ${referrerData.fullName} earned a free ride at ${currentPoints} points! Total free rides: ${freeRides}`);
-        } else {
-          console.log(`📊 ${referrerData.fullName} now has ${currentPoints} points. Need ${POINTS_REQUIRED_PER_FREE_RIDE - (currentPoints % POINTS_REQUIRED_PER_FREE_RIDE)} more for next free ride.`);
+          console.log(`🎫 Free ride awarded to customer: ${referrerData.fullName}`);
         }
       }
-      
-      console.log(`✅ Points awarded successfully`);
       return true;
     } catch (error) {
       console.error("❌ Error awarding points:", error);
@@ -161,14 +166,14 @@ export default function SignUpUi() {
   // ✅ Common user data structure - UPDATED WITH NOTIFICATION FIELDS
   const createUserData = (baseData: any, authType: string, referrerFullId: string | null) => {
     const userShortId = getReferralShortId(baseData.uid || '');
-    
+
     return {
       ...baseData,
       authType,
       createdAt: serverTimestamp(), // ← CHANGED: Using serverTimestamp
       hiredCars: [],
       contactedDrivers: [],
-      
+
       // REFERRAL FIELDS
       referralShortId: userShortId, // Their own short ID for sharing
       referredBy: referrerFullId, // Who referred them (full UID)
@@ -185,7 +190,7 @@ export default function SignUpUi() {
       hasUnreadNotifications: false,
       lastNotification: null,
       fcmToken: "", // Will be set when they enable push notifications
-      
+
       // NEW: PROFILE FIELDS ← ADDED THESE
       city: "", // Empty by default
       phone: "", // Will be added later
@@ -194,7 +199,7 @@ export default function SignUpUi() {
       earnings: 0, // For drivers
       isEmailVerified: false, // Will be true after verification
       lastActive: serverTimestamp(),
-      
+
       // For future use
       preferences: {
         theme: "light",
@@ -368,7 +373,7 @@ export default function SignUpUi() {
                   We'll make your first ride an experience to remember!
                 </p>
                 <p className="text-xs text-green-600 mt-1">
-                  Plus they earn {POINTS_PER_REFERRAL} points for your signup. 
+                  Plus they earn {POINTS_PER_REFERRAL} points for your signup.
                   <br />
                   {POINTS_REQUIRED_PER_FREE_RIDE} points = 1 free ride!
                 </p>
@@ -467,11 +472,10 @@ export default function SignUpUi() {
 
           {message && (
             <div
-              className={`text-center mt-4 text-sm px-4 py-2 rounded-xl ${
-                message.startsWith("✅")
+              className={`text-center mt-4 text-sm px-4 py-2 rounded-xl ${message.startsWith("✅")
                   ? "bg-green-100 text-green-700 border border-green-400"
                   : "bg-red-100 text-red-700 border border-red-400"
-              }`}
+                }`}
             >
               {message}
             </div>
@@ -527,7 +531,7 @@ export default function SignUpUi() {
         {/* NEW: Notification Explanation (subtle) */}
         <div className="mt-4 p-2 bg-gray-100 border border-gray-300 rounded-lg">
           <p className="text-xs text-gray-600 text-center">
-            📢 By signing up, you agree to receive notifications about bookings, 
+            📢 By signing up, you agree to receive notifications about bookings,
             offers, and safety updates. You can manage preferences in settings.
           </p>
         </div>

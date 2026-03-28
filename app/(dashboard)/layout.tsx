@@ -5,19 +5,19 @@ import { useRouter, usePathname } from "next/navigation";
 import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 import Script from "next/script";
 
+// Modern Lucide icons as requested
 import {
-  FaHome,
-  FaTachometerAlt,
-  FaUserPlus,
-  FaCar,
-  FaInfoCircle,
-  FaSignOutAlt,
-  FaBars,
-  FaTimes,
-  FaRegCommentDots,
-  FaHeadphones,
-  FaChevronDown,
-} from "react-icons/fa";
+  Home,
+  LayoutDashboard,
+  UserPlus,
+  Car,
+  Info,
+  LogOut,
+  Menu,
+  X,
+  MessageSquare,
+  ChevronDown
+} from "lucide-react";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
@@ -25,7 +25,7 @@ import { doc, getDoc } from "firebase/firestore";
 
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false); // New state for dropdown
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [isDriver, setIsDriver] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -33,7 +33,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  
+
   const router = useRouter();
   const pathname = usePathname();
   const { unreadCount } = useUnreadChats();
@@ -51,7 +51,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        console.log("No session found, redirecting...");
         setIsAuthenticated(false);
         const returnUrl = encodeURIComponent(pathname);
         router.replace(`/login?redirect=${returnUrl}`);
@@ -72,7 +71,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         if (snap.exists()) {
           const data = snap.data();
           setIsDriver(data.isDriver === true);
-          
+
           if (data.isDriver) {
             finalName = getFirstName(data.firstName || user.displayName);
           } else {
@@ -111,16 +110,15 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
   const dashboardRoute = isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`;
 
-  // Updated menuItems to include sub-links for About
   const menuItems: any[] = [
-    { name: "Home", href: "/", icon: <FaHome /> },
-    { name: "Dashboard", href: dashboardRoute, icon: <FaTachometerAlt /> },
-    { name: "Chat", href: "/user/chat", icon: <FaRegCommentDots />, unreadCount },
-    { name: "Hire a Car", href: "/user/car-hire", icon: <FaCar /> },
-    !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <FaUserPlus /> },
-    { 
-      name: "About", 
-      icon: <FaInfoCircle />, 
+    { name: "Home", href: "/", icon: <Home size={20} /> },
+    { name: "Dashboard", href: dashboardRoute, icon: <LayoutDashboard size={20} /> },
+    { name: "Chat", href: "/user/chat", icon: <MessageSquare size={20} /> },
+    { name: "Hire a Car", href: "/user/car-hire", icon: <Car size={20} /> },
+    !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <UserPlus size={20} /> },
+    {
+      name: "About",
+      icon: <Info size={20} />,
       isDropdown: true,
       subItems: [
         { name: "About Us", href: "/about" },
@@ -128,8 +126,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         { name: "Location", href: "/location" },
       ]
     },
-    { name: "Contact Us", href: "/contact", icon: <FaHeadphones /> },
-    { name: "Logout", icon: <FaSignOutAlt /> },
+    { name: "Logout", icon: <LogOut size={20} /> },
   ].filter(Boolean);
 
   const handleLogout = async () => {
@@ -145,31 +142,39 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   return (
     <>
       <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
-      <div className="flex min-h-screen bg-gray-100">
-        <div className="md:hidden absolute top-6 right-4 z-50">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+
+        {/* Mobile Toggle Button */}
+        <div className="md:hidden absolute top-6 right-4 z-[60]">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white text-2xl">
-            {sidebarOpen ? <FaTimes /> : <FaBars />}
+            {sidebarOpen ? <X /> : <Menu />}
           </button>
         </div>
 
-        <aside className={`z-30 fixed top-0 left-0 w-50 bg-black text-white min-h-screen flex flex-col transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static`}>
-          <div className="p-6 bg-gray-900 flex flex-col items-center">
-            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white mb-4">
+        {/* STATIC SIDEBAR WITH INTERNAL SCROLL */}
+        <aside className={`
+          z-50 fixed top-0 left-0 w-55 bg-black text-white h-screen flex flex-col 
+          transform transition-transform duration-300 shadow-2xl
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static
+        `}>
+
+          {/* Profile Header (Fixed at top of sidebar) */}
+          <div className="p-4 bg-gray-900 flex flex-col items-center border-b border-white/5">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white/20 mb-3 shadow-lg">
               <img src={photoURL} alt="Profile" className="w-full h-full object-cover" />
             </div>
-            <h2 className="text-xl font-bold text-center">
-              <small className="block font-normal text-xs text-gray-400">Welcome,</small>
+            <h2 className="text-lg font-bold text-center">
+              <small className="block font-normal text-[10px] uppercase tracking-wider text-gray-500 mb-1">Welcome back,</small>
               {displayName}
             </h2>
           </div>
 
-          <nav className="flex-1 mt-6">
+          {/* Navigation Area */}
+          <nav className="flex-1 mt-4 overflow-y-auto px-2 custom-scrollbar">
             {menuItems.map((item: any) => (
-              <div 
-                key={item.name} 
-                className="relative"
-                onMouseEnter={() => item.isDropdown && setAboutOpen(true)}
-                onMouseLeave={() => item.isDropdown && setAboutOpen(false)}
+              <div
+                key={item.name}
+                className={`mb-1 ${item.name === "Home" ? "md:hidden" : "block"}`}
               >
                 <button
                   onClick={() => {
@@ -177,23 +182,27 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                     else if (item.isDropdown) setAboutOpen(!aboutOpen);
                     else if (item.href) { router.push(item.href); setSidebarOpen(false); }
                   }}
-                  className={`flex items-center w-full px-6 py-4 hover:bg-green-800 transition-colors relative ${pathname === item.href ? "bg-gray-800 border-l-4 border-green-500" : ""}`}
+                  className={`flex items-center w-full px-4 py-3.5 rounded-xl hover:bg-green-800 transition-all group relative ${pathname === item.href ? "bg-gray-800 text-green-400 font-semibold" : "text-gray-300 hover:text-white"}`}
                 >
-                  <span className="mr-3 text-lg">{item.icon}</span>
-                  <span className="flex-1 text-left">{item.name}</span>
-                  {item.name === "Chat" && unreadCount > 0 && (
-                    <span className="absolute right-4 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                      {unreadCount > 9 ? "9+" : unreadCount}
+                  <span className={`mr-3 transition-colors ${pathname === item.href ? "text-green-400" : "text-gray-500 group-hover:text-white"}`}>
+                    {item.icon}
+                  </span>
+                  <span className="flex-1 text-left text-sm">{item.name}</span>
+
+                  {item.name === "Chat" && Number(unreadCount) > 0 && (
+                    <span className="h-5 min-w-[20px] px-1.5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                      {unreadCount}
                     </span>
                   )}
+
                   {item.isDropdown && (
-                    <FaChevronDown className={`text-xs transition-transform duration-200 ${aboutOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown size={14} className={`transition-transform duration-300 ${aboutOpen ? "rotate-180 text-green-400" : "text-gray-500"}`} />
                   )}
                 </button>
 
-                {/* Dropdown Menu */}
+                {/* About Dropdown Content */}
                 {item.isDropdown && aboutOpen && (
-                  <div className="bg-zinc-900 md:bg-gray-900 w-full">
+                  <div className="mt-1 space-y-1 bg-white/5 rounded-xl overflow-hidden py-1 mx-2">
                     {item.subItems.map((sub: any) => (
                       <button
                         key={sub.name}
@@ -202,7 +211,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                           setSidebarOpen(false);
                           setAboutOpen(false);
                         }}
-                        className={`w-full pl-14 pr-6 py-3 text-sm text-gray-300 hover:text-white hover:bg-green-700 text-left transition-colors ${pathname === sub.href ? "text-green-500 font-bold" : ""}`}
+                        className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === sub.href ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
                       >
                         {sub.name}
                       </button>
@@ -212,13 +221,38 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
               </div>
             ))}
           </nav>
+
+          {/* Optional Footer Branding */}
+          <div className="p-4 border-t border-white/5">
+            <p className="text-[10px] text-center text-gray-600 font-bold tracking-widest uppercase">NOMO v2.0</p>
+          </div>
         </aside>
 
-        <main className="flex-1 p-1">
-          {msg && <div className="bg-green-100 text-green-700 p-3 rounded-lg mb-4 text-center border border-green-300">{msg}</div>}
-          {children}
+        {/* MAIN CONTENT AREA - INDEPENDENT SCROLL */}
+        <main className="flex-1 h-screen overflow-y-auto bg-[#F8F9FA]">
+          <div className="p-1 max-w-7xl mx-auto">
+            {msg && (
+              <div className="bg-green-500 text-white p-4 rounded-2xl mb-6 text-center shadow-lg font-bold animate-in fade-in slide-in-from-top-4">
+                {msg}
+              </div>
+            )}
+            {children}
+          </div>
         </main>
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+      `}</style>
     </>
   );
 }
