@@ -44,14 +44,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://nomocars.com",
+    url: "https://res.cloudinary.com/dqm6hjihm/image/upload/v1774736312/driverShareProfile_zy0dht.jpg",
     siteName: "Nomo Cars",
     title: "Nomo Cars | Premium Car Rental Service",
     description:
       "Experience luxury travel with Nomo Cars. Rent premium vehicles with seamless booking and exceptional service.",
     images: [
       {
-        url: "https://nomocars.com/og-image.png",
+        url: "https://res.cloudinary.com/dqm6hjihm/image/upload/v1774736312/driverShareProfile_zy0dht.jpg",
         width: 1200,
         height: 630,
         alt: "Nomo Cars - Premium Car Rental",
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     title: "Nomo Cars | Premium Car Rental Service",
     description:
       "Experience luxury travel with Nomo Cars. Rent premium vehicles with seamless booking and exceptional service.",
-    images: ["https://nomocars.com/og-image.png"],
+    images: ["https://res.cloudinary.com/dqm6hjihm/image/upload/v1774736312/driverShareProfile_zy0dht.jpg"],
     creator: "@nomocars",
   },
 
@@ -99,7 +99,7 @@ export default function RootLayout({
       <body className="antialiased">
         {/* 2. Add Toaster here so it works globally */}
         <Toaster position="top-center" reverseOrder={false} />
-        
+
         <Nav />
         <hr className="text-white" />
         <main>{children}</main>
