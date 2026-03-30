@@ -41,7 +41,7 @@ export default function DriverPartner({ user, isDriver, data }: any) {
   };
 
   const sectionStyle = {
-    backgroundImage: content.backgroundImage 
+    backgroundImage: content.backgroundImage
       ? `linear-gradient(rgba(30, 58, 138, 0.9), rgba(23, 37, 75, 0.9)), url("${content.backgroundImage}")`
       : `linear-gradient(to right, #1e3a8a, #1e40af)`,
     backgroundSize: 'cover',
@@ -53,29 +53,29 @@ export default function DriverPartner({ user, isDriver, data }: any) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="flex justify-center md:inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
+            <div className="flex justify-center md:inline-flex items-center gap-2 border-2 border-yellow-400 px-4 py-2 rounded-full mb-6">
               <IconComponent name={content.sectionIcon || "FaCrown"} className="text-yellow-300" />
               <span className="text-sm font-medium">{"Partnership"}</span>
             </div>
-            
+
             <h2 className="text-center md:text-left text-3xl md:text-4xl font-bold mb-4">
               {content.title || "Become a Driver Partner"}
             </h2>
             <p className="text-center md:text-left text-xl text-blue-100 mb-8">
-               {content.description || "Earn Money on Your Schedule"}
+              {content.description || "Earn Money on Your Schedule"}
             </p>
-            
+
             <div className="space-y-4 mb-8">
               {(content.benefits || []).map((benefit: any) => (
-                <CheckItem 
+                <CheckItem
                   key={benefit.id}
-                  title={benefit.title} 
-                  desc={benefit.description} 
+                  title={benefit.title}
+                  desc={benefit.description}
                   icon={content.sectionIcon}
                 />
               ))}
             </div>
-            
+
             <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
               <button
                 onClick={handleRegisterDriver}
@@ -86,14 +86,14 @@ export default function DriverPartner({ user, isDriver, data }: any) {
               </button>
             </div>
           </div>
-          
+
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 md:p-8 border border-white/20 shadow-2xl">
             <div className="grid grid-cols-2 gap-4 md:gap-6 mb-8">
               {(content.stats || []).map((stat: any) => (
                 <StatCard key={stat.id} val={stat.value} label={stat.label} />
               ))}
             </div>
-            
+
             <div className="text-center">
               {user ? (
                 <div className="inline-block px-6 py-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/10 text-sm font-bold tracking-wide">
@@ -106,7 +106,7 @@ export default function DriverPartner({ user, isDriver, data }: any) {
                   )}
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={() => router.push("/signup")}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/10 text-sm font-bold tracking-wide hover:bg-white/30 transition-all cursor-pointer"
                 >

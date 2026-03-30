@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, googleProvider, db } from "@/lib/firebaseConfig";
-import { 
-  signInWithPopup, 
-  signInWithEmailAndPassword, 
+import {
+  signInWithPopup,
+  signInWithEmailAndPassword,
   sendEmailVerification,
   UserCredential
 } from "firebase/auth";
@@ -18,7 +18,7 @@ import {
   increment,
   collection,
   getDocs,
-  serverTimestamp 
+  serverTimestamp
 } from "firebase/firestore";
 import Link from "next/link";
 import LoadingRound from "@/components/re-useable-loading";
@@ -32,10 +32,11 @@ export default function LoginUi() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const [loadingLogin, setLoadingLogin] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  
+  const [resending, setResending] = useState(false); // New state for resend button
+
   const [error, setError] = useState("");
   const [verificationMessage, setVerificationMessage] = useState("");
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
@@ -160,67 +161,48 @@ export default function LoginUi() {
   };
 
   const ensureNotificationFields = async (userId: string, userData: any) => {
-    if (!userData.hasOwnProperty('notificationEnabled')) {
-      await updateDoc(doc(db, "users", userId), {
+    await updateDoc(doc(db, "users", userId), {
+      lastActive: serverTimestamp(),
+      ...(!userData.hasOwnProperty('notificationEnabled') && {
         notificationEnabled: true,
         notifications: userData.notifications || [],
         hasUnreadNotifications: false,
         lastNotification: null,
         fcmToken: "",
-        lastActive: serverTimestamp(),
         city: userData.city || "",
         phone: userData.phone || "",
         rating: userData.rating || 0,
         totalTrips: userData.totalTrips || 0,
         earnings: userData.earnings || 0,
         preferences: userData.preferences || { theme: "light", language: "en", currency: "NGN" }
-      });
-    }
-  };
-
-  const handleSmartNotification = async (userId: string, currentData: any) => {
-    const userRef = doc(db, "users", userId);
-    let notifications = [...(currentData.notifications || [])];
-    
-    const now = new Date();
-    const loginTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    const loginIndex = notifications.findIndex(n => n.type === "login");
-
-    const newLoginEntry = {
-      id: Date.now().toString(),
-      type: "login",
-      title: "👋 Welcome Back!",
-      message: `Logged in at ${loginTime}`,
-      timestamp: now.toISOString(),
-      read: false,
-      actionUrl: "/"
-    };
-
-    if (loginIndex !== -1) {
-      notifications[loginIndex] = newLoginEntry;
-    } else {
-      notifications.unshift(newLoginEntry);
-    }
-
-    const trimmedNotifications = notifications.slice(0, 15);
-
-    await updateDoc(userRef, {
-      lastActive: serverTimestamp(),
-      notifications: trimmedNotifications,
-      hasUnreadNotifications: true
+      })
     });
   };
 
+  // --- FIXED RESEND LOGIC ---
   const handleResendVerification = async () => {
     const user = auth.currentUser;
-    if (user && !user.emailVerified) {
-      try {
+    if (!user) return;
+
+    setResending(true);
+    try {
+      // Reload user to ensure we have the latest state
+      await user.reload();
+      if (!user.emailVerified) {
         await sendEmailVerification(user);
-        setVerificationMessage("Verification email sent!");
-      } catch (error: any) {
-        setVerificationMessage("Failed to send verification email.");
+        setVerificationMessage("Check your inbox! Verification email sent.");
+      } else {
+        setVerificationMessage("Email is already verified. Please login again.");
       }
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/too-many-requests') {
+        setVerificationMessage("Too many attempts. Please wait a few minutes.");
+      } else {
+        setVerificationMessage("Failed to send. Try again later.");
+      }
+    } finally {
+      setResending(false);
     }
   };
 
@@ -234,19 +216,18 @@ export default function LoginUi() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
       if (!user.emailVerified) {
-        setVerificationMessage("Please verify your email address.");
+        setVerificationMessage("Your email is not verified yet.");
         setShowVerificationBanner(true);
         setLoadingLogin(false);
       } else {
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
-        
+
         if (userDoc.exists()) {
           const userData = userDoc.data();
           await ensureNotificationFields(user.uid, userData);
-          await handleSmartNotification(user.uid, userData);
         }
         await exchangeTokenAndRedirect(userCredential);
       }
@@ -279,7 +260,6 @@ export default function LoginUi() {
       } else {
         const userData = snap.data();
         await ensureNotificationFields(user.uid, userData);
-        await handleSmartNotification(user.uid, userData);
       }
 
       await exchangeTokenAndRedirect(result);
@@ -305,15 +285,22 @@ export default function LoginUi() {
         {error && <div className="bg-red-100 text-red-700 px-4 py-3 rounded-xl mb-4 text-center border border-red-400 font-bold text-[10px] uppercase tracking-widest">{error}</div>}
 
         {showVerificationBanner && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-            <p className="text-[10px] text-yellow-700 font-black uppercase tracking-widest">{verificationMessage}</p>
-            <button onClick={handleResendVerification} className="mt-2 text-[9px] font-black underline uppercase">Resend email</button>
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 flex flex-col items-start">
+            <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest">{verificationMessage}</p>
+            <button
+              type="button"
+              disabled={resending}
+              onClick={handleResendVerification}
+              className={`mt-2 text-[9px] font-black underline uppercase ${resending ? 'opacity-50 cursor-not-allowed' : 'hover:text-blue-700'}`}
+            >
+              {resending ? "Sending..." : "Resend verification email"}
+            </button>
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input type="email" placeholder="EMAIL ADDRESS" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none uppercase text-xs font-bold bg-white" />
-          
+
           <div className="relative">
             <input type={showPassword ? "text" : "password"} placeholder="PASSWORD" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none uppercase text-xs font-bold bg-white" />
             <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 text-[10px] font-black uppercase hover:text-blue-600 transition">
@@ -344,8 +331,8 @@ export default function LoginUi() {
         </button>
 
         <p className="text-center text-[10px] mt-8 font-black text-gray-400 uppercase tracking-widest">
-          Don't have an account? 
-          <Link href="/signup" className="text-blue-600 hover:underline ml-2 font-black italic">Sign Up</Link>
+          Don't have an account?
+          <Link href="/signup" className="text-blue-600 ml-2 font-black   hover:underline">Sign Up</Link>
         </p>
       </div>
     </div>

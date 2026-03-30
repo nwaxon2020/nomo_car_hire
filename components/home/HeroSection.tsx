@@ -41,7 +41,7 @@ export default function HeroSection({
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-20 w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 border-1 border-white px-4 py-2 rounded-full mb-6">
+            <div className="inline-flex items-center gap-2 border-2 border-gray-500 px-4 py-2 rounded-full mb-6">
               <FaKey className="text-yellow-300" />
               <span className="text-sm font-medium">
                 {content.badgeText || "Nigeria's #1 Car Hire Platform"}

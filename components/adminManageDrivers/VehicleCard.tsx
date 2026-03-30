@@ -3,11 +3,14 @@ import { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { toast } from "react-hot-toast";
-import { FaWind, FaUsers, FaCheckCircle, FaEye, FaCarSide } from "react-icons/fa";
+import { FaWind, FaUsers, FaCheckCircle, FaEye, FaCarSide, FaExclamationTriangle } from "react-icons/fa";
+
+import { triggerNotification } from "@/lib/notifications";
 
 export default function VehicleCard({ car }: any) {
   const [showDocs, setShowDocs] = useState(false);
   const [selectedView, setSelectedView] = useState<string>("front");
+  const [showConfirm, setShowConfirm] = useState(false); // Confirmation overlay state
 
   const mainImage = car.images?.[selectedView] || car.images?.front || "";
 
@@ -21,7 +24,18 @@ export default function VehicleCard({ car }: any) {
         status: "approved",
         approvedAt: new Date().toISOString()
       });
+
+      // ADD THIS: Notify the owner/driver
+      await triggerNotification(
+        car.driverId, // Ensure this field exists in your car object
+        "Vehicle Approved! ✅",
+        `Your ${car.carName} has been verified and is now live.`,
+        "success",
+        "/user/my-vehicles"
+      );
+
       toast.success(`${car.carName} Approved!`);
+      setShowConfirm(false); // Close overlay after success
     } catch (error) {
       toast.error("Failed to approve vehicle");
     }
@@ -29,7 +43,29 @@ export default function VehicleCard({ car }: any) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col h-[350px] relative">
-      
+
+      {/* Confirmation Overlay */}
+      {showConfirm && (
+        <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center animate-in fade-in zoom-in duration-200">
+          <FaExclamationTriangle className="text-amber-500 text-2xl mb-2" />
+          <p className="text-xs font-black text-gray-800 uppercase mb-3">Approve {car.carName}?</p>
+          <div className="flex gap-2 w-full">
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="flex-1 py-2 bg-gray-200 text-gray-800 text-[10px] font-bold rounded"
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleApproveVehicle}
+              className="flex-1 py-2 bg-green-600 text-white text-[10px] font-bold rounded"
+            >
+              CONFIRM
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. New Vehicle Bubbling Indicator */}
       {isNew && (
         <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-blue-600 text-white text-[9px] font-black px-2 py-1 rounded-full animate-pulse shadow-lg">
@@ -45,9 +81,8 @@ export default function VehicleCard({ car }: any) {
             <button
               key={key}
               onClick={() => setSelectedView(key)}
-              className={`w-8 h-8 rounded border-2 overflow-hidden transition-all ${
-                selectedView === key ? "border-amber-400 scale-110" : "border-white/50 opacity-70"
-              }`}
+              className={`w-8 h-8 rounded border-2 overflow-hidden transition-all ${selectedView === key ? "border-amber-400 scale-110" : "border-white/50 opacity-70"
+                }`}
             >
               <img src={url} className="w-full h-full object-cover" />
             </button>
@@ -78,14 +113,14 @@ export default function VehicleCard({ car }: any) {
           <button onClick={() => setShowDocs(true)} className="flex-[2] py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-bold rounded flex items-center justify-center gap-2 transition-colors">
             <FaEye /> VIEW PAPERS
           </button>
-          
-          {/* 1. Updated Approve Button with Firebase Logic */}
-          <button 
+
+          {/* 1. Updated Approve Button with Confirmation Trigger */}
+          <button
             disabled={car.status === "approved"}
-            className={`flex-1 py-2 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-all ${car.status === "approved" ? 'bg-gray-300' : 'bg-green-600 hover:bg-green-700'}`}
-            onClick={handleApproveVehicle}
+            className={`flex-1 py-2 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-all ${car.status === "approved" ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+            onClick={() => setShowConfirm(true)}
           >
-            <FaCheckCircle /> {car.status === "approved" ? "DONE" : "APPROVE"}
+            <FaCheckCircle /> {car.status === "approved" ? "APPROVED" : "APPROVE"}
           </button>
         </div>
       </div>

@@ -3,8 +3,8 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getMessaging } from "firebase/messaging"; // Added Messaging
 
-// Firebase Client configuration
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -15,18 +15,19 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-
-//const app = getFirebaseApp();
-
-
 // 🔑 SINGLE Firebase App (singleton)
-export const app =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Firebase services (ALL use same app)
+// Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Initialize Messaging (only on client side)
+export const messaging = typeof window !== "undefined" ? getMessaging(app) : null;
+
+// Export VAPID Key for easy access in other files
+export const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
 // Google provider
 export const googleProvider = new GoogleAuthProvider();

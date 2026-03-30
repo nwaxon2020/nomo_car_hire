@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 import Script from "next/script";
 
-// Modern Lucide icons as requested
+// Modern Lucide icons
 import {
   Home,
   LayoutDashboard,
@@ -16,16 +16,19 @@ import {
   Menu,
   X,
   MessageSquare,
-  ChevronDown
+  ChevronDown,
+  Bell // Added Bell
 } from "lucide-react";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import NotificationPanel from "@/components/notification/Notification"; // Assuming this is your component
 
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false); // Added for Notif Panel
   const [msg, setMsg] = useState("");
   const [isDriver, setIsDriver] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -33,6 +36,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0); // Added for Bell count
 
   const router = useRouter();
   const pathname = usePathname();
@@ -61,39 +65,42 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       setUserId(user.uid);
       setIsAuthenticated(true);
 
-      try {
-        const ref = doc(db, "users", user.uid);
-        const snap = await getDoc(ref);
-
-        let finalName = "User";
-        let photo = user.photoURL || "/profile.png";
-
+      // Real-time listener for user data (including notifications)
+      const userDocRef = doc(db, "users", user.uid);
+      const unsubDoc = onSnapshot(userDocRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
           setIsDriver(data.isDriver === true);
 
-          if (data.isDriver) {
-            finalName = getFirstName(data.firstName || user.displayName);
-          } else {
-            const full = data.fullName || user.displayName || "User";
-            finalName = getFirstName(full);
-          }
-          photo = data.profileImage || user.photoURL || "/profile.png";
-        } else {
-          finalName = getFirstName(user.displayName);
-        }
+          let finalName = data.isDriver
+            ? getFirstName(data.firstName)
+            : getFirstName(data.fullName || user.displayName);
 
-        setDisplayName(capitalize(finalName));
-        setPhotoURL(photo);
-      } catch (error) {
-        console.error("Data fetch error:", error);
-      } finally {
-        setAuthChecking(false);
-      }
+          setDisplayName(capitalize(finalName));
+          setPhotoURL(data.profileImage || user.photoURL || "/profile.png");
+
+          // Sync notification count
+          const notifs = data.notifications || [];
+          const unread = notifs.filter((n: any) => !n.read).length;
+          setUnreadNotifs(unread);
+        }
+      });
+
+      setAuthChecking(false);
+      return () => unsubDoc();
     });
 
     return () => unsub();
   }, [router, pathname]);
+
+  const handleOpenNotifs = async () => {
+    setNotifOpen(true);
+    if (userId) {
+      await updateDoc(doc(db, "users", userId), {
+        hasUnreadNotifications: false
+      });
+    }
+  };
 
   if (authChecking) {
     return (
@@ -144,22 +151,36 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
       <div className="flex h-screen bg-gray-100 overflow-hidden">
 
-        {/* Mobile Toggle Button */}
+        {/* Mobile Toggle Button (Position untouched) */}
         <div className="md:hidden absolute top-6 right-4 z-[60]">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white text-2xl">
             {sidebarOpen ? <X /> : <Menu />}
           </button>
         </div>
 
-        {/* STATIC SIDEBAR WITH INTERNAL SCROLL */}
+        {/* STATIC SIDEBAR */}
         <aside className={`
           z-50 fixed top-0 left-0 w-55 bg-black text-white h-screen flex flex-col 
           transform transition-transform duration-300 shadow-2xl
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static
         `}>
 
-          {/* Profile Header (Fixed at top of sidebar) */}
-          <div className="p-4 bg-gray-900 flex flex-col items-center border-b border-white/5">
+          {/* Profile Header */}
+          <div className="p-4 pt-8 md:pt-4 bg-gray-900 flex flex-col items-center border-b border-white/5 relative">
+
+            {/* Added Notification Bell in Sidebar Profile Header */}
+            <button
+              onClick={handleOpenNotifs}
+              className="absolute top-10 right-6 md:top-6 md:right-6 p-2 text-gray-300 hover:text-amber-500 transition-colors"
+            >
+              <Bell size={20} className="text-yellow-400" />
+              {unreadNotifs > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-bounce">
+                  {unreadNotifs}
+                </span>
+              )}
+            </button>
+
             <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white/20 mb-3 shadow-lg">
               <img src={photoURL} alt="Profile" className="w-full h-full object-cover" />
             </div>
@@ -169,13 +190,9 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
             </h2>
           </div>
 
-          {/* Navigation Area */}
           <nav className="flex-1 mt-4 overflow-y-auto px-2 custom-scrollbar">
             {menuItems.map((item: any) => (
-              <div
-                key={item.name}
-                className={`mb-1 ${item.name === "Home" ? "md:hidden" : "block"}`}
-              >
+              <div key={item.name} className={`mb-1 ${item.name === "Home" ? "md:hidden" : "block"}`}>
                 <button
                   onClick={() => {
                     if (item.name === "Logout") handleLogout();
@@ -200,7 +217,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                   )}
                 </button>
 
-                {/* About Dropdown Content */}
                 {item.isDropdown && aboutOpen && (
                   <div className="mt-1 space-y-1 bg-white/5 rounded-xl overflow-hidden py-1 mx-2">
                     {item.subItems.map((sub: any) => (
@@ -222,15 +238,22 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
             ))}
           </nav>
 
-          {/* Optional Footer Branding */}
           <div className="p-4 border-t border-white/5">
             <p className="text-[10px] text-center text-gray-600 font-bold tracking-widest uppercase">NOMO v2.0</p>
           </div>
         </aside>
 
-        {/* MAIN CONTENT AREA - INDEPENDENT SCROLL */}
+        {/* NOTIFICATION SLIDE-OUT PANEL */}
+        <div className={`fixed inset-y-0 right-0 z-[100] w-full sm:w-96 transform transition-transform duration-500 ease-in-out shadow-2xl bg-white ${notifOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <NotificationPanel
+            onClose={() => setNotifOpen(false)}
+            onUnreadUpdate={(count: number) => setUnreadNotifs(count)}
+          />
+        </div>
+
+        {/* MAIN CONTENT AREA */}
         <main className="flex-1 h-screen overflow-y-auto bg-[#F8F9FA]">
-          <div className="p-1 max-w-7xl mx-auto">
+          <div className="md:p-1 max-w-7xl mx-auto">
             {msg && (
               <div className="bg-green-500 text-white p-4 rounded-2xl mb-6 text-center shadow-lg font-bold animate-in fade-in slide-in-from-top-4">
                 {msg}

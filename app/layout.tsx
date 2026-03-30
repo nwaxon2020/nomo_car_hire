@@ -61,7 +61,7 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title: "Nomo Cars | Premium Car Rental Service",
+    title: "Nomo Cars | Premium Car Booking Service",
     description:
       "Experience luxury travel with Nomo Cars. Rent premium vehicles with seamless booking and exceptional service.",
     images: ["https://res.cloudinary.com/dqm6hjihm/image/upload/v1774736312/driverShareProfile_zy0dht.jpg"],

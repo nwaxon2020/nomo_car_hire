@@ -6,6 +6,8 @@ import VehicleCard from "./VehicleCard";
 import { toast } from "react-hot-toast";
 import { FaTimes, FaPaperPlane, FaFlag, FaChevronLeft, FaChevronRight, FaInfoCircle, FaChevronDown, FaExclamationTriangle, FaLock } from "react-icons/fa";
 
+import { triggerNotification } from "@/lib/notifications";
+
 export default function DriverProfileView({ driver: initialDriver, onClose }: any) {
   const [driver, setDriver] = useState(initialDriver);
   const [msg, setMsg] = useState("");
@@ -21,8 +23,8 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   // New Passcode States
   const [showPasscodeModal, setShowPasscodeModal] = useState(false);
   const [passcodeEntry, setPasscodeEntry] = useState("");
-  const [adminAction, setAdminAction] = useState<{type: string, label: string} | null>(null);
-  
+  const [adminAction, setAdminAction] = useState<{ type: string, label: string } | null>(null);
+
   const PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE2;
 
   const presetReasons = [
@@ -52,18 +54,17 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
 
   const sendNotification = async () => {
     if (!msg) return toast.error("Please enter a message");
+
     try {
-      await updateDoc(doc(db, "users", driver.id), {
-        notifications: arrayUnion({
-          id: Date.now().toString(),
-          title: "Admin Office",
-          message: msg,
-          timestamp: new Date().toISOString(),
-          read: false
-        })
-      });
+      await triggerNotification(
+        driver.id,
+        "Message from Admin Office",
+        msg,
+        "personal"
+      );
+
       setMsg("");
-      toast.success("Message Sent");
+      toast.success("Message & Push Sent to Driver");
     } catch (error) {
       toast.error("Failed to send message");
     }
@@ -137,9 +138,9 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   const saveReason = async () => {
     if (!flagReason.trim()) return toast.error("Please provide a reason");
     try {
-      await updateDoc(doc(db, "users", driver.id), { 
-        flags: pendingFlag, 
-        flagReason: flagReason 
+      await updateDoc(doc(db, "users", driver.id), {
+        flags: pendingFlag,
+        flagReason: flagReason
       });
       setShowReasonInput(false);
       setShowPresets(false);
@@ -162,7 +163,7 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
 
   return (
     <div className="fixed inset-0 z-[100] bg-white h-screen w-screen overflow-y-auto animate-in fade-in duration-300">
-      
+
       {/* Header */}
       <div className="sticky relative top-0 z-20 bg-white/90 backdrop-blur-md border-b  p-4 md:px-8 flex justify-between items-center">
         <div className="flex items-center gap-4">
@@ -173,28 +174,27 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
               <div className="flex flex-col items-start gap-1">
                 <div className="flex items-center gap-1.5">
                   {[1, 2, 3].map((n) => (
-                    <FaFlag 
-                      key={n} 
+                    <FaFlag
+                      key={n}
                       onClick={() => handleFlagClick(n)}
-                      className={`cursor-pointer transition-colors ${
-                        (pendingFlag >= n || driver.flags >= n) ? 'text-red-600' : 'text-gray-200'
-                      }`} 
-                      size={16} 
+                      className={`cursor-pointer transition-colors ${(pendingFlag >= n || driver.flags >= n) ? 'text-red-600' : 'text-gray-200'
+                        }`}
+                      size={16}
                     />
                   ))}
                   {(driver.flags > 0 || pendingFlag > 0) && (
                     <div className="flex items-center gap-2 ml-2">
-                       <button onClick={handleClearFlags} className="text-[11px] font-bold px-3 py-0.5 rounded-xl border border-green-500 text-green-600 hover:bg-green-50">Clear Flag</button>
-                       <button onClick={() => setShowReasonInput(!showReasonInput)} className="text-blue-500 hover:text-blue-700"><FaInfoCircle size={14} /></button>
+                      <button onClick={handleClearFlags} className="text-[11px] font-bold px-3 py-0.5 rounded-xl border border-green-500 text-green-600 hover:bg-green-50">Clear Flag</button>
+                      <button onClick={() => setShowReasonInput(!showReasonInput)} className="text-blue-500 hover:text-blue-700"><FaInfoCircle size={14} /></button>
                     </div>
                   )}
                 </div>
-                
+
                 {showReasonInput && (
                   <div className="flex flex-col md:flex-row items-center gap-2 mt-2 animate-in slide-in-from-top-2 relative">
                     <div className="relative group">
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={flagReason}
                         onChange={(e) => setFlagReason(e.target.value)}
                         placeholder="Add reason for flag..."
@@ -242,7 +242,7 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
 
           <section className="bg-gray-900 p-5 rounded-2xl">
             <h3 className="text-gray-400 font-bold text-[10px] uppercase mb-3">Direct Message</h3>
-            <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full bg-gray-800 border-none rounded-xl p-3 text-white text-sm h-28 mb-3 focus:ring-1 focus:ring-amber-500" placeholder="Type instruction..."/>
+            <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full bg-gray-800 border-none rounded-xl p-3 text-white text-sm h-28 mb-3 focus:ring-1 focus:ring-amber-500" placeholder="Type instruction..." />
             <button onClick={sendNotification} className="w-full py-3 bg-amber-500 hover:bg-amber-400 rounded-xl font-black text-sm flex items-center justify-center gap-2">
               <FaPaperPlane /> SEND NOW
             </button>
@@ -263,18 +263,18 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
             ))}
           </div>
 
-          <button 
+          <button
             disabled={vehicles.length === 0}
-            onClick={handleVerifyToggle} 
+            onClick={handleVerifyToggle}
             className={`w-full mt-8 py-4 rounded-xl font-black shadow-lg transition-all 
-              ${vehicles.length === 0 
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                : driver.verified 
-                  ? 'bg-purple-600 text-white shadow-purple-100' 
+              ${vehicles.length === 0
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : driver.verified
+                  ? 'bg-purple-600 text-white shadow-purple-100'
                   : 'bg-green-600 hover:bg-green-700 text-white shadow-green-100'}`}
           >
-            {vehicles.length === 0 
-              ? "NO VEHICLE TO ENABLE VERIFICATION" 
+            {vehicles.length === 0
+              ? "NO VEHICLE TO ENABLE VERIFICATION"
               : driver.verified ? "DRIVER VERIFIED" : "VERIFY & APPROVE DRIVER"}
           </button>
           {driver.verified && <p className="text-center text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Only CEO can unverify this account</p>}
@@ -291,9 +291,9 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
               </div>
               <div>
                 <h3 className="text-xl font-black text-gray-900 uppercase">CEO Access Only</h3>
-                <p className="text-sm text-gray-500 mt-2">Enter passcode to authorize:<br/><span className="font-bold text-gray-800">{adminAction?.label}</span></p>
+                <p className="text-sm text-gray-500 mt-2">Enter passcode to authorize:<br /><span className="font-bold text-gray-800">{adminAction?.label}</span></p>
               </div>
-              <input 
+              <input
                 type="password"
                 autoFocus
                 value={passcodeEntry}
@@ -340,10 +340,10 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
           </button>
           <button onClick={prevImg} className="absolute left-8 text-white/50 hover:text-white z-[210]"><FaChevronLeft size={48} /></button>
           <div className="relative max-w-5xl max-h-[80vh] overflow-hidden rounded-2xl">
-             <img src={carImages[currentImgIdx]} className="w-full h-full object-contain" alt="Full view" />
-             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full text-white text-xs font-bold">
-               {currentImgIdx + 1} / {carImages.length} • {selectedCar.carName}
-             </div>
+            <img src={carImages[currentImgIdx]} className="w-full h-full object-contain" alt="Full view" />
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full text-white text-xs font-bold">
+              {currentImgIdx + 1} / {carImages.length} • {selectedCar.carName}
+            </div>
           </div>
           <button onClick={nextImg} className="absolute right-8 text-white/50 hover:text-white z-[210]"><FaChevronRight size={48} /></button>
         </div>

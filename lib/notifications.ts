@@ -1,92 +1,57 @@
 import { db } from "./firebaseConfig";
-import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 
-/** Notification structure */
-export interface NotificationData {
-    id: string;
-    title: string;
-    message: string;
-    type: "info" | "success" | "warning" | "money" | "safety";
-    read: boolean;
-    timestamp: string;
-    actionUrl: string;
-}
-
-/** Money opportunity structure */
-export interface MoneyOpportunity {
-    details: string;
-    amount: string | number;
-}
-
-/** Send notification to a user */
-export const sendNotification = async (
+/** * This function handles BOTH:
+ * 1. Saving to the user's notification list in Firestore (History)
+ * 2. Sending a Push Notification (The "Ping")
+ */
+export const triggerNotification = async (
     userId: string,
     title: string,
-    message: string,
-    type: NotificationData["type"] = "info"
-    ): Promise<void> => {
+    body: string,
+    type: string = "info",
+    link: string = "/",
+    imageUrl: string | null = null,
+    actionLabel: string = "View Details"
+) => {
     try {
         const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
 
-        const notification: NotificationData = {
-        id: Date.now().toString(),
-        title,
-        message,
-        type,
-        read: false,
-        timestamp: new Date().toISOString(),
-        actionUrl:
-            type === "money"
-            ? "/user/driver-dashboard"
-            : "/user/notifications"
+        if (!userSnap.exists()) {
+            console.warn(`User document for ${userId} does not exist.`);
+            return;
+        }
+
+        const userData = userSnap.data();
+        const fcmToken = userData.fcmToken;
+
+        // --- STEP 1: Save to Firestore for the user's "History" ---
+        const notificationObject = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            title,
+            message: body,
+            timestamp: new Date().toISOString(),
+            read: false,
+            favorite: false,
+            type: type,
+            actionUrl: link,
+            actionLabel: actionLabel,
+            image: imageUrl
         };
 
         await updateDoc(userRef, {
-        notifications: arrayUnion(notification),
-        hasUnreadNotifications: true,
-        lastNotification: new Date().toISOString()
+            notifications: arrayUnion(notificationObject),
+            hasUnreadNotifications: true
         });
 
-        console.log(`Notification sent to ${userId}: ${title}`);
+        // --- STEP 2: Send the Push Notification ---
+        if (fcmToken) {
+            console.log("Push Notification payload ready for token:", fcmToken);
+            // This is where you'll eventually call your '/api/send-push' route
+        }
 
-        // Future push notification logic here
     } catch (error) {
-        console.error("Error sending notification:", error);
+        console.error("Notification Error:", error);
     }
-};
-
-/** Send money opportunity alert to driver */
-export const sendMoneyOpportunityAlert = async (
-    driverId: string,
-    opportunity: MoneyOpportunity
-    ): Promise<void> => {
-    const title = "💰 Money Opportunity!";
-    const message = `New booking request: ${opportunity.details}. Potential earnings: ${opportunity.amount}`;
-
-    await sendNotification(driverId, title, message, "money");
-};
-
-/** Send safety reminder */
-export const sendSafetyReminder = async (
-    userId: string,
-    context: string
-    ): Promise<void> => {
-    const reminders: string[] = [
-        "🔒 Always meet in public places like petrol stations",
-        "📝 Check car papers and insurance before payment",
-        "💰 Agree on price before starting the trip",
-        "📱 Save chat history for reference",
-        "👥 Tell someone about your trip details",
-        "🚗 Inspect the car for any damages before accepting"
-    ];
-
-    const randomReminder =
-        reminders[Math.floor(Math.random() * reminders.length)];
-
-    await sendNotification(
-        userId,
-        "Safety Reminder",
-        `${randomReminder} (${context})`,
-        "safety"
-    );
 };

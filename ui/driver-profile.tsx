@@ -2358,14 +2358,6 @@ export default function DriverProfilePage() {
           Contact Us Today!
         </a>
       </div>
-
-      {/* Transport News */}
-      <div className="bg-white mt-6 p-3 lg:p-4 rounded-xl shadow">
-        <h2 className="px-4 pt-4 text-center md:text-left text-lg md:text-2xl font-bold">Latest Transport News</h2>
-        <p className="px-4 text-sm mb-3 text-center md:text-left text-gray-600">
-          Latest Transport, Flight, Pricing, Shipping, & Other News
-        </p>
-      </div>
     </div>
   );
 

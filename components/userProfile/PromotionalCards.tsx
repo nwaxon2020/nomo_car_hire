@@ -47,7 +47,7 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="mb-12"
+            className="mb-12 px-2 md:px-0 "
         >
             <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-6">
                 Earn Free Rides!

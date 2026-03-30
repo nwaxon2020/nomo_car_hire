@@ -12,10 +12,12 @@ export default function AdminDashboardUi() {
   const [allowedRoutes, setAllowedRoutes] = useState<string[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>({
     applicants: 0,
-    complaints: 0
+    complaints: 0,
+    manageDrivers: 0 // Track raw count from DB
   });
 
   const [isExpanded, setIsExpanded] = useState(false);
+  const [lastSeenDriversCount, setLastSeenDriversCount] = useState(0);
 
   const MOCK_TICKET_REVENUE = 100000000;
   const MOCK_TICKET_COUNT = 4;
@@ -32,6 +34,12 @@ export default function AdminDashboardUi() {
 
   const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
   const isCEO = auth.currentUser?.uid === CEO_ID;
+
+  // Load seen count from LocalStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('admin_seen_drivers_count');
+    if (saved) setLastSeenDriversCount(parseInt(saved));
+  }, []);
 
   useEffect(() => {
     const fetchPerms = async () => {
@@ -50,6 +58,15 @@ export default function AdminDashboardUi() {
     });
     const unsubComplaints = onSnapshot(query(collection(db, "complains"), where("status", "!=", "read")), (snap) => {
       setUnreadCounts(prev => ({ ...prev, complaints: snap.size }));
+    });
+
+    // Listener for Manage Drivers (New Drivers + Vehicles)
+    const unsubNewDrivers = onSnapshot(query(collection(db, "users"), where("isDriver", "==", true), where("verified", "==", false)), (dSnap) => {
+      const unsubNewVehicles = onSnapshot(collection(db, "vehicleLog"), (vSnap) => {
+        // You can adjust this filter to specific 'new' vehicle criteria if needed
+        setUnreadCounts(prev => ({ ...prev, manageDrivers: dSnap.size + vSnap.size }));
+      });
+      return () => unsubNewVehicles();
     });
 
     const unsubReviews = onSnapshot(collection(db, "generalSiteReviews"), (snap) => {
@@ -101,12 +118,25 @@ export default function AdminDashboardUi() {
       unsubComplaints();
       unsubUsers();
       unsubReviews();
+      unsubNewDrivers();
     };
   }, []);
 
+  const handleClearDrivers = () => {
+    // Save the current total to local storage to "clear" the badge
+    localStorage.setItem('admin_seen_drivers_count', unreadCounts.manageDrivers.toString());
+    setLastSeenDriversCount(unreadCounts.manageDrivers);
+  };
+
+  // Calculate display badge: only show if the DB count is higher than what we've seen
+  const driverBadgeCount = unreadCounts.manageDrivers > lastSeenDriversCount
+    ? unreadCounts.manageDrivers - lastSeenDriversCount
+    : 0;
+
   const allCards = [
-    { title: "Manage Drivers", icon: <FaCar />, link: "/admin/manage-driver", badge: 0 },
+    { title: "Manage Drivers", icon: <FaCar />, link: "/admin/manage-driver", badge: driverBadgeCount },
     { title: "Applicants", icon: <FiBriefcase />, link: "/admin/applicants", badge: unreadCounts.applicants },
+    { title: "Broadcast", icon: <FiBriefcase />, link: "/admin/broadcast", badge: 0 },
     { title: "Complaints", icon: <FiUserPlus />, link: "/admin/complaints", badge: unreadCounts.complaints },
     { title: "Add Staff", icon: <FiShield />, link: "/admin/add-staff", badge: 0 },
     { title: "Settings", icon: <FiSettings />, link: "/admin/admin-settings", badge: 0 },
@@ -114,24 +144,28 @@ export default function AdminDashboardUi() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      {/* Replaced old Stat section with the new Component */}
-      <AdminStatistics 
-        stats={stats} 
-        isCEO={isCEO} 
-        isExpanded={isExpanded} 
+      <AdminStatistics
+        stats={stats}
+        isCEO={isCEO}
+        isExpanded={isExpanded}
         setIsExpanded={setIsExpanded}
         MOCK_TICKET_REVENUE={MOCK_TICKET_REVENUE}
         MOCK_TICKET_COUNT={MOCK_TICKET_COUNT}
       />
-      
-      {/* --- ACTION CARDS --- */}
+
       <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
         {allCards.map((card) => {
           const canSee = isCEO || allowedRoutes.includes(card.link);
           if (!canSee) return null;
 
           return (
-            <Link href={card.link} key={card.link}>
+            <Link
+              href={card.link}
+              key={card.link}
+              onClick={() => {
+                if (card.title === "Manage Drivers") handleClearDrivers();
+              }}
+            >
               <div className="bg-white p-6 md:p-8 rounded-lg shadow-sm hover:shadow-xl transition-all border border-gray-100 group relative overflow-hidden">
                 {card.badge > 0 && (
                   <div className="absolute top-4 right-4 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center animate-pulse shadow-lg shadow-red-200">
@@ -148,10 +182,10 @@ export default function AdminDashboardUi() {
                   Access Route: {card.link}
                 </p>
                 <div className="mt-4 flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${card.badge > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
-                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
-                        {card.badge > 0 ? `${card.badge} New Actions` : 'System Clear'}
-                    </span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${card.badge > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
+                    {card.badge > 0 ? `${card.badge} New Actions` : 'System Clear'}
+                  </span>
                 </div>
               </div>
             </Link>

@@ -17,7 +17,10 @@ import {
   increment,
   collection,
   getDocs,
-  serverTimestamp // ← ADDED THIS IMPORT
+  serverTimestamp,
+  query,
+  where,
+  limit
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
@@ -43,66 +46,78 @@ export default function SignUpUi() {
 
   // Constants for referral system
   const POINTS_PER_REFERRAL = 2;
-  const POINTS_REQUIRED_PER_FREE_RIDE = 20; // Changed from 10 to 20
 
-  // Find referrer by short ID (last 8 chars of their UID)
   useEffect(() => {
     if (referralShortId && referralShortId.length === 8) {
       findReferrerByShortId(referralShortId);
     }
   }, [referralShortId]);
 
-  // ✅ FIXED: Accept referralShortId as parameter to avoid TypeScript issues
   const findReferrerByShortId = async (shortId: string) => {
     try {
-      console.log(`🔍 Looking for referrer with short ID: ${shortId}`);
-
       const usersRef = collection(db, "users");
-      const querySnapshot = await getDocs(usersRef);
+      const q = query(usersRef, where("referralShortId", "==", shortId), limit(1));
+      const querySnapshot = await getDocs(q);
 
-      // Find user whose UID ends with the short ID
-      const referrerDoc = querySnapshot.docs.find(doc =>
-        doc.id.endsWith(shortId)
-      );
-
-      if (referrerDoc) {
+      if (!querySnapshot.empty) {
+        const referrerDoc = querySnapshot.docs[0];
         const data = referrerDoc.data();
         setReferrerData(data);
-        setReferrerId(referrerDoc.id); // Store the full referrer UID
-        console.log(`✅ Found referrer: ${data.fullName} (UID: ${referrerDoc.id})`);
-      } else {
-        console.log(`❌ No user found ending with: ${shortId}`);
+        setReferrerId(referrerDoc.id);
       }
     } catch (error) {
       console.error("Error finding referrer:", error);
     }
   };
 
+  // --- RESTORED: FETCH FROM SETTINGS/NOTIFICATIONS ---
+  // --- INSIDE SignUpUi.tsx ---
+  const getDynamicWelcomeNote = async (userName: string) => {
+    try {
+      const settingsSnap = await getDoc(doc(db, "settings", "notifications"));
+      const firstName = userName.split(" ")[0];
+
+      if (settingsSnap.exists() && settingsSnap.data().welcomeNote) {
+        const savedNote = settingsSnap.data().welcomeNote;
+        return {
+          id: `welcome-${Date.now()}`,
+          type: "welcome",
+          title: (savedNote.title || "Welcome").replace("[NAME]", firstName),
+          message: (savedNote.message || "").replace("[NAME]", firstName),
+          actionUrl: savedNote.link || "/user/profile",
+          // ADD THIS LINE BELOW TO CAPTURE THE LABEL
+          actionLabel: savedNote.actionLabel || "View Details",
+          image: savedNote.imageUrl || null,
+          timestamp: new Date().toISOString(),
+          read: false,
+        };
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching welcome settings:", e);
+      return null;
+    }
+  };
+
   const validatePassword = (pwd: string) => /^(?=.*[0-9]).{8,}$/.test(pwd);
 
   const mapFirebaseError = (msg: string) => {
-    if (msg.includes("auth/email-already-in-use"))
-      return "This email is already in use.";
-    if (msg.includes("auth/invalid-email"))
-      return "Please enter a valid email address.";
-    if (msg.includes("auth/weak-password"))
-      return "Password should be at least 8 characters and include a number.";
+    if (msg.includes("auth/email-already-in-use")) return "This email is already in use.";
+    if (msg.includes("auth/invalid-email")) return "Please enter a valid email address.";
+    if (msg.includes("auth/weak-password")) return "Password should be at least 8 characters and include a number.";
     return "Something went wrong. Please try again.";
   };
 
-  // ✅ Award referral points using referrer's FULL UID - UPDATED FOR 20 POINTS PER FREE RIDE
   const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
     try {
       const referrerRef = doc(db, "users", referrerFullId);
       const referrerSnap = await getDoc(referrerRef);
-
       if (!referrerSnap.exists()) return;
 
       const referrerData = referrerSnap.data();
       const isDriver = referrerData.isDriver || false;
       const currentPoints = (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
 
-      // 1. Update basic referral stats for everyone
       await updateDoc(referrerRef, {
         referrals: arrayUnion({
           userId: newUserId,
@@ -114,26 +129,22 @@ export default function SignUpUi() {
         referralCount: increment(1),
       });
 
-      // 2. Check for the 20-point Milestone
       if (currentPoints >= 20 && currentPoints % 20 === 0) {
         if (isDriver) {
-          // --- REWARD FOR DRIVERS: VIP STAR ---
           await updateDoc(referrerRef, {
             driverVip: true,
             notifications: arrayUnion({
               id: Date.now().toString(),
               type: "vip_earned",
               title: "🌟 VIP Star Activated!",
-              message: "Your referrals earned you a VIP Star! You'll now appear at the top of search results.",
+              message: "Your referrals earned you a VIP Star!",
               timestamp: new Date().toISOString(),
               read: false,
               actionUrl: `/user/driver-profile/${referrerFullId}`
             }),
             hasUnreadNotifications: true
           });
-          console.log(`🌟 VIP Star awarded to driver: ${referrerData.fullName}`);
         } else {
-          // --- REWARD FOR CUSTOMERS: FREE RIDE ---
           const newFreeRideCount = (referrerData.freeRides || 0) + 1;
           await updateDoc(referrerRef, {
             freeRides: newFreeRideCount,
@@ -141,106 +152,78 @@ export default function SignUpUi() {
               id: Date.now().toString(),
               type: "free_ride_earned",
               title: "🎉 Free ₦5,000 Ride Earned!",
-              message: `You hit 20 points! You now have ${newFreeRideCount} free ride(s) worth ₦5,000 each.`,
+              message: `You hit 20 points! You now have ${newFreeRideCount} free ride(s).`,
               timestamp: new Date().toISOString(),
               read: false,
               actionUrl: "/user/bookings"
             }),
             hasUnreadNotifications: true
           });
-          console.log(`🎫 Free ride awarded to customer: ${referrerData.fullName}`);
         }
       }
-      return true;
     } catch (error) {
       console.error("❌ Error awarding points:", error);
-      return false;
     }
   };
 
-  // ✅ Get last 8 chars of UID for user's referral short ID
-  const getReferralShortId = (userId: string) => {
-    return userId.slice(-8); // Last 8 characters are usually unique
-  };
+  const getReferralShortId = (userId: string) => userId.slice(-8);
 
-  // ✅ Common user data structure - UPDATED WITH NOTIFICATION FIELDS
-  const createUserData = (baseData: any, authType: string, referrerFullId: string | null) => {
+  const createUserData = (baseData: any, authType: string, referrerFullId: string | null, welcomeNote: any) => {
     const userShortId = getReferralShortId(baseData.uid || '');
 
     return {
       ...baseData,
       authType,
-      createdAt: serverTimestamp(), // ← CHANGED: Using serverTimestamp
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       hiredCars: [],
       contactedDrivers: [],
-
-      // REFERRAL FIELDS
-      referralShortId: userShortId, // Their own short ID for sharing
-      referredBy: referrerFullId, // Who referred them (full UID)
-      referralPoints: 0, // Points THEY earn from THEIR referrals
-      referrals: [], // People THEY refer
+      referralShortId: userShortId,
+      referredBy: referrerFullId,
+      referralPoints: 0,
+      referrals: [],
       referralCount: 0,
       freeRides: 0,
-      lastFreeRideEarned: null,
       totalPointsEarned: 0,
-
-      // NEW: NOTIFICATION FIELDS ← ADDED THESE
-      notificationEnabled: true, // Default to enabled
-      notifications: [], // Empty array for notifications
-      hasUnreadNotifications: false,
+      notificationEnabled: true,
+      // PUSH THE FETCHED NOTE DIRECTLY HERE
+      notifications: welcomeNote ? [welcomeNote] : [],
+      hasUnreadNotifications: welcomeNote ? true : false,
       lastNotification: null,
-      fcmToken: "", // Will be set when they enable push notifications
-
-      // NEW: PROFILE FIELDS ← ADDED THESE
-      city: "", // Empty by default
-      phone: "", // Will be added later
-      rating: 0, // For drivers
-      totalTrips: 0, // For drivers
-      earnings: 0, // For drivers
-      isEmailVerified: false, // Will be true after verification
+      fcmToken: "",
+      city: "",
+      phone: "",
+      phoneNumber: baseData.phoneNumber || "",
+      rating: 0,
+      totalTrips: 0,
+      earnings: 0,
+      isEmailVerified: baseData.isEmailVerified || false,
       lastActive: serverTimestamp(),
-
-      // For future use
-      preferences: {
-        theme: "light",
-        language: "en",
-        currency: "NGN"
-      }
+      verified: false,
+      preferences: { theme: "light", language: "en", currency: "NGN" }
     };
   };
 
   const handleRegister = async (e: any) => {
     e.preventDefault();
     setMessage("");
-
     if (!profileImage) return setMessage("⚠️ Profile image is required.");
     if (!fullName.trim()) return setMessage("⚠️ Full name is required.");
-
-    if (password !== confirmPassword)
-      return setMessage("⚠️ Passwords do not match.");
-
-    if (!validatePassword(password))
-      return setMessage(
-        "⚠️ Password must be at least 8 characters and include a number."
-      );
+    if (password !== confirmPassword) return setMessage("⚠️ Passwords do not match.");
+    if (!validatePassword(password)) return setMessage("⚠️ Password must be at least 8 chars + number.");
 
     setLoading(true);
-
     try {
-      // 1. Create auth user
-      const userCred = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      const userCred = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(userCred.user);
 
-      // 2. Upload profile image
       const storageRef = ref(storage, `profileImages/${userCred.user.uid}`);
       await uploadBytes(storageRef, profileImage);
       const photoURL = await getDownloadURL(storageRef);
 
-      // 3. Create user data
+      // FETCH DYNAMIC NOTE FIRST
+      const welcomeNote = await getDynamicWelcomeNote(fullName);
+
       const baseData = {
         uid: userCred.user.uid,
         fullName,
@@ -248,39 +231,17 @@ export default function SignUpUi() {
         profileImage: photoURL,
         isDriver: false,
         vip: false,
-        isEmailVerified: false, // Will be true after they verify
+        isEmailVerified: false,
       };
 
-      const completeUserData = createUserData(baseData, "email", referrerId);
+      const completeUserData = createUserData(baseData, "email", referrerId, welcomeNote);
+      await setDoc(doc(db, "users", userCred.user.uid), completeUserData);
 
-      // 4. Save user to Firestore
-      const userRef = doc(db, "users", userCred.user.uid);
-      await setDoc(userRef, completeUserData);
+      if (referrerId) await awardReferralPoints(referrerId, userCred.user.uid);
 
-      // 5. Award points to referrer if exists
-      if (referrerId) {
-        await awardReferralPoints(referrerId, userCred.user.uid);
-      }
-
-      // 6. Send welcome notification to new user
-      await updateDoc(doc(db, "users", userCred.user.uid), {
-        notifications: arrayUnion({
-          id: Date.now().toString(),
-          type: "welcome",
-          title: "👋 Welcome to Nomo Cars!",
-          message: "Thanks for joining! Complete your profile to get started.",
-          timestamp: new Date().toISOString(),
-          read: false,
-          actionUrl: "/user/profile"
-        }),
-        hasUnreadNotifications: true
-      });
-
-      setMessage("✅ Account created! Check your email for verification.");
+      setMessage("✅ Account created! Check your email.");
       setLoading(false);
-
       setTimeout(() => router.push("/login"), 2500);
-
     } catch (err: any) {
       setMessage(mapFirebaseError(err.message));
       setLoading(false);
@@ -289,17 +250,14 @@ export default function SignUpUi() {
 
   const googleSignup = async () => {
     setGoogleLoading(true);
-    setMessage("");
-
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-
       const userRef = doc(db, "users", user.uid);
       const snap = await getDoc(userRef);
 
       if (!snap.exists()) {
-        // 1. Create user data
+        const welcomeNote = await getDynamicWelcomeNote(user.displayName || "User");
         const baseData = {
           uid: user.uid,
           fullName: user.displayName || "Google User",
@@ -307,46 +265,15 @@ export default function SignUpUi() {
           profileImage: user.photoURL || "/profile.png",
           isDriver: false,
           vip: false,
-          isEmailVerified: true, // Google users are verified
+          isEmailVerified: true,
         };
-
-        const completeUserData = createUserData(baseData, "google", referrerId);
-
-        // 2. Save user to Firestore
+        const completeUserData = createUserData(baseData, "google", referrerId, welcomeNote);
         await setDoc(userRef, completeUserData);
-
-        // 3. Award points to referrer if exists
-        if (referrerId) {
-          await awardReferralPoints(referrerId, user.uid);
-        }
-
-        // 4. Send welcome notification
-        await updateDoc(doc(db, "users", user.uid), {
-          notifications: arrayUnion({
-            id: Date.now().toString(),
-            type: "welcome",
-            title: "👋 Welcome to Nomo Cars!",
-            message: "Thanks for joining with Google! Complete your profile.",
-            timestamp: new Date().toISOString(),
-            read: false,
-            actionUrl: "/user/profile"
-          }),
-          hasUnreadNotifications: true
-        });
-
-      } else {
-        // User already exists, just update last login
-        await updateDoc(userRef, {
-          lastActive: serverTimestamp(),
-          profileImage: user.photoURL || snap.data().profileImage
-        });
+        if (referrerId) await awardReferralPoints(referrerId, user.uid);
       }
-
       setGoogleLoading(false);
       router.push("/");
     } catch (err: any) {
-      console.error("❌ Google signup error:", err);
-      setMessage("Google signup failed. Please try again.");
       setGoogleLoading(false);
     }
   };
@@ -354,187 +281,51 @@ export default function SignUpUi() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4">
       <div className="bg-gray-50 shadow-2xl rounded-2xl p-8 max-w-md w-full">
-        <h1 className="text-4xl font-extrabold text-center mb-6 text-gray-800">
-          Create Account
-        </h1>
+        <h1 className="text-4xl font-extrabold text-center mb-6 text-gray-800">Create Account</h1>
 
-        {/* Referral Banner */}
         {referralShortId && referrerData && (
           <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="bg-green-100 p-2 rounded-lg">
-                <span className="text-green-600 font-bold text-lg">🎁</span>
-              </div>
-              <div>
-                <p className="font-semibold text-green-800">
-                  Signing up through {referrerData.fullName.toUpperCase()}'s referral!
-                </p>
-                <p className="text-sm text-green-700">
-                  We'll make your first ride an experience to remember!
-                </p>
-                <p className="text-xs text-green-600 mt-1">
-                  Plus they earn {POINTS_PER_REFERRAL} points for your signup.
-                  <br />
-                  {POINTS_REQUIRED_PER_FREE_RIDE} points = 1 free ride!
-                </p>
-              </div>
-            </div>
+            <p className="font-semibold text-green-800">Signing up through {referrerData.fullName.toUpperCase()}'s referral!</p>
           </div>
         )}
 
-        {/* FORM for signup */}
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="flex flex-col items-center">
             <label className="w-24 h-24 mb-2 rounded-full overflow-hidden border-2 border-purple-600 flex items-center justify-center bg-gray-100 cursor-pointer">
-              {profileImage ? (
-                <img
-                  src={URL.createObjectURL(profileImage)}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <img src="/profile.png" alt="profile image" />
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  setProfileImage(
-                    e.target.files ? e.target.files[0] : null
-                  )
-                }
-                className="hidden"
-              />
+              {profileImage ? <img src={URL.createObjectURL(profileImage)} alt="Preview" className="w-full h-full object-cover" /> : <img src="/profile.png" alt="profile" />}
+              <input type="file" accept="image/*" onChange={(e) => setProfileImage(e.target.files ? e.target.files[0] : null)} className="hidden" />
             </label>
-
-            <input
-              type="text"
-              className="w-full px-4 py-3 border rounded-xl mt-2"
-              placeholder="Full Name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-            />
+            <input type="text" className="w-full px-4 py-3 border rounded-xl mt-2" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
           </div>
 
-          <input
-            type="email"
-            className="w-full px-4 py-3 border rounded-xl"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+          <input type="email" className="w-full px-4 py-3 border rounded-xl" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
           <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              className="w-full px-4 py-3 border rounded-xl"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <button
-              type="button"
-              className="absolute right-3 top-3 text-gray-500"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? (
-                <i className="fa fa-eye"></i>
-              ) : (
-                <i className="fa fa-eye-slash"></i>
-              )}
+            <input type={showPassword ? "text" : "password"} className="w-full px-4 py-3 border rounded-xl" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <button type="button" className="absolute right-3 top-3" onClick={() => setShowPassword(!showPassword)}>
+              <i className={`fa ${showPassword ? "fa-eye" : "fa-eye-slash"}`}></i>
             </button>
           </div>
 
           <div className="relative">
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              className="w-full px-4 py-3 border rounded-xl"
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-            <button
-              type="button"
-              className="absolute right-3 top-3 text-gray-500"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            >
-              {showConfirmPassword ? (
-                <i className="fa fa-eye"></i>
-              ) : (
-                <i className="fa fa-eye-slash"></i>
-              )}
+            <input type={showConfirmPassword ? "text" : "password"} className="w-full px-4 py-3 border rounded-xl" placeholder="Confirm Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+            <button type="button" className="absolute right-3 top-3" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+              <i className={`fa ${showConfirmPassword ? "fa-eye" : "fa-eye-slash"}`}></i>
             </button>
           </div>
 
-          {message && (
-            <div
-              className={`text-center mt-4 text-sm px-4 py-2 rounded-xl ${message.startsWith("✅")
-                  ? "bg-green-100 text-green-700 border border-green-400"
-                  : "bg-red-100 text-red-700 border border-red-400"
-                }`}
-            >
-              {message}
-            </div>
-          )}
+          {message && <div className={`text-center mt-4 text-sm px-4 py-2 rounded-xl ${message.startsWith("✅") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{message}</div>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="cursor-pointer w-full bg-purple-600 text-white py-3 rounded-xl hover:bg-purple-700 transition-all"
-          >
-            {loading ? <LoadingRound /> : "Register"}
-          </button>
+          <button type="submit" disabled={loading} className="w-full bg-purple-600 text-white py-3 rounded-xl">{loading ? <LoadingRound /> : "Register"}</button>
         </form>
 
         <div className="mt-6">
-          <button
-            onClick={googleSignup}
-            disabled={googleLoading}
-            className="cursor-pointer w-full bg-red-500 text-white py-3 rounded-xl hover:bg-red-600 transition-all flex items-center justify-center gap-2"
-          >
-            {googleLoading ? <LoadingRound /> : (
-              <>
-                <i className="fa fa-google"></i>
-                Continue with Google
-              </>
-            )}
+          <button onClick={googleSignup} disabled={googleLoading} className="w-full bg-red-500 text-white py-3 rounded-xl flex items-center justify-center gap-2">
+            {googleLoading ? <LoadingRound /> : <><i className="fa fa-google"></i> Continue with Google</>}
           </button>
         </div>
 
-        <p className="mt-6 text-center text-sm">
-          Already have an account?{" "}
-          <Link
-            href="/login"
-            className="text-blue-700 hover:underline font-semibold"
-          >
-            Login
-          </Link>
-        </p>
-
-        {/* Referral System Explanation */}
-        <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800 text-center">
-            <span className="font-bold">🎯 Referral System:</span><br />
-            <span className="text-xs">
-              • Share your profile link → Friends sign up<br />
-              • You earn {POINTS_PER_REFERRAL} points per referral<br />
-              • {POINTS_REQUIRED_PER_FREE_RIDE} points = FREE ₦5,000 ride!<br />
-              • Get started by signing up
-            </span>
-          </p>
-        </div>
-
-        {/* NEW: Notification Explanation (subtle) */}
-        <div className="mt-4 p-2 bg-gray-100 border border-gray-300 rounded-lg">
-          <p className="text-xs text-gray-600 text-center">
-            📢 By signing up, you agree to receive notifications about bookings,
-            offers, and safety updates. You can manage preferences in settings.
-          </p>
-        </div>
+        <p className="mt-6 text-center text-sm">Already have an account? <Link href="/login" className="text-blue-700 font-semibold">Login</Link></p>
       </div>
     </div>
   );

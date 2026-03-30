@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
-import { 
-    collection, onSnapshot, query, orderBy, where, 
-    getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp 
+import {
+    collection, onSnapshot, query, orderBy, where,
+    getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp
 } from "firebase/firestore";
-import { 
-    FaGem, FaStar, FaCrown, FaUsers, FaHeart, 
-    FaFire, FaQuoteRight, FaArrowRight, FaTimes, 
+import {
+    FaGem, FaStar, FaCrown, FaUsers, FaHeart,
+    FaFire, FaQuoteRight, FaArrowRight, FaTimes,
     FaPlus, FaEdit, FaTrash, FaCheck, FaExclamationTriangle
 } from "react-icons/fa";
 
@@ -53,18 +53,18 @@ export default function ReviewsUi() {
             if (authUser) {
                 try {
                     const userQuery = query(
-                        collection(db, "users"), 
+                        collection(db, "users"),
                         where("uid", "==", authUser.uid)
                     );
                     const userSnap = await getDocs(userQuery);
-                    
+
                     if (!userSnap.empty) {
                         const userData = userSnap.docs[0].data();
-                        setUser({ 
+                        setUser({
                             uid: authUser.uid,
                             email: authUser.email,
                             displayName: authUser.displayName,
-                            ...userData 
+                            ...userData
                         });
                     } else {
                         setUser({
@@ -81,16 +81,16 @@ export default function ReviewsUi() {
                 setUser(null);
             }
         });
-        
+
         const q = query(
-            collection(db, "generalSiteReviews"), 
+            collection(db, "generalSiteReviews"),
             orderBy("createdAt", "desc")
         );
-        
+
         const unsubReviews = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ 
-                id: doc.id, 
-                ...doc.data() 
+            const data = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
             })) as Review[];
             setReviews(data);
         }, (err) => {
@@ -98,9 +98,9 @@ export default function ReviewsUi() {
             setError("Failed to load reviews");
         });
 
-        return () => { 
-            unsubAuth(); 
-            unsubReviews(); 
+        return () => {
+            unsubAuth();
+            unsubReviews();
         };
     }, []);
 
@@ -120,8 +120,8 @@ export default function ReviewsUi() {
     }, [user, reviews]);
 
     const totalReviews = reviews.length;
-    const averageRating = totalReviews > 0 
-        ? reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews 
+    const averageRating = totalReviews > 0
+        ? reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews
         : 0;
 
     const getRatingGradient = (rating: number): string => {
@@ -178,7 +178,7 @@ export default function ReviewsUi() {
             } else {
                 await addDoc(collection(db, "generalSiteReviews"), reviewData);
             }
-            
+
             setShowReviewForm(false);
         } catch (err) {
             console.error("Review Error:", err);
@@ -187,7 +187,7 @@ export default function ReviewsUi() {
             setIsSubmitting(false);
         }
     };
-    
+
     const handleDeleteReview = async () => {
         if (!userReview) return;
         setIsSubmitting(true);
@@ -196,7 +196,7 @@ export default function ReviewsUi() {
             setShowDeleteConfirm(false);
             setUserReview(null);
             setNewComment("");
-        } catch (err) { 
+        } catch (err) {
             setError("Failed to delete review.");
         } finally {
             setIsSubmitting(false);
@@ -274,7 +274,7 @@ export default function ReviewsUi() {
                             </h4>
                             {reviews.length > 3 && (
                                 <button onClick={() => setShowAllReviews(!showAllReviews)} className="text-xs font-bold text-blue-600 flex items-center gap-1">
-                                    {showAllReviews ? 'Show Featured' : 'View All'} <FaArrowRight size={10}/>
+                                    {showAllReviews ? 'Show Featured' : 'View All'} <FaArrowRight size={10} />
                                 </button>
                             )}
                         </div>
@@ -310,11 +310,11 @@ export default function ReviewsUi() {
                                                 </div>
                                             </div>
                                             <p className="text-blue-800 italic text-xs mt-3 leading-relaxed border-l-2 border-blue-200 pl-3">"{review.comment}"</p>
-                                            
+
                                             {isOwnReview && (
                                                 <div className="flex gap-3 mt-3 pt-3 border-t border-blue-50">
-                                                    <button onClick={() => setShowReviewForm(true)} className="text-[10px] font-bold text-blue-600 flex items-center gap-1"><FaEdit/> Edit</button>
-                                                    <button onClick={() => setShowDeleteConfirm(true)} className="text-[10px] font-bold text-red-500 flex items-center gap-1"><FaTrash/> Delete</button>
+                                                    <button onClick={() => setShowReviewForm(true)} className="text-[10px] font-bold text-blue-600 flex items-center gap-1"><FaEdit /> Edit</button>
+                                                    <button onClick={() => setShowDeleteConfirm(true)} className="text-[10px] font-bold text-red-500 flex items-center gap-1"><FaTrash /> Delete</button>
                                                 </div>
                                             )}
                                         </div>
@@ -328,7 +328,7 @@ export default function ReviewsUi() {
                         {user && !showReviewForm && !userReview && (
                             <div className="mt-8 text-center">
                                 <button onClick={() => setShowReviewForm(true)} className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full text-xs font-bold shadow-lg flex items-center gap-2 mx-auto">
-                                    <FaPlus/> Share Your Experience
+                                    <FaPlus /> Share Your Experience
                                 </button>
                             </div>
                         )}
@@ -338,14 +338,14 @@ export default function ReviewsUi() {
                         <div className="mt-8 bg-white rounded-2xl p-6 border-2 border-blue-100 shadow-2xl">
                             <div className="flex justify-between items-center mb-6">
                                 <h5 className="font-bold text-blue-900">Your Experience</h5>
-                                <button onClick={() => setShowReviewForm(false)} className="text-gray-400 hover:text-red-500"><FaTimes/></button>
+                                <button onClick={() => setShowReviewForm(false)} className="text-gray-400 hover:text-red-500"><FaTimes /></button>
                             </div>
 
                             <div className="flex gap-2 justify-center mb-6">
                                 {[1, 2, 3, 4, 5].map((star) => (
-                                    <button 
-                                        key={star} 
-                                        onMouseEnter={() => setHoverRating(star)} 
+                                    <button
+                                        key={star}
+                                        onMouseEnter={() => setHoverRating(star)}
                                         onMouseLeave={() => setHoverRating(0)}
                                         onClick={() => setNewRating(star)}
                                         className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${star <= (hoverRating || newRating) ? 'bg-yellow-400 text-white shadow-lg' : 'bg-yellow-50 text-yellow-300'}`}
@@ -355,19 +355,19 @@ export default function ReviewsUi() {
                                 ))}
                             </div>
 
-                            <textarea 
+                            <textarea
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
                                 className="w-full p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-sm text-blue-900 outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px]"
                                 placeholder="Describe your experience..."
                             />
 
-                            <button 
+                            <button
                                 onClick={handleSubmitReview}
                                 disabled={isSubmitting || !newComment.trim()}
                                 className="w-full mt-4 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                                {isSubmitting ? "Processing..." : userReview ? <><FaCheck/> Update Review</> : <><FaGem/> Submit Review</>}
+                                {isSubmitting ? "Processing..." : userReview ? <><FaCheck /> Update Review</> : <><FaGem /> Submit Review</>}
                             </button>
                         </div>
                     )}
