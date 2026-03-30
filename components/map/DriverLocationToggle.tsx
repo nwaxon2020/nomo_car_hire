@@ -2,632 +2,303 @@
 
 import { useState, useEffect } from 'react';
 import { doc, updateDoc, Timestamp, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebaseConfig';
 import { getAuth } from 'firebase/auth';
-import { 
-  FaMapMarkerAlt, 
-  FaLocationArrow, 
-  FaStopCircle, 
-  FaCheckCircle, 
-  FaExclamationTriangle, 
-  FaClock, 
-  FaSignal,
-  FaCar,
-  FaPhone
+import {
+  FaMapMarkerAlt, FaLocationArrow, FaStopCircle, FaPhone,
+  FaUser, FaTimes, FaEdit, FaWhatsapp, FaCamera, FaGlobe, FaInfoCircle, FaChevronDown
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
-import { storage } from '@/lib/firebaseConfig'; // Import storage
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-interface DriverLocationToggleProps {
-  driverId: string;
-  vehicleId?: string;
-  tripId?: string;
-}
-
-export default function DriverLocationToggle({ 
-  driverId, 
+export default function DriverLocationToggle({
+  driverId,
   vehicleId,
   tripId,
-}: DriverLocationToggleProps) {
+}: { driverId: string; vehicleId?: string; tripId?: string; }) {
   const [isLocationOn, setIsLocationOn] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<{
-    lat: number, 
-    lng: number, 
-    accuracy?: number,
-    address?: string
-  } | null>(null);
-  const [watchId, setWatchId] = useState<number | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [activeTime, setActiveTime] = useState(0);
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
-  const [driverData, setDriverData] = useState<any>(null); // Added missing state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false); // NEW: State for dropdown
+  const [watchId, setWatchId] = useState<number | null>(null);
+
+  // Profile States
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [whatsappPreferred, setWhatsappPreferred] = useState(false);
+  const [profileImage, setProfileImage] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   const auth = getAuth();
-  const currentUser = auth.currentUser;
+  const isCurrentDriver = auth.currentUser?.uid === driverId;
 
-  // Check if current user is this driver
-  const isCurrentDriver = currentUser?.uid === driverId;
-
-  // Setting Open and Close variable
-  const [settings, setSettings] = useState(false);
-
-  // Upload function
-  async function uploadFile(file: File, path: string) {
-    const sRef = storageRef(storage, path);
-    const task = uploadBytesResumable(sRef, file);
-    return new Promise<string>((resolve, reject) => {
-      task.on("state_changed", 
-        () => { }, 
-        reject, 
-        async () => resolve(await getDownloadURL(task.snapshot.ref))
-      );
-    });
-  }
-
-  // Load driver data
   useEffect(() => {
     if (!driverId) return;
-
-    const loadDriverData = async () => {
-      try {
-        const driverRef = doc(db, 'users', driverId);
-        const driverDoc = await getDoc(driverRef);
-        
-        if (driverDoc.exists()) {
-          const data = driverDoc.data();
-          setDriverData(data); // Store driver data
-          
-          // DIRECT ACCESS - phoneNumber field as you specified
-          const driverPhone = data.phoneNumber;
-          setPhoneNumber(driverPhone || '');
-          
-          console.log('Loaded driver data:', {
-            driverId,
-            phoneNumber: driverPhone,
-            hasPhoneNumber: !!driverPhone
-          });
-
-          // Check if location sharing is active
-          const isSharing = data.location?.isSharing || data.isLocationActive || false;
-          setIsLocationOn(isSharing);
-          
-          // Load current location if available
-          if (data.location) {
-            setCurrentLocation({
-              lat: data.location.latitude || data.location.lat,
-              lng: data.location.longitude || data.location.lng,
-              accuracy: data.location.accuracy,
-              address: data.location.address
-            });
-            if (data.location.timestamp) {
-              setLastUpdate(data.location.timestamp.toDate());
-            }
-          }
-
-          // Auto-restart location if it was previously on
-          const savedStatus = localStorage.getItem(`driverLocation_${driverId}`);
-          if (savedStatus === 'on' && !isSharing) {
-            console.log('Auto-starting location from localStorage');
-            startLocationTracking();
-          }
-        } else {
-          console.error('Driver document not found');
-          toast.error('Driver profile not found');
-        }
-      } catch (error) {
-        console.error('Error loading driver data:', error);
+    const loadData = async () => {
+      const driverDoc = await getDoc(doc(db, 'users', driverId));
+      if (driverDoc.exists()) {
+        const data = driverDoc.data();
+        setFirstName(data.firstName || '');
+        setLastName(data.lastName || '');
+        setPhoneNumber(data.phoneNumber || '');
+        setWhatsappPreferred(data.whatsappPreferred || false);
+        setProfileImage(data.profileImage || '');
+        setCity(data.city || 'Ikeja');
+        setState(data.state || 'Lagos');
+        setIsLocationOn(data.location?.isSharing || false);
+        setCurrentLocation(data.location || null);
       }
     };
-
-    loadDriverData();
+    loadData();
   }, [driverId]);
 
-  // Timer for active time
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `profiles/${driverId}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      await updateDoc(doc(db, 'users', driverId), { profileImage: url });
+      setProfileImage(url);
+      toast.success("Photo updated!");
+    } catch (err) {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', driverId), {
+        firstName,
+        lastName,
+        phoneNumber,
+        city,
+        state,
+        whatsappPreferred,
+        updatedAt: Timestamp.now()
+      });
+      setIsEditingLocation(false);
+      toast.success("Profile synchronized!");
+    } catch (err) {
+      toast.error("Update failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggleLocation = async () => {
     if (isLocationOn) {
-      interval = setInterval(() => {
-        setActiveTime(prev => prev + 1);
-      }, 60000);
-    } else {
-      setActiveTime(0);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isLocationOn]);
-
-  // Function to update trip with driver location
-  const updateTripWithDriverLocation = async (locationData: any) => {
-    if (!tripId) return;
-    
-    try {
-      const tripRef = doc(db, 'trips', tripId);
-      await updateDoc(tripRef, {
-        driverLocation: {
-          lat: locationData.lat,
-          lng: locationData.lng,
-          accuracy: locationData.accuracy,
-          address: locationData.address,
-          timestamp: Timestamp.now(),
-          isSharing: true
-        },
-        lastLocationUpdate: Timestamp.now(),
-        driverId: driverId
-      });
-      console.log('Trip document updated with driver location');
-    } catch (error) {
-      console.error('Error updating trip with driver location:', error);
-    }
-  };
-
-  // Function to clear driver location from trip
-  const clearTripDriverLocation = async () => {
-    if (!tripId) return;
-    
-    try {
-      const tripRef = doc(db, 'trips', tripId);
-      await updateDoc(tripRef, {
-        'driverLocation.isSharing': false,
-        lastLocationUpdate: Timestamp.now()
-      });
-    } catch (error) {
-      console.error('Error clearing trip driver location:', error);
-    }
-  };
-
-  const startLocationTracking = async () => {
-    console.log('Starting location tracking check:', {
-      isCurrentDriver,
-      hasPhoneNumber: !!phoneNumber,
-      phoneNumber,
-      tripId
-    });
-
-    // Check if we're the driver
-    if (!isCurrentDriver) {
-      toast.error('Only the driver can start location sharing');
-      return;
-    }
-
-    // SIMPLE CHECK - phoneNumber field should exist
-    if (!phoneNumber) {
-      console.error('Phone number missing:', { driverId, phoneNumber });
-      
-      // Let's double-check by fetching fresh data
-      try {
-        const driverRef = doc(db, 'users', driverId);
-        const driverDoc = await getDoc(driverRef);
-        if (driverDoc.exists()) {
-          const freshData = driverDoc.data();
-          const freshPhone = freshData.phoneNumber;
-          console.log('Fresh fetch - phoneNumber:', freshPhone);
-          
-          if (!freshPhone) {
-            toast.error(
-              `Phone number is required. Please update your profile. Current value: "${freshPhone}"`,
-              { duration: 5000 }
-            );
-            return;
-          } else {
-            // Update state with fresh data
-            setPhoneNumber(freshPhone);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching fresh data:', error);
-      }
-      
-      toast.error('Please add your phone number in profile settings');
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
-      return;
-    }
-
-    setIsLoading(true);
-    
-    // Get current location
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        const address = await reverseGeocode(latitude, longitude);
-        
-        const locationData = { lat: latitude, lng: longitude, accuracy, address };
-        setCurrentLocation(locationData);
-        setLastUpdate(new Date());
-        
-        try {
-          const userRef = doc(db, 'users', driverId);
-          
-          await updateDoc(userRef, {
-            location: {
-              latitude,
-              longitude,
-              accuracy,
-              address,
-              timestamp: Timestamp.now(),
-              isSharing: true,
-              vehicleId: vehicleId || null
-            },
-            isLocationActive: true,
-            locationSharedAt: Timestamp.now(),
-            lastLocationUpdate: Timestamp.now()
-          });
-
-          console.log('Location sharing started successfully');
-          toast.success('📍 Location sharing started!');
-          
-          // UPDATE TRIP WITH DRIVER LOCATION
-          await updateTripWithDriverLocation(locationData);
-          
-        } catch (error: any) {
-          console.error('Error updating location:', error);
-          toast.error(`Failed to save location: ${error.message}`);
-          setIsLoading(false);
-          return;
-        }
-
-        // Start continuous tracking
-        setIsLocationOn(true);
-        setIsLoading(false);
-        localStorage.setItem(`driverLocation_${driverId}`, 'on');
-
-        const id = navigator.geolocation.watchPosition(
-          async (watchPosition) => {
-            const { latitude: lat, longitude: lng, accuracy: acc } = watchPosition.coords;
-            const newAddress = await reverseGeocode(lat, lng);
-            
-            const newLocationData = { lat, lng, accuracy: acc, address: newAddress };
-            setCurrentLocation(newLocationData);
-            setLastUpdate(new Date());
-            
-            try {
-              const userRef = doc(db, 'users', driverId);
-              await updateDoc(userRef, {
-                'location.latitude': lat,
-                'location.longitude': lng,
-                'location.accuracy': acc,
-                'location.address': newAddress,
-                'location.timestamp': Timestamp.now(),
-                lastLocationUpdate: Timestamp.now()
-              });
-              
-              // UPDATE TRIP WITH NEW LOCATION
-              await updateTripWithDriverLocation(newLocationData);
-            } catch (error) {
-              console.error('Error updating location:', error);
-            }
-          },
-          (error) => {
-            console.error('Error getting location:', error);
-            handleGeolocationError(error);
-            stopLocationTracking();
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 30000
-          }
-        );
-
-        setWatchId(id);
-      },
-      (error) => {
-        setIsLoading(false);
-        handleGeolocationError(error);
-      }
-    );
-  };
-
-  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-      );
-      const data = await response.json();
-      return data.display_name || 'On the way';
-    } catch (error) {
-      return 'Location updated';
-    }
-  };
-
-  const handleGeolocationError = (error: any) => {
-    let errorMessage = 'Failed to get location';
-    switch(error.code) {
-      case error.PERMISSION_DENIED:
-        errorMessage = 'Location permission denied. Please enable location services in your browser settings.';
-        break;
-      case error.POSITION_UNAVAILABLE:
-        errorMessage = 'Location information is unavailable.';
-        break;
-      case error.TIMEOUT:
-        errorMessage = 'Location request timed out.';
-        break;
-      default:
-        errorMessage = 'An unknown error occurred.';
-    }
-    toast.error(errorMessage);
-  };
-
-  const stopLocationTracking = async () => {
-    if (watchId) {
-      navigator.geolocation.clearWatch(watchId);
+      if (watchId) navigator.geolocation.clearWatch(watchId);
       setWatchId(null);
-    }
-    setIsLocationOn(false);
-    setIsLoading(false);
-    localStorage.removeItem(`driverLocation_${driverId}`);
-    
-    try {
-      const userRef = doc(db, 'users', driverId);
-      await updateDoc(userRef, {
+      setIsLocationOn(false);
+      await updateDoc(doc(db, 'users', driverId), {
         'location.isSharing': false,
-        isLocationActive: false,
-        lastLocationUpdate: Timestamp.now()
+        isLocationActive: false
       });
-      
-      // CLEAR DRIVER LOCATION FROM TRIP
-      await clearTripDriverLocation();
-      
-      toast.success('📍 Location sharing stopped');
-    } catch (error) {
-      console.error('Error stopping location:', error);
+      toast.success("Location Off");
+    } else {
+      if (!navigator.geolocation) return toast.error("GPS not supported");
+      setIsLoading(true);
+
+      const id = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          try {
+            const response = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+            const data = await response.json();
+            const areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
+            const loc = { lat: latitude, lng: longitude, isSharing: true, address: areaName, timestamp: Timestamp.now() };
+            setCurrentLocation(loc);
+            await updateDoc(doc(db, 'users', driverId), { location: loc, isLocationActive: true });
+            setIsLocationOn(true);
+            setIsLoading(false);
+          } catch (error) {
+            const fallbackLoc = { lat: latitude, lng: longitude, isSharing: true, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, timestamp: Timestamp.now() };
+            setCurrentLocation(fallbackLoc);
+            await updateDoc(doc(db, 'users', driverId), { location: fallbackLoc, isLocationActive: true });
+            setIsLocationOn(true);
+            setIsLoading(false);
+          }
+        },
+        (err) => {
+          setIsLoading(false);
+          toast.error("Enable GPS permissions");
+        },
+        { enableHighAccuracy: true }
+      );
+      setWatchId(id);
     }
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
-  }, [watchId]);
-
-  // Only show for the driver
-  if (!isCurrentDriver) {
-    return null;
-  }
+  if (!isCurrentDriver) return null;
 
   return (
-    <div className="px-4 py-6 md:p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-full ${isLocationOn ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
-            <FaCar className="text-xl" />
+    <div className="relative font-sans px-2">
+      {/* MAIN WIDGET */}
+      <div className="bg-slate-900 border border-emerald-500/30 rounded-xl shadow-xl overflow-hidden text-white">
+        <div className="p-3 flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-800">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isLocationOn ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span className="text-[10px] font-bold uppercase text-slate-300">
+              {isLocationOn ? 'Live' : 'Offline'}
+            </span>
+
+            {/* INTERACTIVE DROPDOWN INFO BOX */}
+            <div className="px-3">
+              <button
+                onClick={() => setShowInfo(!showInfo)}
+                className="text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg p-1.5 flex flex-col transition-all active:bg-amber-500/20"
+              >
+                <div className="w-full">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight text-left">How This Helps You</p>
+                  </div>
+                </div>
+
+                {showInfo && (
+                  <div className="mt-2 space-y-1 animate-in slide-in-from-top-1 duration-200">
+                    <ul className="text-[9px] text-slate-300 space-y-1 leading-tight text-left border-t border-amber-500/10 pt-2">
+                      <li className="flex items-start gap-1"><span>•</span> Customers can see how close you are to their location</li>
+                      <li className="flex items-start gap-1"><span>•</span> Increases your chances of getting booked</li>
+                      <li className="flex items-start gap-1"><span>•</span> Shows customers you're active and available</li>
+                    </ul>
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
-          <div>
-            <h2 className="md:text-xl font-bold text-gray-900">Live Location Sharing</h2>
-            <p className="text-gray-600 text-xs md:text-sm">
-              {isLocationOn? "Location On": <><span className="font-semibold text-gray-400">Location Off - </span>Turn on your location to become visible to passengers</>}
-            </p>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={toggleLocation}
+              disabled={isLoading}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${isLocationOn ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'}`}
+            >
+              {isLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
+                isLocationOn ? <><FaStopCircle /> Off</> : <><FaLocationArrow /> Go Live</>}
+            </button>
+            <button onClick={() => setSettingsOpen(true)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-slate-300 text-[10px] font-semibold border border-white/5">
+              Settings
+            </button>
           </div>
-        </div>
-        
-        {/* Status Badge */}
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100">
-          <div className={`w-2 h-2 rounded-full ${isLocationOn ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
-          <span className={`text-sm font-medium ${isLocationOn ? 'text-green-700' : 'text-gray-700'}`}>
-            {isLocationOn ? 'Live' : 'Offline'}
-          </span>
         </div>
       </div>
 
-      {/* Trip Info Display (only when tripId exists) */}
-      {tripId && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-full">
-                <FaMapMarkerAlt className="text-blue-600" />
+      {/* SETTINGS OVERLAY */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/90 backdrop-blur-md p-0 md:p-4">
+          <div className="bg-slate-900 w-full max-w-lg rounded-t-xl md:rounded-xl border-t md:border border-emerald-500/20 shadow-2xl max-h-[95vh] overflow-y-auto">
+            <div className="relative p-6 space-y-5">
+              <button onClick={() => setSettingsOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><FaTimes /></button>
+
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative group">
+                  <div className="w-20 h-20 rounded-full border-2 border-emerald-500/50 overflow-hidden bg-slate-800">
+                    {profileImage ? <img src={profileImage} alt="Profile" className="w-full h-full object-cover" /> : <FaUser className="w-full h-full p-5 text-slate-600" />}
+                    {uploading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>}
+                  </div>
+                  <label className="absolute bottom-0 right-0 p-1.5 bg-emerald-600 rounded-full cursor-pointer hover:bg-emerald-500 transition-colors shadow-lg">
+                    <FaCamera className="text-white text-xs" />
+                    <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Driver Photo</p>
               </div>
-              <div>
-                <h4 className="font-bold text-gray-800">Trip Tracking</h4>
-                <p className="text-blue-700 text-sm">
-                  Your location will be shown to the customer in real-time
-                </p>
+
+              {isLocationOn && currentLocation && (
+                <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-3">
+                  <div className="flex items-start gap-3">
+                    <FaGlobe className="text-emerald-400 mt-1 text-xs" />
+                    <div>
+                      <p className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Active Broadcasting</p>
+                      <p className="text-xs text-slate-200 leading-tight mt-1">{currentLocation.address}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-slate-950/50 rounded-lg p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black text-slate-500 uppercase">Base Region</span>
+                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded">VIP</span>
+                </div>
+                {!isEditingLocation ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-white font-bold text-sm">
+                      <FaMapMarkerAlt className="text-red-500" />
+                      <span>{city}, {state}</span>
+                    </div>
+                    <button onClick={() => setIsEditingLocation(true)} className="text-emerald-400 text-xs flex items-center gap-1"><FaEdit /> Edit</button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 animate-in fade-in zoom-in-95">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-emerald-500" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+                      <input className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-emerald-500" value={state} onChange={(e) => setState(e.target.value)} placeholder="State" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={handleUpdateProfile} disabled={isSaving} className="flex-1 bg-emerald-600 text-white text-[10px] font-bold py-2 rounded-lg flex items-center justify-center gap-2">
+                        {isSaving && <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                        Update
+                      </button>
+                      <button onClick={() => setIsEditingLocation(false)} className="flex-1 bg-slate-800 text-slate-400 text-[10px] font-bold py-2 rounded-lg">Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-              Trip #{tripId.substring(0, 8)}...
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">First Name</label>
+                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-sm text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Last Name</label>
+                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-sm text-white focus:border-emerald-500 outline-none" />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Phone & WhatsApp</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <FaPhone className="absolute left-3 top-3 text-slate-500 text-[10px]" />
+                    <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 pl-8 pr-3 text-sm text-white focus:border-emerald-500 outline-none" />
+                  </div>
+                  <button
+                    onClick={() => setWhatsappPreferred(!whatsappPreferred)}
+                    className={`px-3 rounded-lg flex items-center justify-center transition-all border ${whatsappPreferred ? 'bg-green-500/20 border-green-500 text-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                  >
+                    <FaWhatsapp className="text-lg" />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={handleUpdateProfile}
+                disabled={isSaving}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+              >
+                {isSaving && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {isSaving ? 'Synchronizing...' : 'Save All Changes'}
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Location & Phone number */}
-      {settings && <div>
-          {/* Phone Number Display */}
-          <div className={`mb-4 p-4 rounded-lg border ${phoneNumber ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${phoneNumber ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                  <FaPhone />
-                </div>
-                <div>
-                  <h4 className="font-bold text-gray-800 text-sm md:text-base">Phone Number</h4>
-                  {phoneNumber ? (
-                    <p className="text-sm md:text-base text-green-700">
-                      ✓ Verified: <span className="font-semibold">{phoneNumber}</span>
-                    </p>
-                  ) : (
-                    <p className="text-red-700">
-                      ❌ Required for location sharing
-                    </p>
-                  )}
-                </div>
-              </div>
-              {phoneNumber && (
-                <button 
-                  onClick={() => window.location.href = '/profile/edit'}
-                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                  Change
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Profile Image Update */}
-          <div className="mb-4 p-4 rounded-lg border bg-gray-50 border-gray-200">
-            <div className="flex flex-col lg:flex-row items-center gap-3">
-              <div className="flex-shrink-0">
-                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-100 rounded-full overflow-hidden">
-                  {driverData?.profileImage ? (
-                    <img
-                      src={driverData.profileImage}
-                      alt="Current Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-600">
-                      <span className="text-lg">👤</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-medium text-gray-700 mb-1">Update Profile Image</h3>
-                <p className="text-xs text-gray-500 mb-2">A professional photo helps build trust with passengers</p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file && driverId) {
-                      try {
-                        const timestamp = Date.now();
-                        const url = await uploadFile(file, `driverProfiles/${driverId}/${timestamp}_profile.jpg`);
-  
-                        const userRef = doc(db, "users", driverId);
-                        await updateDoc(userRef, {
-                          profileImage: url,
-                          updatedAt: Timestamp.now()
-                        });
-  
-                        toast.success("Profile image updated successfully!");
-                        
-                        // Update local state
-                        setDriverData((prev: any) => ({
-                          ...prev,
-                          profileImage: url
-                        }));
-                      } catch (err) {
-                        console.error("Error uploading profile image:", err);
-                        toast.error("Failed to upload profile image");
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Location Status */}
-          {isLocationOn && currentLocation && (
-            <div className="text-sm md:text-base mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center gap-2 mb-3">
-                <FaCheckCircle className="text-blue-600" />
-                <h4 className="font-bold text-blue-800">Location is Live</h4>
-              </div>
-              
-              <div className="space-y-3">
-                {currentLocation.address && (
-                  <div className="bg-white p-3 rounded-lg border border-blue-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FaMapMarkerAlt className="text-blue-500" />
-                      <span className="text-sm font-medium text-gray-700">Current Address</span>
-                    </div>
-                    <p className="text-gray-800 text-sm">{currentLocation.address}</p>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3 rounded-lg border border-blue-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FaClock className="text-blue-500" />
-                      <span className="text-sm font-medium text-gray-700">Active Time</span>
-                    </div>
-                    <p className="text-gray-800 font-semibold">{formatActiveTime(activeTime)}</p>
-                  </div>
-                  
-                  <div className="bg-white p-3 rounded-lg border border-blue-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FaSignal className="text-blue-500" />
-                      <span className="text-sm font-medium text-gray-700">Accuracy</span>
-                    </div>
-                    <p className="text-gray-800 font-semibold">{getAccuracyLevel(currentLocation.accuracy)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Main Control Button */}
-          <button
-            onClick={isLocationOn ? stopLocationTracking : startLocationTracking}
-            disabled={isLoading || (!phoneNumber && !isLocationOn)}
-            className={`text-sm md:text-base mb-8 w-full py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-              isLoading 
-                ? 'bg-gray-300 text-gray-600 cursor-not-allowed' 
-                : !phoneNumber && !isLocationOn
-                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                  : isLocationOn 
-                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white'
-                    : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-            }`}
-          >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Starting...
-              </>
-            ) : isLocationOn ? (
-              <>
-                <FaStopCircle />
-                Stop Sharing Location
-              </>
-            ) : (
-              <>
-                <FaLocationArrow />
-                Start Sharing Location
-              </>
-            )}
-          </button>
-        </div>
-      }
-
-      {/* Setting open and close button */}
-      <div className="text-right">
-        <button onClick={()=> setSettings(!settings)} className="border rounded-lg px-4 py-1 text-right cursor-pointer text-gray-400">
-          <span className="text-black text-xs md:text-sm font-semibold">{settings?"Close":"Open Settings"}</span>
-        </button>
-      </div>
-
     </div>
   );
-}
-
-// Helper functions
-function formatActiveTime(minutes: number): string {
-  if (minutes < 1) return 'Just started';
-  if (minutes === 1) return '1 minute';
-  if (minutes < 60) return `${minutes} minutes`;
-  if (minutes < 120) return '1 hour';
-  return `${Math.floor(minutes / 60)} hours`;
-}
-
-function getAccuracyLevel(accuracy?: number): string {
-  if (!accuracy) return 'Unknown';
-  if (accuracy < 10) return 'High';
-  if (accuracy < 50) return 'Good';
-  if (accuracy < 100) return 'Moderate';
-  return 'Low';
 }
