@@ -199,9 +199,9 @@ export default function DriverLocationToggle({
 
       {/* SETTINGS OVERLAY */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/90 backdrop-blur-md p-0 md:p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-0 md:p-4">
           <div className="bg-slate-900 w-full max-w-lg rounded-t-xl md:rounded-xl border-t md:border border-emerald-500/20 shadow-2xl max-h-[95vh] overflow-y-auto">
-            <div className="relative p-6 space-y-5">
+            <div className="relative p-4 md:p-6 space-y-5">
               <button onClick={() => setSettingsOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><FaTimes /></button>
 
               <div className="flex flex-col items-center gap-3">

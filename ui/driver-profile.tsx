@@ -1031,16 +1031,9 @@ export default function DriverProfilePage() {
 
       {/* Word Guessing Game */}
       {game && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-auto relative">
-            <button
-              onClick={() => setGame(false)}
-              className="bg-gray-800 p-2 px-4 rounded-lg absolute top-4 right-4 text-white text-2xl hover:text-gray-300 z-20 transition-colors"
-            >
-              ✕
-            </button>
-            <WordGuessGame />
-          </div>
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+          {/* Notice I removed the extra button here */}
+          <WordGuessGame onClose={() => setGame(false)} />
         </div>
       )}
 
