@@ -16,7 +16,7 @@ import {
     arrayUnion,
 } from "firebase/firestore";
 import ChatWindow from "./chat-window";
-import { sendNotification } from "@/lib/notifications";
+import { triggerNotification } from "@/lib/notifications";
 import { MessageCircle, Clock, Shield, Car, X, CheckCircle } from "lucide-react";
 
 // 🔹 Types for expected props
@@ -27,21 +27,21 @@ export interface CarType {
 }
 
 interface PreChatProps {
-  car: {
-    id: string;
-    title: string;
-    price?: number;
-    description?: string;
-    [key: string]: any;
-  };
-  driver: {
-    id: string;
-    name: string;
-    phone: string;
-    [key: string]: any;
-  };
-  onClose?: () => void;
-  chatId?: string;
+    car: {
+        id: string;
+        title: string;
+        price?: number;
+        description?: string;
+        [key: string]: any;
+    };
+    driver: {
+        id: string;
+        name: string;
+        phone: string;
+        [key: string]: any;
+    };
+    onClose?: () => void;
+    chatId?: string;
 }
 
 export default function PreChat({ car, driver, onClose, chatId: propChatId }: PreChatProps) {
@@ -56,7 +56,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
     useEffect(() => {
         const fetchUserData = async () => {
             if (!auth.currentUser) return;
-            
+
             try {
                 const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
                 if (userDoc.exists()) {
@@ -66,7 +66,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                 console.error("Error fetching user data:", error);
             }
         };
-        
+
         fetchUserData();
     }, []);
 
@@ -125,11 +125,11 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
 
         try {
             // Get current user's display name
-            const passengerName = currentUserData.firstName || 
-                                 currentUserData.fullName || 
-                                 auth.currentUser.displayName || 
-                                 "User";
-            
+            const passengerName = currentUserData.firstName ||
+                currentUserData.fullName ||
+                auth.currentUser.displayName ||
+                "User";
+
             // Get driver's full data if needed
             let driverFullData = driver;
             let driverPhone = driver.phone;
@@ -137,7 +137,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                 const driverDoc = await getDoc(doc(db, "users", driver.id));
                 if (driverDoc.exists()) {
                     const driverData = driverDoc.data();
-                    driverFullData = { 
+                    driverFullData = {
                         id: driver.id,
                         name: driver.name,
                         phone: driverData.phone || driverData.phoneNumber || driver.phone || "",
@@ -151,13 +151,13 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
 
             // Prepare participants array
             const participants = [auth.currentUser.uid, driver.id];
-            
+
             // Prepare participant names object
             const participantNames = {
                 [auth.currentUser.uid]: passengerName,
                 [driver.id]: driver.name
             };
-            
+
             // Prepare car info object - FIXED: No duplicate id property
             const { id: carId, title, price, description, ...carRest } = car;
             const carInfo = {
@@ -168,7 +168,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                 // Spread only non-conflicting properties
                 ...carRest
             };
-            
+
             // Current timestamp for consistency
             const now = new Date();
             const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -180,25 +180,25 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                 driverId: driver.id,
                 passengerId: auth.currentUser.uid,
                 participants, // Required for queries
-                
+
                 // Display names
                 driverName: driver.name,
                 passengerName: passengerName,
                 participantNames, // Required for ChatPageUi
-                
+
                 // Car information
                 carTitle: car.title,
                 carInfo, // Required for ChatPageUi
-                
+
                 // Chat data
                 messages: [] as DocumentData[],
                 status: "active",
-                
+
                 // Timestamps
                 createdAt: serverTimestamp(),
                 lastActivity: serverTimestamp(), // Required for tracking
                 expiresAt: expiresAt, // 7 days
-                
+
                 // Additional metadata
                 isDriver: driverFullData?.isDriver || false,
                 carPrice: car.price,
@@ -225,12 +225,12 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
             setShowChat(true);
 
             // 🔔 Notify driver
-            await sendNotification(
+            await triggerNotification(
                 driver.id,
                 "New Chat Request",
                 `${passengerName} wants to chat about ${car.title}`
             );
-            
+
         } catch (error) {
             console.error("Error starting chat:", error);
             alert("Failed to start chat. Please try again.");
@@ -260,10 +260,10 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
     // Format existing chat info
     const getExistingChatInfo = () => {
         if (!existingChatData) return null;
-        
+
         const messages = existingChatData.messages || [];
         if (messages.length === 0) return null;
-        
+
         const lastMessage = messages[messages.length - 1];
         return {
             lastMessage: lastMessage.text,
@@ -275,13 +275,13 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
     // Format time for existing chat
     const formatLastActivity = (timestamp: any) => {
         if (!timestamp) return "Recently";
-        
+
         try {
             const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
             const now = new Date();
             const diffMs = now.getTime() - date.getTime();
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            
+
             if (diffHours < 1) {
                 const diffMinutes = Math.floor(diffMs / (1000 * 60));
                 return `${diffMinutes}m ago`;
@@ -304,7 +304,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
     if (showChat && chatId) {
         // Destructure driver to avoid duplicate properties
         const { id: driverId, name, phone, ...driverRest } = driver;
-        
+
         return (
             <ChatWindow
                 chatId={chatId}
@@ -326,7 +326,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
 
     const existingChatInfo = getExistingChatInfo();
     const messageCount = getExistingChatMessageCount();
-    const lastActivityTime = existingChatData?.lastActivity ? 
+    const lastActivityTime = existingChatData?.lastActivity ?
         formatLastActivity(existingChatData.lastActivity) : "Recently";
 
     return (
@@ -352,7 +352,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                     </button>
                 )}
             </div>
-        
+
             {/* Chat info */}
             <div className="border border-gray-700 bg-gray-900/50 p-4 rounded-lg mb-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -373,22 +373,22 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                         </div>
                     </div>
                 </div>
-                
+
                 {car.price && (
                     <div className="pt-3 border-t border-gray-800">
                         <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Daily Rate</p>
                         <p className="text-lg font-bold text-green-400">${car.price}/day</p>
                     </div>
                 )}
-                
+
                 <div className="pt-3 border-t border-gray-800">
                     <p className="text-sm text-gray-300">
-                        Discuss pricing, availability, pickup locations, and booking arrangements. 
+                        Discuss pricing, availability, pickup locations, and booking arrangements.
                         All chats are secure and expire after 7 days.
                     </p>
                 </div>
             </div>
-            
+
             {/* Features */}
             <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="text-center p-3 bg-gray-800/30 rounded-lg border border-gray-700 hover:border-blue-500/30 transition-colors">
@@ -410,7 +410,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                     <p className="text-xs text-gray-300">7 Days</p>
                 </div>
             </div>
-            
+
             {/* Existing Chat Info */}
             {existingChatId && (
                 <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg space-y-2">
@@ -428,35 +428,34 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                             </span>
                         </div>
                     </div>
-                    
+
                     {existingChatInfo?.lastMessage && (
                         <div className="pl-5">
                             <p className="text-xs text-blue-200/80 truncate">
-                                Last: "{existingChatInfo.lastMessage.length > 50 
-                                    ? existingChatInfo.lastMessage.substring(0, 50) + '...' 
+                                Last: "{existingChatInfo.lastMessage.length > 50
+                                    ? existingChatInfo.lastMessage.substring(0, 50) + '...'
                                     : existingChatInfo.lastMessage}"
                             </p>
                         </div>
                     )}
-                    
+
                     <div className="flex items-center gap-2 text-xs text-blue-300/70">
                         <CheckCircle className="h-3 w-3" />
                         <span>Tap button below to continue conversation</span>
                     </div>
                 </div>
             )}
-            
+
             {/* Action Button */}
             <button
                 onClick={handleStartOrOpenChat}
                 disabled={loading}
-                className={`w-full px-4 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-3 ${
-                    loading 
-                    ? 'bg-blue-800/50 text-blue-300 cursor-not-allowed' 
-                    : existingChatId
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-blue-500/25'
-                    : 'bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white shadow-lg hover:shadow-green-500/25'
-                }`}
+                className={`w-full px-4 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-3 ${loading
+                        ? 'bg-blue-800/50 text-blue-300 cursor-not-allowed'
+                        : existingChatId
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-blue-500/25'
+                            : 'bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white shadow-lg hover:shadow-green-500/25'
+                    }`}
             >
                 {loading ? (
                     <>
@@ -475,7 +474,7 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                     </>
                 )}
             </button>
-            
+
             {/* Additional info */}
             <div className="mt-4 text-center space-y-2">
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
