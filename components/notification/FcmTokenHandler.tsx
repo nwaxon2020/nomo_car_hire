@@ -3,8 +3,7 @@
 import { useEffect } from "react";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db, app } from "@/lib/firebaseConfig";
-import { auth } from "@/lib/firebaseConfig";
+import { db, app, auth } from "@/lib/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 
 export default function FcmTokenHandler() {
@@ -30,9 +29,12 @@ export default function FcmTokenHandler() {
                 return;
             }
 
-            // 2. Get the Token using your VAPID KEY
+            // 2. Register Service Worker and Get the Token using your VAPID KEY
+            const registration = await navigator.serviceWorker.register('/api/service-worker');
+
             const currentToken = await getToken(messaging, {
-                vapidKey: "PASTE_YOUR_VAPID_KEY_HERE", // <--- PASTE IT HERE
+                vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+                serviceWorkerRegistration: registration,
             });
 
             if (currentToken) {

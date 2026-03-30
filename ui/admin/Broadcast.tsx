@@ -5,7 +5,7 @@ import Link from "next/link";
 import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast } from "react-hot-toast";
-import { Plus, Send, Users, User, ShieldCheck, Image as ImageIcon, X, Info, Eye, EyeOff, ArrowRight, Star, CheckCircle } from "lucide-react";
+import { Send, Users, User, ShieldCheck, Image as ImageIcon, X, Eye, EyeOff, ArrowRight, } from "lucide-react";
 import { FiNavigation } from "react-icons/fi";
 import { triggerNotification } from "@/lib/notifications";
 import WelcomeNoteSection from "@/components/admin/WelcomeNoteManager";

@@ -24,6 +24,7 @@ import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
 import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import NotificationPanel from "@/components/notification/Notification"; // Assuming this is your component
+import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
 
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -250,6 +251,9 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
             onUnreadUpdate={(count: number) => setUnreadNotifs(count)}
           />
         </div>
+
+        {/* FCM Token Handler */}
+        <FcmTokenHandler />
 
         {/* MAIN CONTENT AREA */}
         <main className="flex-1 h-screen overflow-y-auto bg-[#F8F9FA]">
