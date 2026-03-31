@@ -16,7 +16,7 @@ import { VIPStar } from "@/components/driversProfile/VIPStar";
 import { VehicleCard } from "@/components/driversProfile/VehicleCard";
 import { VehicleFormModal } from "@/components/driversProfile/VehicleFormModal";
 import { DriverHeader } from "@/components/driversProfile/DriverHeader";
-import WordGuessGame from "@/components/wordGuessGame";
+import WordGuessGame from "@/components/wordGame/wordGuessGame";
 import ShareButton from "@/components/sharebutton";
 import LoadingRound from "@/components/re-useable-loading";
 import DriverLocationToggle from "@/components/map/DriverLocationToggle";
@@ -37,11 +37,6 @@ const setStoredVipLevel = (driverId: string, level: number) => {
     localStorage.setItem(`driver-${driverId}-vipLevel`, level.toString());
   } catch { }
 };
-
-const capitalizeFullName = (name: string) =>
-  name?.split(" ").filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ") || "Professional Driver";
 
 const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, vipExpiryDate?: any) => {
   let referralBasedLevel = 0;
@@ -192,8 +187,6 @@ export default function DriverProfilePage() {
   // Location States
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
-  const [editingLocation, setEditingLocation] = useState(false);
-  const [savingLocation, setSavingLocation] = useState(false);
   const [whatsappPreferred, setWhatsappPreferred] = useState(false);
 
   // VIP and Stats
@@ -493,47 +486,6 @@ export default function DriverProfilePage() {
   };
 
   // Location Operations
-  const startEditLocation = () => {
-    setEditingLocation(true);
-    setCity(driverData?.city || "");
-    setState(driverData?.state || "");
-  };
-
-  const updateLocation = async () => {
-    if (!city.trim() || !state.trim()) {
-      toast.error("Please enter both city and state");
-      return;
-    }
-
-    setSavingLocation(true);
-    try {
-      const userRef = doc(db, "users", driverId);
-      await updateDoc(userRef, {
-        city: city.trim(),
-        state: state.trim(),
-        updatedAt: Timestamp.now()
-      });
-      toast.success("Location updated successfully!");
-      setEditingLocation(false);
-    } catch (err) {
-      console.error("Error updating location:", err);
-      toast.error("Failed to update location");
-    } finally {
-      setSavingLocation(false);
-    }
-  };
-
-  const cancelLocationEdit = () => {
-    setEditingLocation(false);
-    setCity(driverData?.city || "");
-    setState(driverData?.state || "");
-  };
-
-  const handleLocationChange = (field: string, value: string) => {
-    if (field === 'city') setCity(value);
-    if (field === 'state') setState(value);
-  };
-
   const toggleWhatsappPreference = async () => {
     const newValue = !whatsappPreferred;
     try {
@@ -706,7 +658,7 @@ export default function DriverProfilePage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 px-4 py-6 md:p-8">
+    <div className="p-2 min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Toaster position="top-right" />
 
       {/* VIP Limit Modal */}
@@ -775,7 +727,7 @@ export default function DriverProfilePage() {
 
       {/* VIP Upgrade Modal */}
       {showVIPUpgradeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 relative max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-300">
             <button
               onClick={() => setShowVIPUpgradeModal(false)}
@@ -981,7 +933,7 @@ export default function DriverProfilePage() {
       )}
 
       {/* Live Location Toggle Section */}
-      <div className="mb-6">
+      <div className="mb-1">
         <DriverLocationToggle
           driverId={driverId}
           vehicleId={vehicles.length > 0 ? vehicles[0].id : undefined}
@@ -1003,13 +955,6 @@ export default function DriverProfilePage() {
         onAddVehicle={handleAddVehicleClick}
         onUpgradeVIP={() => setShowVIPUpgradeModal(true)}
         onPlayGame={() => setGame(true)}
-        onEditLocation={startEditLocation}
-        isEditingLocation={editingLocation}
-        editingLocationData={{ city, state }}
-        onLocationChange={handleLocationChange}
-        onUpdateLocation={updateLocation}
-        onCancelLocationEdit={cancelLocationEdit}
-        isSavingLocation={savingLocation}
         whatsappPreferred={whatsappPreferred}
         onToggleWhatsapp={toggleWhatsappPreference}
         vipDetails={vipDetails}

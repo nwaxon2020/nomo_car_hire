@@ -2,6 +2,7 @@
 import React from 'react';
 import { VIPStar } from './VIPStar';
 import ShareButton from '@/components/sharebutton';
+import { FaWhatsapp, FaMapMarkerAlt, FaUsers, FaStar, FaCar, FaUserCheck } from 'react-icons/fa';
 
 interface DriverHeaderProps {
     driverData: any;
@@ -17,13 +18,6 @@ interface DriverHeaderProps {
     onAddVehicle: () => void;
     onUpgradeVIP: () => void;
     onPlayGame: () => void;
-    onEditLocation: () => void;
-    isEditingLocation: boolean;
-    editingLocationData: { city: string; state: string };
-    onLocationChange: (field: string, value: string) => void;
-    onUpdateLocation: () => void;
-    onCancelLocationEdit: () => void;
-    isSavingLocation: boolean;
     whatsappPreferred: boolean;
     onToggleWhatsapp: () => void;
     vipDetails: any;
@@ -43,48 +37,43 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
     onAddVehicle,
     onUpgradeVIP,
     onPlayGame,
-    onEditLocation,
-    isEditingLocation,
-    editingLocationData,
-    onLocationChange,
-    onUpdateLocation,
-    onCancelLocationEdit,
-    isSavingLocation,
     whatsappPreferred,
     onToggleWhatsapp,
     vipDetails
 }) => {
     return (
-        <div className="bg-white shadow-xl rounded-2xl p-6 mb-6">
-            <div className="flex flex-col lg:flex-row gap-6">
+        <div className="bg-slate-900 border border-emerald-500/20 shadow-2xl rounded md:rounded-xl px-3 py-5 md:p-6 mb-8 overflow-hidden relative">
+            {/* Subtle Premium Background Glow */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] -z-10" />
+
+            <div className="flex flex-col lg:flex-row gap-6 md:gap-8">
                 {/* Left Column - Profile Info */}
-                <div className="lg:w-1/2">
-                    <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 mb-4">
+                <div className="lg:w-1/2 flex flex-col gap-5 ">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                         <div className="relative">
-                            <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-full overflow-hidden border-4 border-white shadow-lg">
+                            <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full overflow-hidden border-2 border-emerald-500/30 p-1 bg-slate-800 shadow-2xl">
                                 {driverData?.profileImage ? (
                                     <img
                                         src={driverData.profileImage}
                                         alt="Driver Profile"
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover rounded-full"
                                     />
                                 ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                                    <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-emerald-400 text-3xl font-black">
                                         {driverData?.firstName?.charAt(0).toUpperCase() || "D"}
-                                        {driverData?.lastName?.charAt(0).toUpperCase() || "D"}
                                     </div>
                                 )}
                             </div>
                             {isVerified && (
-                                <div className="absolute -bottom-1 -right-1 bg-green-500 text-white w-7 h-7 rounded-full flex items-center justify-center border-2 border-white shadow-md">
-                                    ✓
+                                <div className="absolute bottom-1 right-1 bg-emerald-500 text-white w-8 h-8 rounded-full flex items-center justify-center border-4 border-slate-900 shadow-lg">
+                                    <FaUserCheck className="text-xs" />
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex-1">
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                                <h1 className="text-2xl font-bold text-gray-800">
+                        <div className="flex-1 text-center sm:text-left">
+                            <div className="flex flex-col sm:flex-row items-center gap-3 mb-2">
+                                <h1 className="text-3xl font-black text-white tracking-tight">
                                     {driverData?.fullName || "Professional Driver"}
                                 </h1>
                                 {vipLevel > 0 && (
@@ -92,199 +81,113 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
                                 )}
                             </div>
 
-                            <div className="flex items-center gap-2 mb-3">
-                                <p className="text-gray-600 text-sm">
-                                    📍 {driverData?.city || "City not specified"}, {driverData?.state || "State not specified"}
-                                </p>
-                                <button
-                                    onClick={onEditLocation}
-                                    className="text-blue-500 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors"
-                                >
-                                    ✏️ Edit
-                                </button>
-                            </div>
-
-                            {isEditingLocation && (
-                                <div className="mb-3 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
-                                    <div className="flex flex-col sm:flex-row gap-3 mb-3">
-                                        <div className="flex-1">
-                                            <input
-                                                type="text"
-                                                value={editingLocationData.city}
-                                                onChange={(e) => onLocationChange('city', e.target.value)}
-                                                placeholder="City"
-                                                className="w-full border border-gray-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <input
-                                                type="text"
-                                                value={editingLocationData.state}
-                                                onChange={(e) => onLocationChange('state', e.target.value)}
-                                                placeholder="State"
-                                                className="w-full border border-gray-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={onUpdateLocation}
-                                            disabled={isSavingLocation}
-                                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                                        >
-                                            {isSavingLocation ? "Saving..." : "Update"}
-                                        </button>
-                                        <button
-                                            onClick={onCancelLocationEdit}
-                                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex items-center gap-3 mb-3">
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${isVerified
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-gray-100 text-gray-600'}`}>
-                                    {isVerified ? '✓ Verified Driver' : 'Unverified'}
+                            <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-400 mb-4">
+                                <FaMapMarkerAlt className="text-emerald-500" />
+                                <span className="text-sm font-medium tracking-wide uppercase">
+                                    {driverData?.city || "Unknown City"}, {driverData?.state || "State"}
                                 </span>
                             </div>
 
-                            <div className="mt-4">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-medium text-gray-700">
-                                        Progress to {vipLevel > 0 ? vipDetails.nextLevelName : 'Green VIP'}
+                            {/* VIP Progress Bar */}
+                            <div className="w-full max-w-sm">
+                                <div className="flex justify-between items-end mb-1.5">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                        Level Progress
                                     </span>
-                                    <span className="text-sm text-gray-500">
-                                        {referralCount}/{vipLevel > 0 ? vipDetails.referralsForNext : 15} referrals
+                                    <span className="text-[10px] font-bold text-emerald-400">
+                                        {referralCount}/{vipLevel > 0 ? vipDetails.referralsForNext : 15}
                                     </span>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                <div className="w-full bg-slate-800 rounded-full h-1.5 border border-white/5">
                                     <div
-                                        className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-500"
+                                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.4)] transition-all duration-1000"
                                         style={{
                                             width: `${vipLevel > 0 ? vipDetails.progressPercentage :
                                                 Math.min((referralCount / 15) * 100, 100)}%`
                                         }}
                                     ></div>
                                 </div>
-                                <p className="text-xs text-gray-600 mt-2">
-                                    {vipLevel > 0
-                                        ? `${vipDetails.nextReferralsNeeded} more referrals for next level`
-                                        : `${15 - referralCount} more referrals to become Green VIP`}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* WhatsApp Preference - Enhanced Look */}
+                    <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${whatsappPreferred ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                                <FaWhatsapp className="text-2xl" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-white uppercase tracking-tight">WhatsApp Priority</p>
+                                <p className="text-xs text-slate-400">
+                                    {whatsappPreferred ? "Instant WhatsApp messaging enabled" : "Standard phone calls only"}
                                 </p>
                             </div>
                         </div>
+                        <button
+                            onClick={onToggleWhatsapp}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-500 focus:outline-none ${whatsappPreferred ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-all duration-300 ${whatsappPreferred ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
                     </div>
 
-                    {/* WhatsApp Preference Toggle */}
-                    <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                    <span className="text-green-600 text-lg">📱</span>
-                                </div>
-                                <div>
-                                    <p className="text-sm font-semibold text-gray-800">WhatsApp Preferred</p>
-                                    <p className="text-xs text-gray-600">
-                                        {whatsappPreferred
-                                            ? "Passengers can contact you via WhatsApp"
-                                            : "Passengers contact you via regular calls"}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={onToggleWhatsapp}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${whatsappPreferred ? 'bg-green-600' : 'bg-gray-300'}`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-all duration-300 ${whatsappPreferred ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-                    </div>
                 </div>
 
-                {/* Right Column - Stats Grid */}
+                {/* Right Column - Premium Stats Grid */}
                 <div className="lg:w-1/2">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-4 text-center hover:shadow-md transition-shadow">
-                            <p className="text-xs font-semibold text-yellow-700 mb-2">Rating</p>
-                            <p className="text-2xl font-bold text-gray-800">{averageRating}</p>
-                            <p className="text-xs text-gray-500 mt-1">⭐ ({ratingsCount} reviews)</p>
-                        </div>
+                    <div className="grid grid-cols-2 gap-2 md:gap-4">
+                        {[
+                            { label: 'Rating', val: averageRating, sub: `${ratingsCount} reviews`, icon: <FaStar />, color: 'from-amber-400/20 to-orange-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
+                            { label: 'Passengers', val: customersCarried, sub: 'Total Bookings', icon: <FaUsers />, color: 'from-emerald-400/20 to-teal-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400' },
+                            { label: 'Referrals', val: referralCount, sub: `Level ${vipLevel || 0}`, icon: <FaStar />, color: 'from-purple-400/20 to-indigo-500/10', border: 'border-purple-500/20', text: 'text-purple-400' },
+                            { label: 'Vehicles', val: vehiclesCount, sub: 'Active Fleet', icon: <FaCar />, color: 'from-blue-400/20 to-cyan-500/10', border: 'border-blue-500/20', text: 'text-blue-400' },
+                        ].map((stat, i) => (
+                            <div key={i} className={`bg-gradient-to-br ${stat.color} border ${stat.border} rounded-xl p-3 flex flex-col justify-center items-center text-center backdrop-blur-sm group hover:scale-[1.02] transition-transform`}>
+                                <div className={`${stat.text} flex items-center justify-center gap-2 text-lg mb-1 opacity-80 group-hover:opacity-100`}>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</p>
+                                    <p>{stat.icon}</p>
+                                </div>
 
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 text-center hover:shadow-md transition-shadow">
-                            <p className="text-xs font-semibold text-green-700 mb-2">Customers</p>
-                            <p className="text-2xl font-bold text-gray-800">{customersCarried}</p>
-                            <p className="text-xs text-gray-500 mt-1">Total passengers</p>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200 rounded-xl p-4 text-center hover:shadow-md transition-shadow">
-                            <p className="text-xs font-semibold text-purple-700 mb-2">Referrals</p>
-                            <p className="text-2xl font-bold text-gray-800">{referralCount}</p>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                                <div
-                                    className="h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-violet-500 transition-all"
-                                    style={{
-                                        width: `${vipLevel > 0 ? vipDetails.progressPercentage :
-                                            Math.min((referralCount / 15) * 100, 100)}%`
-                                    }}
-                                ></div>
+                                <p className="text-2xl font-black text-white">{stat.val}</p>
+                                <p className="text-[9px] text-slate-400 mt-1 font-medium">{stat.sub}</p>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                                {vipLevel > 0 ? `VIP Level ${vipLevel}` : `Need ${15 - referralCount} more for VIP`}
-                            </p>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 text-center hover:shadow-md transition-shadow">
-                            <p className="text-xs font-semibold text-blue-700 mb-2">Vehicles</p>
-                            <p className="text-2xl font-bold text-gray-800">{vehiclesCount}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                                {vipLevel === 0
-                                    ? `${Math.max(0, 2 - vehiclesCount)} more available`
-                                    : vipLevel <= 3
-                                        ? `${Math.max(0, 10 - vehiclesCount)} more available`
-                                        : 'Unlimited'}
-                            </p>
-                        </div>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
-                    <div className="w-full lg:w-auto">
-                        <ShareButton
-                            userId={driverData?.id}
-                            title="Book a Professional Driver on Nomopoventures!"
-                            text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
-                        />
-                    </div>
+            {/* Action Buttons Section */}
+            <div className="mt-8 pt-8 border-t border-white/5 flex flex-col lg:flex-row justify-between items-center gap-6">
+                <div className="w-full lg:w-auto">
+                    <ShareButton
+                        userId={driverData?.id}
+                        title="Book a Professional Driver!"
+                        text="Need a reliable driver? Book with me on Nomopo! 🚗✨"
+                    />
+                </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                        <button
-                            onClick={onAddVehicle}
-                            className="flex-1 lg:flex-none bg-gradient-to-r from-emerald-600 to-green-600 text-white px-6 py-2.5 rounded-xl hover:from-emerald-700 hover:to-green-700 transition-all text-sm font-medium shadow-md"
-                        >
-                            + Add Vehicle {!canAddVehicle && `(${vehiclesCount} added)`}
-                        </button>
+                <div className="grid grid-cols-2 md:grid-cols-3 justify-center sm:justify-end gap-4 w-full lg:w-auto">
+                    <button
+                        onClick={onAddVehicle}
+                        className="col-span-2 md:col-span-1 px-6 py-3 rounded-md md:rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-white/10 text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl"
+                    >
+                        + Add Vehicle {!canAddVehicle && `(${vehiclesCount})`}
+                    </button>
 
-                        <button
-                            onClick={onUpgradeVIP}
-                            className="flex-1 lg:flex-none bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2.5 rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all text-sm font-medium shadow-md"
-                        >
-                            {vipLevel > 0 ? '⭐ Upgrade VIP' : '🌟 Become VIP'}
-                        </button>
+                    <button
+                        onClick={onUpgradeVIP}
+                        className="px-3 md:px-6 py-3 rounded-md md:rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
+                    >
+                        {vipLevel > 0 ? '⭐ Upgrade VIP' : '🌟 Become VIP'}
+                    </button>
 
-                        <button
-                            onClick={onPlayGame}
-                            className="flex-1 lg:flex-none bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2.5 rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all text-sm font-medium shadow-md"
-                        >
-                            🎮 Play Game
-                        </button>
-                    </div>
+                    <button
+                        onClick={onPlayGame}
+                        className="px-3 md:px-6 py-3 rounded-md md:rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(99,102,241,0.3)]"
+                    >
+                        🎮 Play Game
+                    </button>
                 </div>
             </div>
         </div>

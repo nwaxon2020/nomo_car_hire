@@ -4,7 +4,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import ShareButton from "@/components/sharebutton";
-import WordGuessGame from "@/components/wordGuessGame";
+import WordGuessGame from "@/components/wordGame/wordGuessGame";
 
 interface ProfileHeaderProps {
     userData: any;

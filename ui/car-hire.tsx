@@ -2,15 +2,19 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import {collection, query, where, getDocs, doc, updateDoc, arrayUnion,
-  arrayRemove,Timestamp, getDoc, writeBatch, serverTimestamp, addDoc} from "firebase/firestore"
+import {
+    collection, query, where, getDocs, doc, updateDoc, arrayUnion,
+    arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc
+} from "firebase/firestore"
 import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
-import { FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt, 
-  FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope, 
-  FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt, FaShieldAlt} from 'react-icons/fa'
+import {
+    FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt,
+    FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope,
+    FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaCalendarAlt, FaShieldAlt
+} from 'react-icons/fa'
 
-import { useRouter ,useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 // NEW: Imports From components 
 import PreChat from "@/components/PreChat"
@@ -24,163 +28,163 @@ import CustomerLocationToggle from "@/components/map/CustomerLocationToggle"
 
 // Interfaces matching your Firebase data structure
 interface VehicleLog {
-  id: string;
-  carName: string;
-  carModel: string;
-  carType: string;
-  exteriorColor: string;
-  passengers: number;
-  ac: boolean;
-  description: string;
-  status: string;
-  driverId: string;
-  images?: {
-    front?: string;
-    back?: string;
-    side?: string;
-    interior?: string;
-  };
+    id: string;
+    carName: string;
+    carModel: string;
+    carType: string;
+    exteriorColor: string;
+    passengers: number;
+    ac: boolean;
+    description: string;
+    status: string;
+    driverId: string;
+    images?: {
+        front?: string;
+        back?: string;
+        side?: string;
+        interior?: string;
+    };
 }
 
 interface Comment {
-  id?: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  firstName?: string;
-  lastName?: string;
-  comment: string;
-  rating?: number;
-  createdAt: any;
-  updatedAt?: any;
+    id?: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    firstName?: string;
+    lastName?: string;
+    comment: string;
+    rating?: number;
+    createdAt: any;
+    updatedAt?: any;
 }
 
 interface Driver {
-  id: string;
-  uid: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  phoneNumber: string;
-  email: string;
-  city: string;
-  state: string;
-  country: string;
-  verified: boolean;
-  whatsappPreferred: boolean;
-  profileImage?: string;
-  vehicleLog: string[];
-  comments?: Comment[];
-  ratings?: number[];
-  averageRating?: number;
-  totalRatings?: number;
-  customersCarried?: string[];
-  // VIP FIELDS BASED ON YOUR SYSTEM
-  isVip?: boolean;
-  vipLevel?: number;
-  purchasedVipLevel?: number;
-  prestigeLevel?: number;
-  referralCount?: number;
-  vipBadge?: string;
-  
-  // ADD THESE LOCATION FIELDS
-  location?: {
-    latitude: number;
-    longitude: number;
-    accuracy?: number;
-    address?: string;
-    timestamp?: any; // Firestore Timestamp
-    isSharing: boolean;
-    vehicleId?: string;
-  };
-  isLocationActive?: boolean;
-  locationSharedAt?: any; // Firestore Timestamp
-  lastLocationUpdate?: any; // Firestore Timestamp
+    id: string;
+    uid: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    phoneNumber: string;
+    email: string;
+    city: string;
+    state: string;
+    country: string;
+    verified: boolean;
+    whatsappPreferred: boolean;
+    profileImage?: string;
+    vehicleLog: string[];
+    comments?: Comment[];
+    ratings?: number[];
+    averageRating?: number;
+    totalRatings?: number;
+    customersCarried?: string[];
+    // VIP FIELDS BASED ON YOUR SYSTEM
+    isVip?: boolean;
+    vipLevel?: number;
+    purchasedVipLevel?: number;
+    prestigeLevel?: number;
+    referralCount?: number;
+    vipBadge?: string;
+
+    // ADD THESE LOCATION FIELDS
+    location?: {
+        latitude: number;
+        longitude: number;
+        accuracy?: number;
+        address?: string;
+        timestamp?: any; // Firestore Timestamp
+        isSharing: boolean;
+        vehicleId?: string;
+    };
+    isLocationActive?: boolean;
+    locationSharedAt?: any; // Firestore Timestamp
+    lastLocationUpdate?: any; // Firestore Timestamp
 }
 
 interface DriverWithVehicle extends Driver {
-  vehicles: VehicleLog[];
+    vehicles: VehicleLog[];
 }
 
 interface TripHistory {
-  id?: string;
-  tripId: string;
-  driverId: string;
-  driverName: string;
-  driverPhone: string;
-  driverImage?: string;
-  vehicleId: string;
-  vehicleName: string;
-  vehicleModel: string;
-  vehicleType: string;
-  vehicleImage?: string;
-  // Trip details
-  pickupLocation: string;
-  destination: string;
-  fare: number;
-  status: 'active' | 'completed' | 'cancelled';
-  startTime: any;
-  endTime?: any;
-  // Additional info
-  rating?: number;
-  review?: string;
-  createdAt: any;
-  updatedAt: any;
+    id?: string;
+    tripId: string;
+    driverId: string;
+    driverName: string;
+    driverPhone: string;
+    driverImage?: string;
+    vehicleId: string;
+    vehicleName: string;
+    vehicleModel: string;
+    vehicleType: string;
+    vehicleImage?: string;
+    // Trip details
+    pickupLocation: string;
+    destination: string;
+    fare: number;
+    status: 'active' | 'completed' | 'cancelled';
+    startTime: any;
+    endTime?: any;
+    // Additional info
+    rating?: number;
+    review?: string;
+    createdAt: any;
+    updatedAt: any;
 }
 
 interface ContactedDriver {
-  id?: string;
-  driverId: string;
-  driverName: string;
-  phoneNumber: string;
-  vehicleId: string;
-  vehicleName: string;
-  vehicleModel: string;
-  contactDate: any;
-  lastContacted: any;
-  timestamp?: any;
+    id?: string;
+    driverId: string;
+    driverName: string;
+    phoneNumber: string;
+    vehicleId: string;
+    vehicleName: string;
+    vehicleModel: string;
+    contactDate: any;
+    lastContacted: any;
+    timestamp?: any;
 }
 
 interface HiredCar {
-  id?: string;
-  driverId: string;
-  vehicleId: string;
-  driverName: string;
-  vehicleName: string;
-  vehicleModel: string;
-  hireDate: any;
-  lastHired: any;
-  timestamp?: any;
+    id?: string;
+    driverId: string;
+    vehicleId: string;
+    driverName: string;
+    vehicleName: string;
+    vehicleModel: string;
+    hireDate: any;
+    lastHired: any;
+    timestamp?: any;
 }
 
 interface Trip {
-  id: string;
-  driverId: string;
-  vehicleId: string;
-  customerId: string;
-  customerName: string;
-  pickupLocation: string;
-  destination: string;
-  fare: number;
-  status: string;
-  startTime: Timestamp | null;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  endTime?: Timestamp;
-  // NEW: For real-time tracking
-  driverLocation?: {
-    lat: number;
-    lng: number;
-    address?: string;
-    timestamp: Timestamp;
-  };
-  routePolyline?: string; // For showing route on map
-  currentLocation?: {
-    lat: number;
-    lng: number;
-    address?: string;
-    timestamp: Timestamp;
-  };
+    id: string;
+    driverId: string;
+    vehicleId: string;
+    customerId: string;
+    customerName: string;
+    pickupLocation: string;
+    destination: string;
+    fare: number;
+    status: string;
+    startTime: Timestamp | null;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    endTime?: Timestamp;
+    // NEW: For real-time tracking
+    driverLocation?: {
+        lat: number;
+        lng: number;
+        address?: string;
+        timestamp: Timestamp;
+    };
+    routePolyline?: string; // For showing route on map
+    currentLocation?: {
+        lat: number;
+        lng: number;
+        address?: string;
+        timestamp: Timestamp;
+    };
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -200,19 +204,19 @@ const VIP_CONFIG = {
 // Helper to get VIP name and color from level
 const getVIPDetails = (vipLevel: number, prestigeLevel: number = 0) => {
     if (vipLevel <= 0) return { name: "", color: "", stars: 0 };
-    
+
     const vipInfo = VIP_CONFIG.levels.find(level => level.level === vipLevel);
     if (!vipInfo) return { name: "", color: "", stars: 0 };
-    
+
     return {
         name: vipInfo.name,
         color: vipInfo.color,
         stars: vipInfo.stars,
         level: vipLevel,
         prestigeLevel,
-        displayName: prestigeLevel > 0 
-        ? `${vipInfo.name} LV${prestigeLevel}`
-        : vipInfo.name
+        displayName: prestigeLevel > 0
+            ? `${vipInfo.name} LV${prestigeLevel}`
+            : vipInfo.name
     };
 };
 
@@ -223,80 +227,80 @@ const isDriverVIP = (driver: Driver): boolean => {
 
 
 // VIP Star Component (add this in your component file)
-const VIPStar = ({ 
-    vipLevel, 
-    prestigeLevel = 0, 
-    size = "sm" 
-    }: { 
-    vipLevel: number, 
-    prestigeLevel?: number, 
-    size?: "sm" | "md" | "lg" 
-    }) => {
+const VIPStar = ({
+    vipLevel,
+    prestigeLevel = 0,
+    size = "sm"
+}: {
+    vipLevel: number,
+    prestigeLevel?: number,
+    size?: "sm" | "md" | "lg"
+}) => {
     if (vipLevel <= 0) return null;
-    
+
     const vipDetails = getVIPDetails(vipLevel, prestigeLevel);
     if (!vipDetails.name) return null;
-    
+
     const sizeClasses = {
         sm: "w-3 h-3",
         md: "w-4 h-4",
         lg: "w-5 h-5"
     };
-    
+
     const getColorClass = (color: string) => {
         const colors: Record<string, string> = {
-        green: "text-green-500 bg-green-100",
-        yellow: "text-yellow-500 bg-yellow-100",
-        purple: "text-purple-500 bg-purple-100",
-        gold: "text-yellow-600 bg-yellow-100",
-        black: "text-gray-900 bg-gray-100"
+            green: "text-green-500 bg-green-100",
+            yellow: "text-yellow-500 bg-yellow-100",
+            purple: "text-purple-500 bg-purple-100",
+            gold: "text-yellow-600 bg-yellow-100",
+            black: "text-gray-900 bg-gray-100"
         };
         return colors[color] || colors.green;
     };
-    
+
     const getBorderClass = (color: string) => {
         const colors: Record<string, string> = {
-        green: "border-green-300",
-        yellow: "border-yellow-300",
-        purple: "border-purple-300",
-        gold: "border-yellow-400",
-        black: "border-gray-300"
+            green: "border-green-300",
+            yellow: "border-yellow-300",
+            purple: "border-purple-300",
+            gold: "border-yellow-400",
+            black: "border-gray-300"
         };
         return colors[color] || colors.green;
     };
-    
+
     const getTextClass = (color: string) => {
         const colors: Record<string, string> = {
-        green: "text-green-800",
-        yellow: "text-yellow-800",
-        purple: "text-purple-800",
-        gold: "text-yellow-900",
-        black: "text-gray-900"
+            green: "text-green-800",
+            yellow: "text-yellow-800",
+            purple: "text-purple-800",
+            gold: "text-yellow-900",
+            black: "text-gray-900"
         };
         return colors[color] || colors.green;
     };
-    
+
     return (
         <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getColorClass(vipDetails.color)} ${getBorderClass(vipDetails.color)} border`}>
-        <div className="flex items-center gap-0.5">
-            {Array.from({ length: vipDetails.stars }).map((_, i) => (
-            <svg 
-                key={i}
-                className={`${sizeClasses[size]} fill-current`}
-                viewBox="0 0 24 24"
-            >
-                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-            </svg>
-            ))}
-        </div>
-        {prestigeLevel > 0 && (
-            <span className="text-xs font-bold px-1 py-0.5 rounded bg-gray-800 text-white">
-            LV{prestigeLevel}
+            <div className="flex items-center gap-0.5">
+                {Array.from({ length: vipDetails.stars }).map((_, i) => (
+                    <svg
+                        key={i}
+                        className={`${sizeClasses[size]} fill-current`}
+                        viewBox="0 0 24 24"
+                    >
+                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                    </svg>
+                ))}
+            </div>
+            {prestigeLevel > 0 && (
+                <span className="text-xs font-bold px-1 py-0.5 rounded bg-gray-800 text-white">
+                    LV{prestigeLevel}
+                </span>
+            )}
+            <span className={`text-xs font-semibold ${getTextClass(vipDetails.color)}`}>
+                {vipDetails.name}
             </span>
-        )}
-        <span className={`text-xs font-semibold ${getTextClass(vipDetails.color)}`}>
-            {vipDetails.name}
-        </span>
         </div>
     );
 };
@@ -327,7 +331,7 @@ export default function CarHireUi() {
         status: string;
         startTime: Timestamp | null;
         endTime: Timestamp | null;
-        showForm?: boolean; 
+        showForm?: boolean;
     }>({
         pickupLocation: '',
         destination: '',
@@ -353,9 +357,9 @@ export default function CarHireUi() {
     const [showVerifiedOnly, setShowVerifiedOnly] = useState(false)
 
     // New state to handle review form inputs
-    const [reviewForm, setReviewForm] = useState({ 
-        comment: "", 
-        rating: 0 
+    const [reviewForm, setReviewForm] = useState({
+        comment: "",
+        rating: 0
     })
     const [reviewMessage, setReviewMessage] = useState<{ type: "success" | "error" | ""; text: string }>({ type: "", text: "" })
     const [hoverRating, setHoverRating] = useState(0)
@@ -383,12 +387,12 @@ export default function CarHireUi() {
 
     // Toggle Booking Request
     const [showRequestBox, setShowRequestBox] = useState(false);
-   
+
     // State for loading history
     const [loadingHistory, setLoadingHistory] = useState(false)
 
     // State for delete confirmation
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState<{show: boolean, comment: Comment | null}>({show: false, comment: null})
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ show: boolean, comment: Comment | null }>({ show: false, comment: null })
 
     // ✅ NEW: State for Pre-Chat Modal
     const [showPreChat, setShowPreChat] = useState(false)
@@ -412,7 +416,7 @@ export default function CarHireUi() {
     const [tripSuccessMessage, setTripSuccessMessage] = useState('');
 
 
-   // Initialize auth and load history from Firebase
+    // Initialize auth and load history from Firebase
     useEffect(() => {
         const auth = getAuth()
         const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -420,7 +424,7 @@ export default function CarHireUi() {
                 setCurrentUser(user)
                 setCurrentUserId(user.uid)
                 loadUserHistory(user.uid)
-                
+
                 // ✅ Clean way: Call notification function
                 loadNotificationData(user.uid)
             } else {
@@ -428,7 +432,7 @@ export default function CarHireUi() {
                 setCurrentUserId("")
                 setContactedDrivers([])
                 setHiredCars([])
-                
+
                 // Clear notification data for logged out users
                 setNotificationCount(0)
                 setNotificationType("customer")
@@ -463,7 +467,7 @@ export default function CarHireUi() {
                         requestsRef,
                         where("status", "==", "active")
                     ));
-                    
+
                     let unofferedCount = 0;
                     querySnapshot.forEach((docSnap) => {
                         const request = docSnap.data();
@@ -481,7 +485,7 @@ export default function CarHireUi() {
                         where("userId", "==", userId),
                         where("status", "==", "active")
                     ));
-                    
+
                     let totalOffers = 0;
                     querySnapshot.forEach((docSnap) => {
                         const request = docSnap.data();
@@ -508,117 +512,117 @@ export default function CarHireUi() {
     const loadUserHistory = async (userId: string) => {
         try {
             setLoadingHistory(true);
-            
+
             // Fetch trips where user is the customer
             const tripsRef = collection(db, "trips");
             const q = query(
-            tripsRef,
-            where("customerId", "==", userId),
-            where("status", "in", ["completed", "cancelled"]) // Only completed/cancelled trips
+                tripsRef,
+                where("customerId", "==", userId),
+                where("status", "in", ["completed", "cancelled"]) // Only completed/cancelled trips
             );
-            
+
             const tripsSnapshot = await getDocs(q);
-            
+
             const tripsList: TripHistory[] = [];
-            
+
             for (const tripDoc of tripsSnapshot.docs) {
-            const tripData = tripDoc.data();
-            
-            // Get driver details
-            const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
-            const driverData = driverDoc.data();
-            
-            // Get vehicle details
-            const vehicleDoc = await getDoc(doc(db, "vehicleLog", tripData.vehicleId));
-            const vehicleData = vehicleDoc.data();
-            
-            // Get user's review for this trip if exists
-            let userRating: number | undefined;
-            let userReview: string | undefined;
-            
-            if (driverData?.comments) {
-                const userComment = driverData.comments.find(
-                (comment: Comment) => comment.userId === userId
-                );
-                if (userComment) {
-                userRating = userComment.rating;
-                userReview = userComment.comment;
+                const tripData = tripDoc.data();
+
+                // Get driver details
+                const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
+                const driverData = driverDoc.data();
+
+                // Get vehicle details
+                const vehicleDoc = await getDoc(doc(db, "vehicleLog", tripData.vehicleId));
+                const vehicleData = vehicleDoc.data();
+
+                // Get user's review for this trip if exists
+                let userRating: number | undefined;
+                let userReview: string | undefined;
+
+                if (driverData?.comments) {
+                    const userComment = driverData.comments.find(
+                        (comment: Comment) => comment.userId === userId
+                    );
+                    if (userComment) {
+                        userRating = userComment.rating;
+                        userReview = userComment.comment;
+                    }
                 }
+
+                const tripHistoryItem: TripHistory = {
+                    id: tripDoc.id,
+                    tripId: tripDoc.id,
+                    driverId: tripData.driverId,
+                    driverName: driverData?.fullName || `${driverData?.firstName} ${driverData?.lastName}`,
+                    driverPhone: driverData?.phoneNumber || "",
+                    driverImage: driverData?.profileImage,
+                    vehicleId: tripData.vehicleId,
+                    vehicleName: vehicleData?.carName || "",
+                    vehicleModel: vehicleData?.carModel || "",
+                    vehicleType: vehicleData?.carType || "",
+                    vehicleImage: vehicleData?.images?.front || getDefaultVehicleImage(vehicleData?.carType),
+                    // Trip details
+                    pickupLocation: tripData.pickupLocation || "",
+                    destination: tripData.destination || "",
+                    fare: tripData.fare || 0,
+                    status: tripData.status,
+                    startTime: tripData.startTime,
+                    endTime: tripData.endTime,
+                    // Review info
+                    rating: userRating,
+                    review: userReview,
+                    createdAt: tripData.createdAt,
+                    updatedAt: tripData.updatedAt
+                };
+
+                tripsList.push(tripHistoryItem);
             }
-            
-            const tripHistoryItem: TripHistory = {
-                id: tripDoc.id,
-                tripId: tripDoc.id,
-                driverId: tripData.driverId,
-                driverName: driverData?.fullName || `${driverData?.firstName} ${driverData?.lastName}`,
-                driverPhone: driverData?.phoneNumber || "",
-                driverImage: driverData?.profileImage,
-                vehicleId: tripData.vehicleId,
-                vehicleName: vehicleData?.carName || "",
-                vehicleModel: vehicleData?.carModel || "",
-                vehicleType: vehicleData?.carType || "",
-                vehicleImage: vehicleData?.images?.front || getDefaultVehicleImage(vehicleData?.carType),
-                // Trip details
-                pickupLocation: tripData.pickupLocation || "",
-                destination: tripData.destination || "",
-                fare: tripData.fare || 0,
-                status: tripData.status,
-                startTime: tripData.startTime,
-                endTime: tripData.endTime,
-                // Review info
-                rating: userRating,
-                review: userReview,
-                createdAt: tripData.createdAt,
-                updatedAt: tripData.updatedAt
-            };
-            
-            tripsList.push(tripHistoryItem);
-            }
-            
+
             // Sort by endTime (most recent first) and limit to 5
             const sortedTrips = tripsList.sort((a, b) => {
-            const timeA = a.endTime?.toMillis?.() || a.endTime?.seconds * 1000 || new Date(a.endTime).getTime() || 0;
-            const timeB = b.endTime?.toMillis?.() || b.endTime?.seconds * 1000 || new Date(b.endTime).getTime() || 0;
-            return timeB - timeA; // Descending (newest first)
+                const timeA = a.endTime?.toMillis?.() || a.endTime?.seconds * 1000 || new Date(a.endTime).getTime() || 0;
+                const timeB = b.endTime?.toMillis?.() || b.endTime?.seconds * 1000 || new Date(b.endTime).getTime() || 0;
+                return timeB - timeA; // Descending (newest first)
             }).slice(0, 5); // Keep only 5 most recent
-            
+
             setTripHistory(sortedTrips);
-            
+
             // For backward compatibility, also load old history format
             const userDocRef = doc(db, "users", userId);
             const userDoc = await getDoc(userDocRef);
-            
+
             if (userDoc.exists()) {
-            const userData = userDoc.data();
-            
-            const contactedDriversData: ContactedDriver[] = (userData.contactedDrivers || [])
-                .map((item: ContactedDriver) => ({
-                ...item,
-                timestamp: item.lastContacted || item.contactDate || serverTimestamp()
-                }))
-                .sort((a: ContactedDriver, b: ContactedDriver) => {
-                const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0;
-                const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0;
-                return timeB - timeA;
-                })
-                .slice(0, 5);
-            
-            const hiredCarsData: HiredCar[] = (userData.hiredCars || [])
-                .map((item: HiredCar) => ({
-                ...item,
-                timestamp: item.lastHired || item.hireDate || serverTimestamp()
-                }))
-                .sort((a: HiredCar, b: HiredCar) => {
-                const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0;
-                const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0;
-                return timeB - timeA;
-                })
-                .slice(0, 5);
-            
-            setContactedDrivers(contactedDriversData);
-            setHiredCars(hiredCarsData);
+                const userData = userDoc.data();
+
+                const contactedDriversData: ContactedDriver[] = (userData.contactedDrivers || [])
+                    .map((item: ContactedDriver) => ({
+                        ...item,
+                        timestamp: item.lastContacted || item.contactDate || serverTimestamp()
+                    }))
+                    .sort((a: ContactedDriver, b: ContactedDriver) => {
+                        const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0;
+                        const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0;
+                        return timeB - timeA;
+                    })
+                    .slice(0, 5);
+
+                const hiredCarsData: HiredCar[] = (userData.hiredCars || [])
+                    .map((item: HiredCar) => ({
+                        ...item,
+                        timestamp: item.lastHired || item.hireDate || serverTimestamp()
+                    }))
+                    .sort((a: HiredCar, b: HiredCar) => {
+                        const timeA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || new Date(a.timestamp).getTime() || 0;
+                        const timeB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || new Date(b.timestamp).getTime() || 0;
+                        return timeB - timeA;
+                    })
+                    .slice(0, 5);
+
+                setContactedDrivers(contactedDriversData);
+                setHiredCars(hiredCarsData);
             }
-            
+
         } catch (error) {
             console.error("Error loading user history:", error);
         } finally {
@@ -638,14 +642,14 @@ export default function CarHireUi() {
             const driverId = searchParams.get('driver')
             const vehicleId = searchParams.get('vehicle')
             const searchQuery = searchParams.get('search')
-            
+
             // Handle search query from homepage
             if (searchQuery) {
                 setSearchLocation(searchQuery)
-                
+
                 // Optional: Also set a message showing what was searched
                 console.log(`Searching for: ${searchQuery}`)
-                
+
                 // Optional: Auto-scroll to search results
                 setTimeout(() => {
                     const element = document.getElementById('search-results')
@@ -654,38 +658,38 @@ export default function CarHireUi() {
                     }
                 }, 500)
             }
-            
+
             if (driverId) {
                 // Find the driver in the loaded drivers
                 const driver = driversWithVehicles.find(d => d.uid === driverId || d.id === driverId)
-                
+
                 if (driver) {
                     let vehicle: VehicleLog | null = null
-                    
+
                     // Find the specific vehicle if vehicleId is provided
                     if (vehicleId) {
                         vehicle = driver.vehicles.find(v => v.id === vehicleId) || null
                     }
-                    
+
                     // If no specific vehicle found, use the first available vehicle
                     if (!vehicle && driver.vehicles.length > 0) {
                         vehicle = driver.vehicles[0]
                     }
-                    
+
                     if (vehicle) {
                         // Open the driver modal
                         setSelectedDriver(driver)
                         setSelectedVehicle(vehicle)
                         setDriverInfo(true)
-                        
+
                         // Set the main image
-                        const firstImage = vehicle.images?.front || 
-                                        vehicle.images?.side || 
-                                        vehicle.images?.back || 
-                                        vehicle.images?.interior || 
-                                        getDefaultVehicleImage(vehicle.carType)
+                        const firstImage = vehicle.images?.front ||
+                            vehicle.images?.side ||
+                            vehicle.images?.back ||
+                            vehicle.images?.interior ||
+                            getDefaultVehicleImage(vehicle.carType)
                         setMainImage(firstImage)
-                        
+
                         // Scroll to the modal after a short delay
                         setTimeout(() => {
                             const element = document.getElementById('contact-driver')
@@ -711,11 +715,11 @@ export default function CarHireUi() {
                 where("isDriver", "==", true)
             );
             const driversSnapshot = await getDocs(driversQuery);
-            
+
             // Fetch ALL vehicles (including unavailable ones)
             const vehiclesQuery = collection(db, "vehicleLog");
             const vehiclesSnapshot = await getDocs(vehiclesQuery);
-            
+
             // Create vehicle map - INCLUDE ALL VEHICLES regardless of status
             const vehicleMap = new Map<string, VehicleLog>();
             vehiclesSnapshot.forEach((doc) => {
@@ -738,7 +742,7 @@ export default function CarHireUi() {
 
             // Combine drivers with ALL their vehicles (including unavailable ones)
             const driversWithVehiclesList: DriverWithVehicle[] = [];
-            
+
             driversSnapshot.forEach(doc => {
                 const data = doc.data();
                 // In fetchDrivers
@@ -768,7 +772,7 @@ export default function CarHireUi() {
                     prestigeLevel: data.prestigeLevel || 0,
                     referralCount: data.referralCount || 0,
                     vipBadge: data.vipBadge || "",
-                    
+
                     // LOCATION FIELDS
                     location: data.location || undefined,
                     isLocationActive: data.isLocationActive || false,
@@ -783,7 +787,7 @@ export default function CarHireUi() {
 
                 // Get ALL vehicles for this driver (including unavailable ones)
                 const driverVehicles: VehicleLog[] = [];
-                
+
                 // Get vehicles from driver's vehicleLog array
                 driver.vehicleLog.forEach(vehicleId => {
                     const vehicle = vehicleMap.get(vehicleId);
@@ -831,18 +835,18 @@ export default function CarHireUi() {
                 const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
                     return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
                 };
-                
+
                 const aVipLevel = getEffectiveVipLevel(a);
                 const bVipLevel = getEffectiveVipLevel(b);
                 const aIsVIP = aVipLevel > 0;
                 const bIsVIP = bVipLevel > 0;
                 const aVerified = a.verified;
                 const bVerified = b.verified;
-                
+
                 // 1. VIP with Verified
                 if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
                 if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
-                
+
                 // 2. VIP without Verified
                 if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
                     // Both are VIP without verified, compare VIP levels
@@ -856,15 +860,15 @@ export default function CarHireUi() {
                     // Same VIP level, compare ratings
                     return (b.averageRating || 0) - (a.averageRating || 0);
                 }
-                
+
                 // 3. Verified without VIP
                 if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
                 if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
-                
+
                 // 4. Others (neither VIP nor verified)
                 // Sort by rating for non-VIP, non-verified drivers
                 return (b.averageRating || 0) - (a.averageRating || 0);
-                
+
                 // If all criteria are equal, maintain original order
             });
 
@@ -881,55 +885,55 @@ export default function CarHireUi() {
     // Filter drivers by location, category, AC, verification, and location sharing status
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
         return driver.vehicles
-        .filter((vehicle) => {
-            // Check if driver has location sharing enabled
-            const locationSharingOn = 
-                (driver.location && driver.location.isSharing === true) || 
-                driver.isLocationActive === true;
-            
-            // Skip driver if location sharing is not enabled
-            if (!locationSharingOn) {
-                return false;
-            }
-            
-            // Check if location was updated recently (e.g., within last 30 minutes)
-            // This prevents showing drivers who turned on location but then went offline
-            if (driver.lastLocationUpdate) {
-                const lastUpdate = driver.lastLocationUpdate.toDate(); // Convert Firestore Timestamp
-                const now = new Date();
-                const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
-                
-                // Don't show drivers who haven't updated location in over 30 minutes
-                if (minutesSinceUpdate > 30) {
+            .filter((vehicle) => {
+                // Check if driver has location sharing enabled
+                const locationSharingOn =
+                    (driver.location && driver.location.isSharing === true) ||
+                    driver.isLocationActive === true;
+
+                // Skip driver if location sharing is not enabled
+                if (!locationSharingOn) {
                     return false;
                 }
-            }
-            
-            const locationMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
-                                driver.state?.toLowerCase().includes(searchLocation.toLowerCase()) ||
-                                searchLocation === ""
-            
-            // If AC filter is on, remove keke even if driver has AC true
-            let categoryMatch = true
-            if (selectedCategory === "all") {
-                // If AC filter is on and category is all, exclude keke
-                if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
-                    categoryMatch = false
+
+                // Check if location was updated recently (e.g., within last 30 minutes)
+                // This prevents showing drivers who turned on location but then went offline
+                if (driver.lastLocationUpdate) {
+                    const lastUpdate = driver.lastLocationUpdate.toDate(); // Convert Firestore Timestamp
+                    const now = new Date();
+                    const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+
+                    // Don't show drivers who haven't updated location in over 30 minutes
+                    if (minutesSinceUpdate > 30) {
+                        return false;
+                    }
                 }
-            } else {
-                categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase()
-                // If AC filter is on and category is keke, exclude it
-                if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
-                    categoryMatch = false
+
+                const locationMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
+                    driver.state?.toLowerCase().includes(searchLocation.toLowerCase()) ||
+                    searchLocation === ""
+
+                // If AC filter is on, remove keke even if driver has AC true
+                let categoryMatch = true
+                if (selectedCategory === "all") {
+                    // If AC filter is on and category is all, exclude keke
+                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
+                        categoryMatch = false
+                    }
+                } else {
+                    categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase()
+                    // If AC filter is on and category is keke, exclude it
+                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
+                        categoryMatch = false
+                    }
                 }
-            }
-            
-            const acMatch = !showACOnly || (vehicle.ac && vehicle.carType.toLowerCase() !== "keke")
-            const verifiedMatch = !showVerifiedOnly || driver.verified
-            
-            return locationMatch && categoryMatch && acMatch && verifiedMatch
-        })
-        .map(vehicle => ({ driver, vehicle }))
+
+                const acMatch = !showACOnly || (vehicle.ac && vehicle.carType.toLowerCase() !== "keke")
+                const verifiedMatch = !showVerifiedOnly || driver.verified
+
+                return locationMatch && categoryMatch && acMatch && verifiedMatch
+            })
+            .map(vehicle => ({ driver, vehicle }))
     })
 
     // Handle driver selection
@@ -943,14 +947,14 @@ export default function CarHireUi() {
         })
         setHoverRating(0)
         setSaveMessage({ type: "", text: "" }) // Clear any previous save messages
-        setShowDeleteConfirm({show: false, comment: null}) // Clear delete confirmation
-        const firstImage = vehicle.images?.front || 
-                        vehicle.images?.side || 
-                        vehicle.images?.back || 
-                        vehicle.images?.interior || 
-                        "/car_select.jpg"
+        setShowDeleteConfirm({ show: false, comment: null }) // Clear delete confirmation
+        const firstImage = vehicle.images?.front ||
+            vehicle.images?.side ||
+            vehicle.images?.back ||
+            vehicle.images?.interior ||
+            "/car_select.jpg"
         setMainImage(firstImage)
-        window.scrollTo({top: 0, behavior: "smooth"})
+        window.scrollTo({ top: 0, behavior: "smooth" })
     }
 
     // ✅ NEW: Handle Pre-Chat button click
@@ -970,40 +974,40 @@ export default function CarHireUi() {
     // Check if user can save (10-minute cooldown)
     const canSaveDriver = (driverId: string, vehicleId: string) => {
         if (!currentUser) return { canSave: false, message: "Please sign in first" }
-        
+
         const key = `${driverId}_${vehicleId}`
         const lastSaveTime = saveCooldown[key]
-        
+
         if (lastSaveTime) {
             const tenMinutes = 10 * 60 * 1000 // 10 minutes in milliseconds
             const timeSinceLastSave = Date.now() - lastSaveTime
-            
+
             if (timeSinceLastSave < tenMinutes) {
                 const minutesLeft = Math.ceil((tenMinutes - timeSinceLastSave) / 60000)
-                return { 
-                    canSave: false, 
-                    message: `Please wait ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''} before saving again` 
+                return {
+                    canSave: false,
+                    message: `Please wait ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''} before saving again`
                 }
             }
         }
-        
+
         return { canSave: true, message: "" }
     }
 
     // Handle saving driver to user's contactedDrivers and hiredCars
     const handleSaveDriver = async () => {
         if (!currentUser) {
-            setSaveMessage({ 
-                type: "error", 
-                text: "Please sign in to save drivers to your history" 
+            setSaveMessage({
+                type: "error",
+                text: "Please sign in to save drivers to your history"
             })
             return
         }
 
         if (!selectedDriver || !selectedVehicle) {
-            setSaveMessage({ 
-                type: "error", 
-                text: "No driver or vehicle selected" 
+            setSaveMessage({
+                type: "error",
+                text: "No driver or vehicle selected"
             })
             return
         }
@@ -1011,16 +1015,16 @@ export default function CarHireUi() {
         // Check cooldown
         const cooldownCheck = canSaveDriver(selectedDriver.uid, selectedVehicle.id)
         if (!cooldownCheck.canSave) {
-            setSaveMessage({ 
-                type: "info", 
-                text: cooldownCheck.message 
+            setSaveMessage({
+                type: "info",
+                text: cooldownCheck.message
             })
             return
         }
 
         try {
             setSaveMessage({ type: "", text: "" })
-            
+
             const userDocRef = doc(db, "users", currentUser.uid)
             const driverDocRef = doc(db, "users", selectedDriver.id)
             const now = Timestamp.now()
@@ -1041,7 +1045,7 @@ export default function CarHireUi() {
             const newHiredCar: HiredCar = {
                 driverId: selectedDriver.uid,
                 vehicleId: selectedVehicle.id,
-               driverName: `${selectedDriver.firstName} ${selectedDriver.lastName}`,
+                driverName: `${selectedDriver.firstName} ${selectedDriver.lastName}`,
                 vehicleName: selectedVehicle.carName,
                 vehicleModel: selectedVehicle.carModel,
                 hireDate: now,
@@ -1052,7 +1056,7 @@ export default function CarHireUi() {
             // Get current user data
             const userDoc = await getDoc(userDocRef)
             const userData = userDoc.data()
-            
+
             let currentContactedDrivers: ContactedDriver[] = userData?.contactedDrivers || []
             let currentHiredCars: HiredCar[] = userData?.hiredCars || []
 
@@ -1060,7 +1064,7 @@ export default function CarHireUi() {
             const existingContactIndex = currentContactedDrivers.findIndex(
                 (cd: ContactedDriver) => cd.driverId === selectedDriver.uid && cd.vehicleId === selectedVehicle.id
             )
-            
+
             const existingHireIndex = currentHiredCars.findIndex(
                 (hc: HiredCar) => hc.driverId === selectedDriver.uid && hc.vehicleId === selectedVehicle.id
             )
@@ -1069,7 +1073,7 @@ export default function CarHireUi() {
             if (existingContactIndex !== -1) {
                 currentContactedDrivers.splice(existingContactIndex, 1)
             }
-            
+
             if (existingHireIndex !== -1) {
                 currentHiredCars.splice(existingHireIndex, 1)
             }
@@ -1082,14 +1086,14 @@ export default function CarHireUi() {
             if (currentContactedDrivers.length > 5) {
                 currentContactedDrivers = currentContactedDrivers.slice(0, 5)
             }
-            
+
             if (currentHiredCars.length > 5) {
                 currentHiredCars = currentHiredCars.slice(0, 5)
             }
 
             // Update both user and driver documents in a batch
             const batch = writeBatch(db)
-            
+
             // Update user document with limited history
             batch.update(userDocRef, {
                 contactedDrivers: currentContactedDrivers,
@@ -1125,11 +1129,11 @@ export default function CarHireUi() {
 
             // Save to quick view history
             setQuickViewHistory(newContactedDriver)
-            
+
             // Show success message
-            setSaveMessage({ 
-                type: "success", 
-                text: "✓ Driver and vehicle saved to your history!" 
+            setSaveMessage({
+                type: "success",
+                text: "✓ Driver and vehicle saved to your history!"
             })
 
             // Clear message after 5 seconds
@@ -1139,11 +1143,11 @@ export default function CarHireUi() {
 
         } catch (error) {
             console.error("Error saving driver:", error)
-            setSaveMessage({ 
-                type: "error", 
-                text: "Failed to save driver. Please try again." 
+            setSaveMessage({
+                type: "error",
+                text: "Failed to save driver. Please try again."
             })
-            
+
             // Clear error message after 5 seconds
             setTimeout(() => {
                 setSaveMessage({ type: "", text: "" })
@@ -1155,7 +1159,7 @@ export default function CarHireUi() {
     const handleCloseDriverInfo = () => {
         setDriverInfo(false)
         setSaveMessage({ type: "", text: "" }) // Clear save message
-        setShowDeleteConfirm({show: false, comment: null}) // Clear delete confirmation
+        setShowDeleteConfirm({ show: false, comment: null }) // Clear delete confirmation
     }
 
     // Handle review input change
@@ -1172,12 +1176,12 @@ export default function CarHireUi() {
     // Handle complain button
     const handleComplain = (driverName: string, vehicle: VehicleLog) => {
         setSelectDriver(`${driverName} - ${vehicle.carName} ${vehicle.carModel}`)
-        
+
         // Scroll to the div with id="complains"
         const complainsDiv = document.getElementById('complain');
         if (complainsDiv) {
-            complainsDiv.scrollIntoView({ 
-                behavior: "smooth", 
+            complainsDiv.scrollIntoView({
+                behavior: "smooth",
                 block: "start" // or "center", "end", "nearest"
             });
         }
@@ -1186,12 +1190,12 @@ export default function CarHireUi() {
     // Handle delete comment
     const handleDeleteComment = async (commentToDelete: Comment) => {
         if (!currentUser || !selectedDriver) return
-        
+
         // Check if the comment belongs to the current user
         if (commentToDelete.userId !== currentUser.uid) {
-            setReviewMessage({ 
-                type: "error", 
-                text: "You can only delete your own comments." 
+            setReviewMessage({
+                type: "error",
+                text: "You can only delete your own comments."
             })
             setTimeout(() => {
                 setReviewMessage({ type: "", text: "" })
@@ -1200,7 +1204,7 @@ export default function CarHireUi() {
         }
 
         // Show confirmation message instead of window.confirm
-        setShowDeleteConfirm({show: true, comment: commentToDelete})
+        setShowDeleteConfirm({ show: true, comment: commentToDelete })
     }
 
     // Confirm delete comment
@@ -1210,7 +1214,7 @@ export default function CarHireUi() {
         try {
             const commentToDelete = showDeleteConfirm.comment
             const driverDocRef = doc(db, "users", selectedDriver.id)
-            
+
             // Remove the comment from the array
             await updateDoc(driverDocRef, {
                 comments: arrayRemove(commentToDelete),
@@ -1218,16 +1222,16 @@ export default function CarHireUi() {
             })
 
             // Update average rating
-            const remainingComments = selectedDriver.comments?.filter(c => 
+            const remainingComments = selectedDriver.comments?.filter(c =>
                 c.userId !== currentUser.uid || c.createdAt !== commentToDelete.createdAt
             ) || []
-            
-            const remainingRatings = selectedDriver.ratings?.filter(r => 
+
+            const remainingRatings = selectedDriver.ratings?.filter(r =>
                 r !== commentToDelete.rating
             ) || []
-            
-            const newAverageRating = remainingRatings.length > 0 
-                ? remainingRatings.reduce((a, b) => a + b, 0) / remainingRatings.length 
+
+            const newAverageRating = remainingRatings.length > 0
+                ? remainingRatings.reduce((a, b) => a + b, 0) / remainingRatings.length
                 : 0
 
             await updateDoc(driverDocRef, {
@@ -1262,11 +1266,11 @@ export default function CarHireUi() {
             }))
 
             // Close confirmation
-            setShowDeleteConfirm({show: false, comment: null})
-            
-            setReviewMessage({ 
-                type: "success", 
-                text: "✓ Review deleted successfully!" 
+            setShowDeleteConfirm({ show: false, comment: null })
+
+            setReviewMessage({
+                type: "success",
+                text: "✓ Review deleted successfully!"
             })
 
             // Clear message after 5 seconds
@@ -1276,12 +1280,12 @@ export default function CarHireUi() {
 
         } catch (error) {
             console.error("Error deleting review:", error)
-            setShowDeleteConfirm({show: false, comment: null})
-            setReviewMessage({ 
-                type: "error", 
-                text: "Failed to delete review. Please try again." 
+            setShowDeleteConfirm({ show: false, comment: null })
+            setReviewMessage({
+                type: "error",
+                text: "Failed to delete review. Please try again."
             })
-            
+
             // Clear error message after 5 seconds
             setTimeout(() => {
                 setReviewMessage({ type: "", text: "" })
@@ -1291,7 +1295,7 @@ export default function CarHireUi() {
 
     // Cancel delete
     const cancelDeleteComment = () => {
-        setShowDeleteConfirm({show: false, comment: null})
+        setShowDeleteConfirm({ show: false, comment: null })
         setReviewMessage({ type: "", text: "" })
     }
 
@@ -1300,43 +1304,43 @@ export default function CarHireUi() {
         e.preventDefault()
 
         if (!selectedDriver || !currentUser) {
-            setReviewMessage({ 
-                type: "error", 
-                text: "Please sign in to post a review." 
+            setReviewMessage({
+                type: "error",
+                text: "Please sign in to post a review."
             })
             return
         }
 
         if (hasUserReviewed) {
-            setReviewMessage({ 
-                type: "error", 
-                text: "You have already reviewed this driver. You can delete your existing review to submit a new one." 
+            setReviewMessage({
+                type: "error",
+                text: "You have already reviewed this driver. You can delete your existing review to submit a new one."
             })
             return
         }
 
         if (!reviewForm.rating) {
-            setReviewMessage({ 
-                type: "error", 
-                text: "Please select a rating." 
+            setReviewMessage({
+                type: "error",
+                text: "Please select a rating."
             })
             return
         }
 
         try {
             const driverDocRef = doc(db, "users", selectedDriver.id)
-            
+
             // Get user's fullName from Firestore
             const userDocRef = doc(db, "users", currentUser.uid);
             const userDoc = await getDoc(userDocRef);
-            
+
             let userName = "User";
             let firstName = "User";
             let lastName = "";
-            
+
             if (userDoc.exists()) {
                 const userData = userDoc.data();
-                
+
                 // Use fullName from Firestore (main source)
                 if (userData.fullName) {
                     userName = userData.fullName;
@@ -1364,7 +1368,7 @@ export default function CarHireUi() {
 
             const updatedRatings = [...(selectedDriver.ratings || []), reviewForm.rating]
             const newAverageRating = updatedRatings.reduce((a, b) => a + b, 0) / updatedRatings.length
-            
+
             await updateDoc(driverDocRef, {
                 averageRating: newAverageRating,
                 totalRatings: updatedRatings.length
@@ -1394,15 +1398,15 @@ export default function CarHireUi() {
                 return driver
             }))
 
-            setReviewForm({ 
-                comment: "", 
-                rating: 0 
+            setReviewForm({
+                comment: "",
+                rating: 0
             })
             setHoverRating(0)
-            
-            setReviewMessage({ 
-                type: "success", 
-                text: "✓ Review posted successfully!" 
+
+            setReviewMessage({
+                type: "success",
+                text: "✓ Review posted successfully!"
             })
 
             setTimeout(() => {
@@ -1411,11 +1415,11 @@ export default function CarHireUi() {
 
         } catch (error) {
             console.error("Error posting review:", error)
-            setReviewMessage({ 
-                type: "error", 
-                text: "Failed to post review. Please try again." 
+            setReviewMessage({
+                type: "error",
+                text: "Failed to post review. Please try again."
             })
-            
+
             setTimeout(() => {
                 setReviewMessage({ type: "", text: "" })
             }, 5000)
@@ -1443,28 +1447,43 @@ export default function CarHireUi() {
         if (vehicle.images?.side) images.push(vehicle.images.side)
         if (vehicle.images?.back) images.push(vehicle.images.back)
         if (vehicle.images?.interior) images.push(vehicle.images.interior)
-        
+
         if (images.length === 0) {
             images.push(getDefaultVehicleImage(vehicle.carType))
             images.push("/car.jpg")
             images.push("/carz.jpg")
         }
-        
+
         return images
     }
 
-    // Get driver's location string
-    const getDriverLocation = (driver: DriverWithVehicle) => {
-        const parts = []
-        if (driver.city) parts.push(driver.city)
-        if (driver.state) parts.push(driver.state)
-        return parts.join(", ") || "Location not specified"
-    }
+    const getDriverLocation = (driver: any) => {
+        // 1. Safety Check: If no driver or no location data, return null
+        if (!driver || !driver.location) return null;
+
+        // 2. Ensure we are sending valid numbers (prevents "string is not assignable to number" errors)
+        const lat = typeof driver.location.lat === 'string'
+            ? parseFloat(driver.location.lat)
+            : driver.location.lat;
+
+        const lng = typeof driver.location.lng === 'string'
+            ? parseFloat(driver.location.lng)
+            : driver.location.lng;
+
+        // 3. Final Validation: If the math failed (NaN), don't break the map
+        if (isNaN(lat) || isNaN(lng)) return null;
+
+        return { lat, lng };
+    };
+
+    const getDriverAddress = (driver: any) => {
+        return driver?.location?.address || "Scanning for location...";
+    };
 
     // Format timestamp to readable date
     const formatDate = (timestamp: any) => {
         if (!timestamp) return "Recently"
-        
+
         try {
             if (timestamp.toDate) {
                 return timestamp.toDate().toLocaleDateString("en-GB")
@@ -1484,7 +1503,7 @@ export default function CarHireUi() {
             md: "w-4 h-4",
             lg: "w-5 h-5"
         }
-        
+
         return (
             <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -1513,7 +1532,7 @@ export default function CarHireUi() {
             // Find the driver and vehicle from the history
             const driver = driversWithVehicles.find(d => d.uid === quickViewHistory.driverId)
             const vehicle = driver?.vehicles.find(v => v.id === quickViewHistory.vehicleId)
-            
+
             if (driver && vehicle) {
                 handleDriverSelect(driver, vehicle)
             }
@@ -1534,10 +1553,10 @@ export default function CarHireUi() {
 
         // Get phone number
         let phoneNumber = driver.phoneNumber.trim()
-        
+
         // Remove all non-numeric characters
         phoneNumber = phoneNumber.replace(/\D/g, '')
-        
+
         // If phone number starts with 0 (Nigerian format), convert to +234
         if (phoneNumber.startsWith('0') && phoneNumber.length === 11) {
             phoneNumber = '+234' + phoneNumber.substring(1)
@@ -1550,7 +1569,7 @@ export default function CarHireUi() {
         else if (!phoneNumber.startsWith('+')) {
             phoneNumber = '+' + phoneNumber
         }
-        
+
         // Validate phone number
         if (!phoneNumber.match(/^\+\d{10,15}$/)) {
             alert("Invalid phone number format. Please use the call button instead.")
@@ -1559,7 +1578,7 @@ export default function CarHireUi() {
 
         const message = `Hello ${driver.fullName}, I'm interested in hiring your ${vehicle.carName} ${vehicle.carModel} (${vehicle.carType}). Could you please provide more information about availability and pricing?`
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
-        
+
         window.open(whatsappUrl, '_blank')
     }
 
@@ -1607,23 +1626,23 @@ export default function CarHireUi() {
             // Add trip to trips collection
             const tripsRef = collection(db, 'trips');
             const tripDoc = await addDoc(tripsRef, tripData);
-            
+
             // Update vehicle status to 'on-trip'
             const vehicleRef = doc(db, 'vehicleLog', vehicleId);
             await updateDoc(vehicleRef, {
-            status: 'on-trip',
-            currentTripId: tripDoc.id
+                status: 'on-trip',
+                currentTripId: tripDoc.id
             });
 
             // Update driver's customersCarried (add customer ID immediately)
             const driverRef = doc(db, 'users', driverId);
             const driverDoc = await getDoc(driverRef);
             const currentCustomers = driverDoc.data()?.customersCarried || [];
-            
+
             if (!currentCustomers.includes(currentUser.uid)) {
-            await updateDoc(driverRef, {
-                customersCarried: [...currentCustomers, currentUser.uid]
-            });
+                await updateDoc(driverRef, {
+                    customersCarried: [...currentCustomers, currentUser.uid]
+                });
             }
 
             // Set active trip locally
@@ -1634,8 +1653,8 @@ export default function CarHireUi() {
 
             // Update the selected driver in local state
             setSelectedDriver(prev => prev ? {
-            ...prev,
-            customersCarried: [...(prev.customersCarried || []), currentUser.uid]
+                ...prev,
+                customersCarried: [...(prev.customersCarried || []), currentUser.uid]
             } : null);
 
             // Refresh drivers list to hide the unavailable vehicle
@@ -1644,15 +1663,15 @@ export default function CarHireUi() {
             // Show success message
             setTripSuccessMessage(`Trip started successfully! Live tracking activated.`);
             setShowTripSuccess(true);
-            
+
             // Update trip info state
             setTripInfo({
-            pickupLocation,
-            destination,
-            fare: estimatedFare,
-            status: 'active',
-            startTime: Timestamp.now(),
-            endTime: null
+                pickupLocation,
+                destination,
+                fare: estimatedFare,
+                status: 'active',
+                startTime: Timestamp.now(),
+                endTime: null
             });
 
             // Auto-hide success message after 3 seconds
@@ -1671,14 +1690,14 @@ export default function CarHireUi() {
         }
     };
 
-   // Complete or cancel trip
+    // Complete or cancel trip
     const updateTripStatus = async (tripId: string, status: 'completed' | 'cancelled') => {
         if (!tripId || !currentUser) return;
 
         try {
             const tripRef = doc(db, 'trips', tripId);
             const tripDoc = await getDoc(tripRef);
-            
+
             if (!tripDoc.exists()) {
                 setTripSuccessMessage('Trip not found');
                 setShowTripSuccess(true);
@@ -1687,7 +1706,7 @@ export default function CarHireUi() {
             }
 
             const tripData = tripDoc.data() as Trip;
-            
+
             // Check if user is authorized to update this trip
             if (tripData.customerId !== currentUser.uid && tripData.driverId !== currentUser.uid) {
                 setTripSuccessMessage('You are not authorized to update this trip');
@@ -1696,10 +1715,10 @@ export default function CarHireUi() {
                 return;
             }
 
-            const updates: { 
-                status: 'completed' | 'cancelled', 
+            const updates: {
+                status: 'completed' | 'cancelled',
                 updatedAt: Timestamp,
-                endTime?: Timestamp 
+                endTime?: Timestamp
             } = {
                 status,
                 updatedAt: Timestamp.now()
@@ -1707,17 +1726,17 @@ export default function CarHireUi() {
 
             if (status === 'completed') {
                 updates.endTime = Timestamp.now();
-                
+
                 // Update vehicle status back to available
                 const vehicleRef = doc(db, 'vehicleLog', tripData.vehicleId);
                 await updateDoc(vehicleRef, {
                     status: 'available',
                     currentTripId: null
                 });
-                
+
                 // Refresh drivers list to show the vehicle again
                 fetchDriversAndVehicles();
-                
+
                 // Refresh trip history
                 if (currentUser) {
                     loadUserHistory(currentUser.uid);
@@ -1731,13 +1750,13 @@ export default function CarHireUi() {
                     status: 'available',
                     currentTripId: null
                 });
-                
+
                 // Refresh drivers list
                 fetchDriversAndVehicles();
             }
 
             await updateDoc(tripRef, updates);
-            
+
             // Clear active trip if completed or cancelled
             if (status === 'completed' || status === 'cancelled') {
                 setActiveTrip(null);
@@ -1755,7 +1774,7 @@ export default function CarHireUi() {
             setTripSuccessMessage(`Trip ${status} successfully!`);
             setShowTripSuccess(true);
             setTimeout(() => setShowTripSuccess(false), 3000);
-            
+
         } catch (error) {
             console.error('Error updating trip:', error);
             setTripSuccessMessage('Failed to update trip status');
@@ -1770,36 +1789,36 @@ export default function CarHireUi() {
             if (!currentUser) return;
 
             try {
-            const tripsRef = collection(db, 'trips');
-            const q = query(
-                tripsRef,
-                where('customerId', '==', currentUser.uid),
-                where('status', '==', 'active')
-            );
-            
-            const snapshot = await getDocs(q);
-            
-            if (!snapshot.empty) {
-                const tripDoc = snapshot.docs[0];
-                const tripData = tripDoc.data() as Trip;
-                
-                setActiveTrip({
-                ...tripData,
-                id: tripDoc.id
-                });
-                
-                // Set trip info from active trip
-                setTripInfo({
-                pickupLocation: tripData.pickupLocation || '',
-                destination: tripData.destination || '',
-                fare: tripData.fare || 0,
-                status: 'active',
-                startTime: tripData.startTime,
-                endTime: tripData.endTime || null
-                });
-            }
+                const tripsRef = collection(db, 'trips');
+                const q = query(
+                    tripsRef,
+                    where('customerId', '==', currentUser.uid),
+                    where('status', '==', 'active')
+                );
+
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    const tripDoc = snapshot.docs[0];
+                    const tripData = tripDoc.data() as Trip;
+
+                    setActiveTrip({
+                        ...tripData,
+                        id: tripDoc.id
+                    });
+
+                    // Set trip info from active trip
+                    setTripInfo({
+                        pickupLocation: tripData.pickupLocation || '',
+                        destination: tripData.destination || '',
+                        fare: tripData.fare || 0,
+                        status: 'active',
+                        startTime: tripData.startTime,
+                        endTime: tripData.endTime || null
+                    });
+                }
             } catch (error) {
-            console.error('Error checking active trips:', error);
+                console.error('Error checking active trips:', error);
             }
         };
 
@@ -1841,48 +1860,44 @@ export default function CarHireUi() {
                         {/* Trip Notification Popup */}
                         {showTripSuccess && (
                             <div className="fixed top-4 right-4 z-50 animate-slideIn">
-                                <div className={`border rounded-lg shadow-lg p-4 max-w-sm ${
-                                    tripSuccessMessage.includes('successfully') 
-                                        ? 'bg-green-50 border-green-200' 
-                                        : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                <div className={`border rounded-lg shadow-lg p-4 max-w-sm ${tripSuccessMessage.includes('successfully')
+                                    ? 'bg-green-50 border-green-200'
+                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
                                         ? 'bg-red-50 border-red-200'
                                         : 'bg-yellow-50 border-yellow-200'
-                                }`}>
+                                    }`}>
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                            tripSuccessMessage.includes('successfully') 
-                                                ? 'bg-green-100 text-green-600' 
-                                                : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tripSuccessMessage.includes('successfully')
+                                            ? 'bg-green-100 text-green-600'
+                                            : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
                                                 ? 'bg-red-100 text-red-600'
                                                 : 'bg-yellow-100 text-yellow-600'
-                                        }`}>
-                                            {tripSuccessMessage.includes('successfully') 
+                                            }`}>
+                                            {tripSuccessMessage.includes('successfully')
                                                 ? <span className="text-lg">✓</span>
                                                 : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
-                                                ? <span className="text-lg">✗</span>
-                                                : <span className="text-lg">⚠</span>
+                                                    ? <span className="text-lg">✗</span>
+                                                    : <span className="text-lg">⚠</span>
                                             }
                                         </div>
                                         <div className="flex-1">
-                                            <p className={`font-medium ${
-                                                tripSuccessMessage.includes('successfully') 
-                                                    ? 'text-green-800' 
-                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                            <p className={`font-medium ${tripSuccessMessage.includes('successfully')
+                                                ? 'text-green-800'
+                                                : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
                                                     ? 'text-red-800'
                                                     : 'text-yellow-800'
-                                            }`}>
+                                                }`}>
                                                 {tripSuccessMessage}
                                             </p>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={() => setShowTripSuccess(false)}
-                                            className={`${
-                                                tripSuccessMessage.includes('successfully') 
-                                                    ? 'text-green-400 hover:text-green-600' 
-                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
+                                            className={`${tripSuccessMessage.includes('successfully')
+                                                ? 'text-green-400 hover:text-green-600'
+                                                : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
                                                     ? 'text-red-400 hover:text-red-600'
                                                     : 'text-yellow-400 hover:text-yellow-600'
-                                            }`}
+                                                }`}
                                         >
                                             ×
                                         </button>
@@ -1907,7 +1922,7 @@ export default function CarHireUi() {
                             <div>
                                 {currentUser && (
                                     <div className="mb-8">
-                                        <CustomerLocationToggle 
+                                        <CustomerLocationToggle
                                             userId={currentUser.uid}
                                             tripId={activeTrip?.id}
                                         />
@@ -1935,7 +1950,7 @@ export default function CarHireUi() {
                                             🟢 LIVE
                                         </span>
                                     </div>
-                                    
+
                                     {/* Route Info */}
                                     <div className="flex justify-center md:justify-start items-center gap-4 space-y-1 text-white">
                                         <div className="flex items-center gap-2 text-sm">
@@ -1949,16 +1964,16 @@ export default function CarHireUi() {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 {/* LIVE TRIP TRACKER WIDGET - ADD THIS */}
                                 <div className="p-3 bg-white">
-                                    <TripTracker 
+                                    <TripTracker
                                         tripId={activeTrip.id}
                                         driverId={selectedDriver?.id || activeTrip.driverId}
                                         customerId={currentUser?.uid}
                                     />
                                 </div>
-                                
+
                                 {/* Action Buttons */}
                                 <div className="p-3 bg-white border-t border-gray-100">
                                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1978,7 +1993,7 @@ export default function CarHireUi() {
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 {/* Safety Section */}
                                 <div className="p-3 bg-gradient-to-r from-blue-50 to-blue-100 border-t border-blue-200">
                                     <div className="flex flex-col md:flex-row items-center justify-between mb-2">
@@ -1996,7 +2011,7 @@ export default function CarHireUi() {
                                             currentUserId={currentUser?.uid}
                                         />
                                     </div>
-                                    
+
                                     <p className="text-blue-700 text-xs">
                                         ✅ Your trip is being tracked for safety. Share location with loved ones.
                                     </p>
@@ -2016,11 +2031,10 @@ export default function CarHireUi() {
 
                 {/* Save Message on Main Page (only show when modal is closed) */}
                 {saveMessage.text && !driverInfo && (
-                    <div className={`mt-4 p-3 rounded-lg ${
-                        saveMessage.type === "success" ? "bg-green-100 border border-green-300 text-green-700" :
+                    <div className={`mt-4 p-3 rounded-lg ${saveMessage.type === "success" ? "bg-green-100 border border-green-300 text-green-700" :
                         saveMessage.type === "error" ? "bg-red-100 border border-red-300 text-red-700" :
-                        "bg-blue-100 border border-blue-300 text-blue-700"
-                    }`}>
+                            "bg-blue-100 border border-blue-300 text-blue-700"
+                        }`}>
                         <div className="flex items-center">
                             {saveMessage.type === "success" && <FaCheckCircle className="mr-2" />}
                             {saveMessage.type === "error" && <FaTimesCircle className="mr-2" />}
@@ -2034,7 +2048,7 @@ export default function CarHireUi() {
                 {quickViewHistory && !driverInfo && (
                     <div className="mt-6 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex justify-between items-start sm:items-center">
-                            <div 
+                            <div
                                 onClick={handleQuickViewClick}
                                 className="cursor-pointer hover:bg-blue-100 p-2 rounded-lg flex-1"
                             >
@@ -2068,16 +2082,16 @@ export default function CarHireUi() {
                     {/* The Top Box */}
                     <div className="max-h-[300rem] overflow-y-auto bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 px-1 md:p-4 border border-blue-200 mb-6">
                         <div className="px-2 flex flex-col md:flex-row items-center justify-between">
-                        
+
                             {/* Left */}
                             <div className="text-center md:text-left">
                                 <h2 className="flex justify-center md:justify-start text-center text-xl font-bold text-gray-800 flex items-center gap-2">
-                                <FaCalendarAlt className="text-blue-600" />
-                                Don't See What You Need?
+                                    <FaCalendarAlt className="text-blue-600" />
+                                    Don't See What You Need?
                                 </h2>
 
                                 <p className="text-gray-600 mt-1">
-                                Post your specific car requirements. Drivers will contact you directly!
+                                    Post your specific car requirements. Drivers will contact you directly!
                                 </p>
                             </div>
 
@@ -2097,18 +2111,18 @@ export default function CarHireUi() {
                                         hover:bg-gray-700 transition flex items-center gap-2 justify-center relative"
                             >
                                 {showRequestBox ? "🙈 Hide Request Box" : "👀 Show Request Box"}
-                                
+
                                 {/* Notification Badge - Shows for both drivers and customers */}
                                 {notificationCount > 0 && (
-                                <div className="absolute top-4 right-6">
-                                    {/* You'll need to import NotificationBadge component */}
-                                    <NotificationBadge
-                                        count={notificationCount}
-                                        type={notificationType}
-                                        position="top-right"
-                                        size="md"
-                                    />
-                                </div>
+                                    <div className="absolute top-4 right-6">
+                                        {/* You'll need to import NotificationBadge component */}
+                                        <NotificationBadge
+                                            count={notificationCount}
+                                            type={notificationType}
+                                            position="top-right"
+                                            size="md"
+                                        />
+                                    </div>
                                 )}
                             </button>
                         </div>
@@ -2117,13 +2131,13 @@ export default function CarHireUi() {
                         {/* SHOW BOOKING REQUEST (WITH ANIMATION) */}
                         {showRequestBox && (
                             <div className="mt-4 animate-fadeSlide">
-                            <BookingRequest
-                                userId={currentUser?.uid}
-                                userCity={currentUser?.city || ""}
-                            />
+                                <BookingRequest
+                                    userId={currentUser?.uid}
+                                    userCity={currentUser?.city || ""}
+                                />
                             </div>
                         )}
-                    </div>  
+                    </div>
                 </section>
 
                 {/* Search and Filter Section - Now with AC and Verified filters */}
@@ -2143,9 +2157,9 @@ export default function CarHireUi() {
 
                         {/* Select Car category */}
                         <div>
-                            <select  
+                            <select
                                 className="text-gray-700 outline-blue-600 w-full p-3 border-2 border-gray-300 rounded-lg"
-                                name="category" 
+                                name="category"
                                 id="category"
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -2231,15 +2245,15 @@ export default function CarHireUi() {
                                                         <FaCheckCircle className="mr-1" /> Verified
                                                     </div>
                                                 )}
-                                               {driver.vipLevel && driver.vipLevel > 0 ? (
+                                                {driver.vipLevel && driver.vipLevel > 0 ? (
                                                     <div className="mt-1">
                                                         <VIPStar
-                                                        vipLevel={driver.vipLevel}
-                                                        prestigeLevel={driver.prestigeLevel}
-                                                        size="sm"
+                                                            vipLevel={driver.vipLevel}
+                                                            prestigeLevel={driver.prestigeLevel}
+                                                            size="sm"
                                                         />
                                                     </div>
-                                                    ) : null
+                                                ) : null
                                                 }
                                             </div>
                                         </div>
@@ -2269,13 +2283,10 @@ export default function CarHireUi() {
                                                     </div>
                                                 ) : null}
                                             </div>
-                                            <hr className="text-gray-400 mb-1"/>
+                                            <hr className="text-gray-400 mb-1" />
 
                                             <div className="bg-white p-2 rounded-lg space-y-2 mb-4 text-xs sm:text-sm">
-                                                <div className="flex items-center text-gray-700">
-                                                    <FaMapMarkerAlt className="mr-2 text-gray-400" />
-                                                    <span>{getDriverLocation(driver)}</span>
-                                                </div>
+
                                                 <div className="flex justify-between items-center">
                                                     <div className="flex items-center text-gray-700">
                                                         <FaUsers className="mr-2 text-gray-400" />
@@ -2314,10 +2325,10 @@ export default function CarHireUi() {
                                                 >
                                                     View Details
                                                 </button>
-                                                
+
                                                 {/* Contact Options Row */}
-                                                <div className="grid grid-cols-3 gap-2">                                    
-                                                    
+                                                <div className="grid grid-cols-3 gap-2">
+
                                                     {/* Enhanced WhatsApp */}
                                                     {driver.whatsappPreferred ? (
                                                         <button
@@ -2345,7 +2356,7 @@ export default function CarHireUi() {
                                                         <FaComment className="text-sm" />
                                                         <span>Chat</span>
                                                     </button>
-                                                    
+
                                                     {/* Complain Button */}
                                                     <button
                                                         onClick={() => handleComplain(driver.fullName, vehicle)}
@@ -2369,8 +2380,8 @@ export default function CarHireUi() {
                 <div id="complain" className="mt-8 mb-6 w-full">
                     {selectDriver && (
                         <div className="relative flex flex-col mb-3 w-full rounded-lg py-3 px-4 bg-red-100 border border-red-200">
-                            <button 
-                                onClick={() => setSelectDriver("")} 
+                            <button
+                                onClick={() => setSelectDriver("")}
                                 className="absolute top-3 right-3 text-red-900 text-lg cursor-pointer hover:text-red-700"
                             >
                                 ✖️
@@ -2387,8 +2398,8 @@ export default function CarHireUi() {
                         </div>
                     )}
                     {selectDriver && (
-                        <a 
-                            href="mailto:nomopoventures@yahoo.com" 
+                        <a
+                            href="mailto:nomopoventures@yahoo.com"
                             className="text-center block w-full rounded-lg py-3 bg-[#3688EE] hover:bg-blue-700 transition-all duration-300 text-white font-semibold"
                         >
                             Lodge Complain!
@@ -2400,9 +2411,9 @@ export default function CarHireUi() {
             {/* Driver's Information Display - Modal */}
             {driverInfo && selectedDriver && selectedVehicle && (
                 <div id="contact-driver" className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-2 sm:p-8 z-50 overflow-y-auto">
-                    
+
                     <div className="bg-gray-900 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-                        
+
                         {/* Header */}
                         <div className="sticky top-0 bg-gray-900 z-10 p-4 border-b border-gray-800 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-white">Driver & Vehicle Details</h2>
@@ -2418,11 +2429,10 @@ export default function CarHireUi() {
                         <div className="p-4 md:p-6">
                             {/* Save Message Inside Modal - This will be visible when user clicks save */}
                             {saveMessage.text && (
-                                <div className={`mb-4 p-3 rounded-lg ${
-                                    saveMessage.type === "success" ? "bg-green-900 border border-green-700 text-green-300" :
+                                <div className={`mb-4 p-3 rounded-lg ${saveMessage.type === "success" ? "bg-green-900 border border-green-700 text-green-300" :
                                     saveMessage.type === "error" ? "bg-red-900 border border-red-700 text-red-300" :
-                                    "bg-blue-900 border border-blue-700 text-blue-300"
-                                }`}>
+                                        "bg-blue-900 border border-blue-700 text-blue-300"
+                                    }`}>
                                     <div className="flex items-center">
                                         {saveMessage.type === "success" && <FaCheckCircle className="mr-2" />}
                                         {saveMessage.type === "error" && <FaExclamationTriangle className="mr-2" />}
@@ -2460,8 +2470,8 @@ export default function CarHireUi() {
                             <div className="flex flex-col md:flex-row gap-6 mb-8">
                                 {/* Driver Image */}
                                 <div className="flex-shrink-0">
-                                    <Image 
-                                        src={selectedDriver.profileImage || "/per.png"} 
+                                    <Image
+                                        src={selectedDriver.profileImage || "/per.png"}
                                         alt="Driver's profile picture"
                                         width={150}
                                         height={150}
@@ -2473,9 +2483,9 @@ export default function CarHireUi() {
                                 <div className="relative flex-1">
                                     <h1 className="text-2xl font-bold text-white mb-2">{selectedDriver.firstName} {selectedDriver.lastName}</h1>
                                     <div className="space-y-2 mb-4">
-                                        <div className="flex items-center text-gray-300">
-                                            <FaMapMarkerAlt className="mr-3 text-gray-400" />
-                                            <span>{getDriverLocation(selectedDriver)}</span>
+                                        <div className="flex items-center text-gray-700">
+                                            <FaMapMarkerAlt className="mr-2 text-gray-400" />
+                                            <span>{getDriverAddress(selectedDriver)}</span>
                                         </div>
                                         <div className="flex items-center text-gray-300">
                                             <FaPhone className="mr-3 text-gray-400" />
@@ -2506,12 +2516,12 @@ export default function CarHireUi() {
                                                     </>
                                                 )}
                                             </span>
-                                            
+
                                             {selectedDriver.vipLevel && selectedDriver.vipLevel > 0 && (
-                                                <VIPStar 
-                                                    vipLevel={selectedDriver.vipLevel} 
-                                                    prestigeLevel={selectedDriver.prestigeLevel || 0} 
-                                                    size="md" 
+                                                <VIPStar
+                                                    vipLevel={selectedDriver.vipLevel}
+                                                    prestigeLevel={selectedDriver.prestigeLevel || 0}
+                                                    size="md"
                                                 />
                                             )}
                                         </div>
@@ -2570,41 +2580,41 @@ export default function CarHireUi() {
                                     <div className="mb-4">
                                         {activeTrip && activeTrip.driverId === selectedDriver.uid && activeTrip.vehicleId === selectedVehicle.id ? (
                                             <div className="space-y-3">
-                                            <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3">
-                                                <h4 className="font-bold text-white mb-2">🚗 Active Trip</h4>
-                                                <div className="space-y-1">
-                                                <p className="text-gray-300 text-sm">
-                                                    <span className="font-medium">Pickup:</span> {activeTrip.pickupLocation}
-                                                </p>
-                                                <p className="text-gray-300 text-sm">
-                                                    <span className="font-medium">Destination:</span> {activeTrip.destination}
-                                                </p>
-                                                <p className="text-gray-300 text-sm">
-                                                    <span className="font-medium">Fare:</span> <span className="text-yellow-300">₦{activeTrip.fare?.toLocaleString()}</span>
-                                                </p>
-                                                <p className="text-gray-300 text-xs mt-2">
-                                                    Trip started: {activeTrip.startTime?.toDate?.()?.toLocaleString() || 'Recently'}
-                                                </p>
+                                                <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3">
+                                                    <h4 className="font-bold text-white mb-2">🚗 Active Trip</h4>
+                                                    <div className="space-y-1">
+                                                        <p className="text-gray-300 text-sm">
+                                                            <span className="font-medium">Pickup:</span> {activeTrip.pickupLocation}
+                                                        </p>
+                                                        <p className="text-gray-300 text-sm">
+                                                            <span className="font-medium">Destination:</span> {activeTrip.destination}
+                                                        </p>
+                                                        <p className="text-gray-300 text-sm">
+                                                            <span className="font-medium">Fare:</span> <span className="text-yellow-300">₦{activeTrip.fare?.toLocaleString()}</span>
+                                                        </p>
+                                                        <p className="text-gray-300 text-xs mt-2">
+                                                            Trip started: {activeTrip.startTime?.toDate?.()?.toLocaleString() || 'Recently'}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <button
-                                                onClick={() => updateTripStatus(activeTrip.id, 'completed')}
-                                                className="py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-300"
-                                                >
-                                                ✅ Complete Trip
-                                                </button>
-                                                <button
-                                                onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
-                                                className="py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300"
-                                                >
-                                                ❌ Cancel Trip
-                                                </button>
-                                            </div>
-                                            <p className="text-gray-400 text-xs text-center">
-                                                Complete trip when you reach your destination. Cancel if plans change.
-                                            </p>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button
+                                                        onClick={() => updateTripStatus(activeTrip.id, 'completed')}
+                                                        className="py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-300"
+                                                    >
+                                                        ✅ Complete Trip
+                                                    </button>
+                                                    <button
+                                                        onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
+                                                        className="py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300"
+                                                    >
+                                                        ❌ Cancel Trip
+                                                    </button>
+                                                </div>
+                                                <p className="text-gray-400 text-xs text-center">
+                                                    Complete trip when you reach your destination. Cancel if plans change.
+                                                </p>
                                             </div>
                                         ) : (
                                             <>
@@ -2613,7 +2623,7 @@ export default function CarHireUi() {
                                                     <h3 className="text-lg font-bold text-white mb-3 flex justify-center md:justify-start items-center gap-2">
                                                         <span className="text-blue-400">🛡️</span> Trip Safety Information
                                                     </h3>
-                                                    
+
                                                     {/* Fill Info Link - Only shown when location/destination not set */}
                                                     {(!tripInfo.pickupLocation || !tripInfo.destination) && (
                                                         <div className="text-center md:text-left mb-4">
@@ -2623,9 +2633,9 @@ export default function CarHireUi() {
                                                             <button
                                                                 onClick={() => {
                                                                     // Toggle the form visibility
-                                                                    setTripInfo(prev => ({ 
-                                                                        ...prev, 
-                                                                        showForm: !prev.showForm 
+                                                                    setTripInfo(prev => ({
+                                                                        ...prev,
+                                                                        showForm: !prev.showForm
                                                                     }));
                                                                 }}
                                                                 className="text-blue-400 hover:text-blue-300 underline decoration-2 underline-offset-2 text-sm font-medium transition-colors duration-200"
@@ -2642,15 +2652,15 @@ export default function CarHireUi() {
                                                             destination={tripInfo.destination}
                                                             driverLocation={getDriverLocation(selectedDriver)}
                                                             onLocationSelect={(type: 'pickup' | 'destination', value: string) => {
-                                                                setTripInfo(prev => ({ 
-                                                                    ...prev, 
-                                                                    [type === 'pickup' ? 'pickupLocation' : 'destination']: value 
+                                                                setTripInfo(prev => ({
+                                                                    ...prev,
+                                                                    [type === 'pickup' ? 'pickupLocation' : 'destination']: value
                                                                 }));
                                                             }}
                                                         />
                                                     )}
                                                 </div>
-                                                
+
                                                 {/* Start Trip Button - Only enabled when both locations are set */}
                                                 {(tripInfo.pickupLocation && tripInfo.destination) && (
                                                     <>
@@ -2660,14 +2670,14 @@ export default function CarHireUi() {
                                                                 if (!tripInfo.pickupLocation || !tripInfo.destination) {
                                                                     return;
                                                                 }
-                                                                
+
                                                                 const tripId = await startTrip(
                                                                     selectedDriver.uid,
                                                                     selectedVehicle.id,
                                                                     tripInfo.pickupLocation,
                                                                     tripInfo.destination
                                                                 );
-                                                                
+
                                                                 // Only close modal if trip was successful AND after showing success message
                                                                 if (tripId) {
                                                                     // Wait for success message to show before closing modal
@@ -2677,15 +2687,14 @@ export default function CarHireUi() {
                                                                 }
                                                             }}
                                                             disabled={!tripInfo.pickupLocation || !tripInfo.destination}
-                                                            className={`w-full py-3 text-white font-semibold rounded-lg transition-all duration-300 mb-2 ${
-                                                                tripInfo.pickupLocation && tripInfo.destination
-                                                                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 cursor-pointer'
-                                                                    : 'bg-gray-500 cursor-not-allowed opacity-50'
-                                                            }`}
+                                                            className={`w-full py-3 text-white font-semibold rounded-lg transition-all duration-300 mb-2 ${tripInfo.pickupLocation && tripInfo.destination
+                                                                ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 cursor-pointer'
+                                                                : 'bg-gray-500 cursor-not-allowed opacity-50'
+                                                                }`}
                                                         >
                                                             🚀 Start Trip for Safety Tracking
                                                         </button>
-                                                        
+
                                                         <p className="text-gray-400 text-xs text-center mb-3">
                                                             Click "Start Trip" to enable real-time tracking for your safety
                                                         </p>
@@ -2695,23 +2704,22 @@ export default function CarHireUi() {
                                                 {/* Original Save Button (optional - keep if you still want it) */}
                                                 {currentUser && (
                                                     <div className="mt-4 pt-4 border-t border-gray-700">
-                                                    <button
-                                                        onClick={handleSaveDriver}
-                                                        disabled={!canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave}
-                                                        className={`w-full py-2 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center ${
-                                                        canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                        ? "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
-                                                        : "bg-gray-800 cursor-not-allowed"
-                                                        }`}
-                                                    >
-                                                        <FaEye className="mr-2" />
-                                                        {canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                        ? "Mark as Contacted"
-                                                        : "Save (Cooldown)"}
-                                                    </button>
-                                                    <p className="text-gray-400 text-xs mt-1 text-center">
-                                                        Save driver to your history for future reference
-                                                    </p>
+                                                        <button
+                                                            onClick={handleSaveDriver}
+                                                            disabled={!canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave}
+                                                            className={`w-full py-2 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center ${canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
+                                                                ? "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
+                                                                : "bg-gray-800 cursor-not-allowed"
+                                                                }`}
+                                                        >
+                                                            <FaEye className="mr-2" />
+                                                            {canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
+                                                                ? "Mark as Contacted"
+                                                                : "Save (Cooldown)"}
+                                                        </button>
+                                                        <p className="text-gray-400 text-xs mt-1 text-center">
+                                                            Save driver to your history for future reference
+                                                        </p>
                                                     </div>
                                                 )}
                                             </>
@@ -2721,7 +2729,7 @@ export default function CarHireUi() {
                                     {/* Real-time Trip Tracker - Only show if this is the active trip */}
                                     {activeTrip && activeTrip.driverId === selectedDriver.uid && activeTrip.vehicleId === selectedVehicle.id && (
                                         <div className="mt-6">
-                                            <TripTracker 
+                                            <TripTracker
                                                 tripId={activeTrip.id}
                                                 driverId={selectedDriver.uid}
                                                 customerId={currentUser?.uid}
@@ -2772,14 +2780,13 @@ export default function CarHireUi() {
                                         </div>
                                         <div className="flex justify-center items-center gap-2 overflow-x-auto pb-2">
                                             {getVehicleImages(selectedVehicle).map((img, idx) => (
-                                                <div 
-                                                    key={idx} 
-                                                    onClick={() => setMainImage(img)} 
-                                                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden cursor-pointer border-2 ${
-                                                        mainImage === img ? "border-blue-500" : "border-gray-700"
-                                                    }`}
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => setMainImage(img)}
+                                                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden cursor-pointer border-2 ${mainImage === img ? "border-blue-500" : "border-gray-700"
+                                                        }`}
                                                 >
-                                                    <Image 
+                                                    <Image
                                                         src={img}
                                                         alt="car thumbnail"
                                                         width={80}
@@ -2824,7 +2831,7 @@ export default function CarHireUi() {
                                                 </p>
                                             </div>
                                         </div>
-                                        
+
                                         {/* Description */}
                                         <div className="mt-4">
                                             <p className="text-gray-400 text-sm mb-2">Description</p>
@@ -2839,17 +2846,17 @@ export default function CarHireUi() {
                                                     {selectedDriver.vehicles
                                                         .filter(v => v.id !== selectedVehicle.id)
                                                         .map((vehicle, idx) => (
-                                                        <button
-                                                            key={idx}
-                                                            onClick={() => {
-                                                                setSelectedVehicle(vehicle)
-                                                                const vehicleImages = getVehicleImages(vehicle)
-                                                                setMainImage(vehicleImages[0])
-                                                            }}
-                                                            className="flex-shrink-0 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
-                                                        >
-                                                            {vehicle.carName} ({vehicle.carType})
-                                                        </button>
+                                                            <button
+                                                                key={idx}
+                                                                onClick={() => {
+                                                                    setSelectedVehicle(vehicle)
+                                                                    const vehicleImages = getVehicleImages(vehicle)
+                                                                    setMainImage(vehicleImages[0])
+                                                                }}
+                                                                className="flex-shrink-0 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                                                            >
+                                                                {vehicle.carName} ({vehicle.carType})
+                                                            </button>
                                                         ))}
                                                 </div>
                                             </div>
@@ -2861,7 +2868,7 @@ export default function CarHireUi() {
                             {/* Reviews Section */}
                             <div id="reviews-section" className="bg-gray-800 rounded-lg md:px-26 p-2 sm:p-4">
                                 <h3 className="text-lg font-bold text-white mb-4">Reviews & Ratings</h3>
-                                
+
                                 {/* Review Form */}
                                 {currentUser && (
                                     <div className="mb-6 sm:p-4 p-2 bg-gray-900 rounded-lg">
@@ -2895,24 +2902,24 @@ export default function CarHireUi() {
                                                     </div>
                                                 </div>
 
-                                                <textarea 
-                                                    className="w-full outline-none rounded bg-gray-700 text-white p-3 sm:mb-3" 
-                                                    name="comment" 
-                                                    rows={3} 
-                                                    maxLength={500} 
-                                                    placeholder="Write your review here..." 
+                                                <textarea
+                                                    className="w-full outline-none rounded bg-gray-700 text-white p-3 sm:mb-3"
+                                                    name="comment"
+                                                    rows={3}
+                                                    maxLength={500}
+                                                    placeholder="Write your review here..."
                                                     value={reviewForm.comment}
                                                     onChange={handleReviewChange}
                                                     required
                                                     disabled={hasUserReviewed}
                                                 ></textarea>
-                                                
+
                                                 <div className="flex flex-col sm:flex-row justify-between items-center">
                                                     <span className="my-1 text-sm text-gray-400">
                                                         {reviewForm.comment.length}/500 characters
                                                     </span>
-                                                    <button 
-                                                        type="submit" 
+                                                    <button
+                                                        type="submit"
                                                         className={`w-full sm:w-50 px-6 py-2 text-white font-semibold rounded ${hasUserReviewed ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                                                         disabled={hasUserReviewed}
                                                     >
@@ -2921,12 +2928,11 @@ export default function CarHireUi() {
                                                 </div>
                                             </form>
                                         )}
-                                        
+
                                         {/* Review Message */}
                                         {reviewMessage.text && (
-                                            <div className={`mt-3 p-2 text-center rounded ${
-                                                reviewMessage.type === "success" ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"
-                                            }`}>
+                                            <div className={`mt-3 p-2 text-center rounded ${reviewMessage.type === "success" ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"
+                                                }`}>
                                                 {reviewMessage.text}
                                             </div>
                                         )}
@@ -2937,61 +2943,61 @@ export default function CarHireUi() {
                                 <div className="mt-6 sm:mt-12 max-h-96 overflow-y-auto pr-2">
                                     {selectedDriver.comments && selectedDriver.comments.length > 0 ? (
                                         [...selectedDriver.comments]
-                                        .sort((a, b) => {
-                                            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0)
-                                            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0)
-                                            return dateB.getTime() - dateA.getTime()
-                                        })
-                                        .map((comment, idx) => {
-                                            const isCurrentUserComment = comment.userId === currentUserId
-                                            const userInitial = comment.firstName ? comment.firstName.charAt(0).toUpperCase() : 
-                                                            comment.userName ? comment.userName.charAt(0).toUpperCase() : 'U'
-                                            
-                                            return (
-                                                <div key={idx} className="mb-4 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-700">
-                                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                                                                <span className="text-white font-bold text-sm sm:text-base">{userInitial}</span>
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="font-bold text-white text-sm sm:text-base truncate">
-                                                                    {comment.firstName || comment.userName.split(' ')[0] || 'User'} 
-                                                                    {comment.lastName ? ` ${comment.lastName}` : ''}
-                                                                    {isCurrentUserComment && (
-                                                                        <span className="ml-2 text-xs bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded">You</span>
-                                                                    )}
-                                                                </p>
-                                                                <p className="text-gray-400 text-xs sm:text-sm truncate">{comment.userEmail}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col items-start sm:items-end gap-2">
-                                                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                                                <div className="flex text-yellow-400 text-xs sm:text-sm">
-                                                                    {comment.rating && renderStars(comment.rating, "sm", false)}
+                                            .sort((a, b) => {
+                                                const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0)
+                                                const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0)
+                                                return dateB.getTime() - dateA.getTime()
+                                            })
+                                            .map((comment, idx) => {
+                                                const isCurrentUserComment = comment.userId === currentUserId
+                                                const userInitial = comment.firstName ? comment.firstName.charAt(0).toUpperCase() :
+                                                    comment.userName ? comment.userName.charAt(0).toUpperCase() : 'U'
+
+                                                return (
+                                                    <div key={idx} className="mb-4 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-700">
+                                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                                                                    <span className="text-white font-bold text-sm sm:text-base">{userInitial}</span>
                                                                 </div>
-                                                                <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap">
-                                                                    {formatDate(comment.createdAt)}
-                                                                </span>
+                                                                <div className="min-w-0">
+                                                                    <p className="font-bold text-white text-sm sm:text-base truncate">
+                                                                        {comment.firstName || comment.userName.split(' ')[0] || 'User'}
+                                                                        {comment.lastName ? ` ${comment.lastName}` : ''}
+                                                                        {isCurrentUserComment && (
+                                                                            <span className="ml-2 text-xs bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded">You</span>
+                                                                        )}
+                                                                    </p>
+                                                                    <p className="text-gray-400 text-xs sm:text-sm truncate">{comment.userEmail}</p>
+                                                                </div>
                                                             </div>
-                                                            {isCurrentUserComment && (
-                                                                <button
-                                                                    onClick={() => handleDeleteComment(comment)}
-                                                                    className="text-red-400 hover:text-red-300 text-xs sm:text-sm flex items-center gap-1 mt-1"
-                                                                    title="Delete your review"
-                                                                >
-                                                                    <FaTrash className="text-xs" />
-                                                                    <span>Delete</span>
-                                                                </button>
-                                                            )}
+                                                            <div className="flex flex-col items-start sm:items-end gap-2">
+                                                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                                    <div className="flex text-yellow-400 text-xs sm:text-sm">
+                                                                        {comment.rating && renderStars(comment.rating, "sm", false)}
+                                                                    </div>
+                                                                    <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap">
+                                                                        {formatDate(comment.createdAt)}
+                                                                    </span>
+                                                                </div>
+                                                                {isCurrentUserComment && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteComment(comment)}
+                                                                        className="text-red-400 hover:text-red-300 text-xs sm:text-sm flex items-center gap-1 mt-1"
+                                                                        title="Delete your review"
+                                                                    >
+                                                                        <FaTrash className="text-xs" />
+                                                                        <span>Delete</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
+                                                        <p className="p-2 sm:p-3 rounded-lg bg-gray-800/50 text-gray-300 text-sm sm:text-base border-l-2 sm:border-l-4 border-blue-600">
+                                                            {comment.comment}
+                                                        </p>
                                                     </div>
-                                                    <p className="p-2 sm:p-3 rounded-lg bg-gray-800/50 text-gray-300 text-sm sm:text-base border-l-2 sm:border-l-4 border-blue-600">
-                                                        {comment.comment}
-                                                    </p>
-                                                </div>
-                                            )
-                                        })
+                                                )
+                                            })
                                     ) : (
                                         <div className="text-center py-8 text-gray-400">
                                             <div className="text-3xl mb-3">💬</div>
@@ -3009,7 +3015,7 @@ export default function CarHireUi() {
             {showPreChat && selectedDriver && selectedVehicle && (
                 <div className="fixed inset-0 bg-[rgba(0,0,0,0.8)] bg-opacity-70 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-                        <PreChat 
+                        <PreChat
                             car={{
                                 id: selectedVehicle.id,
                                 title: `${selectedVehicle.carName} ${selectedVehicle.carModel}`,

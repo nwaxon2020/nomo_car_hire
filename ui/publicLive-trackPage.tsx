@@ -1,520 +1,206 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
-import { 
- 
-  FaCar, 
-  FaClock, 
-  FaUser,
-  FaPhone,
+import {
   FaShieldAlt,
   FaExclamationTriangle,
   FaArrowLeft,
-  FaRoad,
-  FaCalendar,
-  FaStar,
-  FaCheckCircle,
-  FaChild,
+  FaPhone,
+  FaMapMarkerAlt,
   FaCrown,
-  FaPercent
+  FaCheckCircle,
+  FaStar,
+  FaChild
 } from 'react-icons/fa';
-import LiveMap from '@/components/map/LiveMap';
 
-interface LocationData {
-  lat: number;
-  lng: number;
-  address: string;
-  timestamp: any;
-  isSharing: boolean;
-  speed?: number;
-  accuracy?: number;
-}
-
-interface UserData {
-  fullName?: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  email?: string;
-  location?: LocationData;
-  currentTripId?: string;
-  isDriver?: boolean;
-  vehicleInfo?: string;
-  carName?: string;
-  carModel?: string;
-}
+// The High-End Component we built earlier
+import TripTracker from '@/components/map/TripTracker';
 
 export default function PublicLiveTrackPage() {
   const params = useParams();
   const router = useRouter();
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [location, setLocation] = useState<LocationData | null>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [location, setLocation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isValidToken, setIsValidToken] = useState(false);
-  const [locationHistory, setLocationHistory] = useState<LocationData[]>([]);
 
   useEffect(() => {
     const { userId, token } = params;
-    
+
     if (!userId || !token) {
       setError('Invalid tracking link');
       setLoading(false);
       return;
     }
 
-    const verifyToken = async () => {
+    const verifyAndTrack = async () => {
       try {
-        // Check if token is valid
+        // 1. Validate Token Security
         const tokenRef = doc(db, 'trackingTokens', token as string);
         const tokenDoc = await getDoc(tokenRef);
-        
+
         if (!tokenDoc.exists() || tokenDoc.data().userId !== userId) {
-          setError('This tracking link has expired or is invalid');
+          setError('This tracking link has expired for security reasons.');
           setLoading(false);
           return;
         }
-        
+
         setIsValidToken(true);
-        
-        // Load user data
+
+        // 2. Real-time User & Location Sync
         const userRef = doc(db, 'users', userId as string);
-        const userDoc = await getDoc(userRef);
-        
-        if (!userDoc.exists()) {
-          setError('User not found');
-          setLoading(false);
-          return;
-        }
-        
-        const data = userDoc.data();
-        setUserData(data);
-        
-        // Set up real-time location listener
         const unsubscribe = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            const userData = docSnap.data();
-            const locData = userData.location || userData.currentLocation || {};
-            
-            if (locData.isSharing && locData.lat) {
-              const newLocation: LocationData = {
-                lat: locData.lat,
-                lng: locData.lng,
-                address: locData.address || 'On the move',
-                timestamp: locData.timestamp,
-                isSharing: true,
-                speed: locData.speed,
-                accuracy: locData.accuracy
-              };
-              
-              setLocation(newLocation);
-              
-              // Add to location history (last 20 locations)
-              setLocationHistory(prev => {
-                const newHistory = [newLocation, ...prev.slice(0, 19)];
-                return newHistory;
-              });
+            const data = docSnap.data();
+            setUserData(data);
+
+            // Only update location state if they are actually sharing
+            if (data.location?.isSharing) {
+              setLocation(data.location);
             } else {
               setLocation(null);
             }
           }
+          setLoading(false);
         });
-        
-        setLoading(false);
-        
+
         return () => unsubscribe();
-      } catch (error) {
-        console.error('Error verifying token:', error);
-        setError('Failed to load tracking');
+      } catch (err) {
+        console.error("Tracking Error:", err);
+        setError('System error: Unable to establish satellite link.');
         setLoading(false);
       }
     };
 
-    verifyToken();
+    verifyAndTrack();
   }, [params]);
 
-  // Helper function to get user name in correct priority
-  const getUserName = (data: any): string => {
-    if (!data) return 'Your loved one';
-    
-    // First try firstName + lastName
-    if (data.firstName && data.lastName) {
-      return `${data.firstName} ${data.lastName}`;
-    }
-    // Then try fullName
-    if (data.fullName) {
-      return data.fullName;
-    }
-    // Then try email username
-    if (data.email) {
-      return data.email.split('@')[0];
-    }
-    // Finally fallback
-    return 'Your loved one';
-  };
+  // Premium Name Formatting
+  const displayName = useMemo(() => {
+    if (!userData) return 'Chauffeur';
+    return userData.firstName
+      ? `${userData.firstName} ${userData.lastName || ''}`
+      : userData.fullName || 'Nomo Chauffeur';
+  }, [userData]);
 
-  const formatTimeSince = (timestamp: any): string => {
-    if (!timestamp) return 'Just now';
-    
-    const date = timestamp.toDate();
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (diffInSeconds < 10) return 'Just now';
-    if (diffInSeconds < 60) return `${diffInSeconds} sec ago`;
-    if (diffInSeconds < 120) return '1 min ago';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} mins ago`;
-    return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-  };
-
-  const formatPhoneNumber = (phone: string | undefined): string => {
-    if (!phone) return 'Not available';
-    
-    if (phone.startsWith('+234')) {
-      return `0${phone.slice(4)}`;
-    } else if (phone.startsWith('234')) {
-      return `0${phone.slice(3)}`;
-    }
-    return phone;
-  };
-
-  // Function to navigate to car hire page and scroll to search-results
-    const navigateToCarHire = () => {
-        router.push('/user/car-hire');
-        
-        // Wait for page to load, then scroll to search-results section
-        setTimeout(() => {
-            const searchResultsElement = document.getElementById('search-results');
-            if (searchResultsElement) {
-            searchResultsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }, 100);
-    };
-    // Function to navigate to booking page and scroll to book-now
-    const navigateToBooking = () => {
-        router.push('/user/car-hire');
-        
-        // Wait for page to load, then scroll to book-now section
-        setTimeout(() => {
-            const bookNowElement = document.getElementById('book-now');
-            if (bookNowElement) {
-            bookNowElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }, 100);
-    };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading live tracking...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen bg-[#060b16] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+        <p className="text-[10px] font-black text-slate-500 tracking-[0.3em]">SECURE LINK ESTABLISHING...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (error || !isValidToken) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-6 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FaExclamationTriangle className="text-red-600 text-2xl" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Tracking Link Expired</h2>
-          <p className="text-gray-600 mb-6">{error || 'This tracking link is no longer valid'}</p>
-          <p className="text-sm text-gray-500">
-            Ask your loved one to share a new tracking link with you
-          </p>
-        </div>
+  if (error || !isValidToken) return (
+    <div className="min-h-screen bg-[#060b16] flex items-center justify-center p-6">
+      <div className="max-w-sm w-full bg-[#0b1222] border border-white/5 rounded-[2.5rem] p-8 text-center">
+        <FaExclamationTriangle className="text-rose-500 text-3xl mx-auto mb-4" />
+        <h2 className="text-white font-bold text-lg mb-2">Access Revoked</h2>
+        <p className="text-slate-500 text-sm mb-6 leading-relaxed">{error}</p>
+        <button
+          onClick={() => router.push('/')}
+          className="w-full py-4 bg-white text-black font-bold rounded-2xl text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+        >
+          Return to Hub
+        </button>
       </div>
-    );
-  }
-
-  const userName = getUserName(userData);
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => window.history.back()}
-                className="p-2 rounded-lg hover:bg-gray-100"
-              >
-                <FaArrowLeft className="text-gray-600" />
-              </button>
-              <div>
-                <h1 className="font-bold text-gray-900">Live Location Tracking</h1>
-                <p className="text-sm text-gray-600">
-                  Tracking: <span className="font-semibold">{userName}</span>
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${location?.isSharing ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
-              <span className={`text-sm font-medium ${location?.isSharing ? 'text-green-600' : 'text-gray-500'}`}>
-                {location?.isSharing ? 'LIVE NOW' : 'OFFLINE'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Live Map */}
-        <div className="mb-6">
-          <LiveMap 
-            location={location ? {
-              lat: location.lat,
-              lng: location.lng,
-              address: location.address || 'On the move'
-            } : null}
-            userName={userName}
-          />
-        </div>
-
-        {/* Stats & Info - Now 4 cards with responsive grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Person Being Tracked Card */}
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-blue-100 rounded-full">
-                <FaUser className="text-blue-600 text-sm sm:text-base" />
-              </div>
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base">Person Being Tracked</h3>
-            </div>
-            <div className="space-y-2">
-              <p className="text-base sm:text-lg font-semibold text-gray-800 truncate">{userName}</p>
-              {userData?.phoneNumber && (
-                <div className="flex items-center gap-1 mt-1 sm:mt-2">
-                  <FaPhone className="text-gray-500 text-xs sm:text-sm" />
-                  <span className="text-xs sm:text-sm text-gray-600 truncate">
-                    {formatPhoneNumber(userData.phoneNumber)}
-                  </span>
-                </div>
-              )}
-              {userData?.email && (
-                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                  ✉️ {userData.email}
-                </p>
-              )}
-            </div>
-          </div>
-          
-          {/* Car Hire Advertisement Card */}
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-white rounded-full">
-                <FaCrown className="text-blue-600 text-sm sm:text-base" />
-              </div>
-              <h3 className="font-bold text-blue-900 text-sm sm:text-base">Premium Car Hire</h3>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs sm:text-sm text-blue-800">Need a reliable ride?</p>
-                <p className="text-sm sm:text-base font-semibold text-blue-900 truncate">
-                  Book Luxury Cars Today!
-                </p>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <FaCheckCircle className="text-green-500 text-xs" />
-                  <p className="text-xs text-blue-700">✓ Verified & Insured Drivers</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <FaStar className="text-yellow-500 text-xs" />
-                  <p className="text-xs text-blue-700">✓ 5-Star Rated Service</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <FaChild className="text-blue-500 text-xs" />
-                  <p className="text-xs text-blue-700">✓ 24/7 Safety Support</p>
-                </div>
-              </div>
-              
-              <button
-                onClick={navigateToCarHire}
-                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg"
-              >
-                Book Premium Car →
-              </button>
-            </div>
-          </div>
-          
-          {/* Quick Booking Ad Card */}
-          <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-white rounded-full">
-                <FaCalendar className="text-green-600 text-sm sm:text-base" />
-              </div>
-              <h3 className="font-bold text-green-900 text-sm sm:text-base">Instant Booking</h3>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs sm:text-sm text-green-800">Get a ride in minutes!</p>
-                <p className="text-sm sm:text-base font-semibold text-green-900 truncate">
-                  Same-Day Service Available
-                </p>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <FaClock className="text-green-500 text-xs" />
-                  <p className="text-xs text-green-700">⏱️ 10-min Response Time</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <FaCar className="text-green-500 text-xs" />
-                  <p className="text-xs text-green-700">🚗 Wide Range of Vehicles</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <FaPercent className="text-green-500 text-xs" />
-                  <p className="text-xs text-green-700">🎉 First Ride Discount</p>
-                </div>
-              </div>
-              
-              <button
-                onClick={navigateToBooking}
-                className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg"
-              >
-                Book Now & Save →
-              </button>
-            </div>
-          </div>
-          
-          {/* Trip Status Card */}
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 bg-purple-100 rounded-full">
-                <FaRoad className="text-purple-600 text-sm sm:text-base" />
-              </div>
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base">Tracking Status</h3>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-xs sm:text-sm text-gray-600">Status</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${location?.isSharing ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                  {location?.isSharing ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              
-              {location?.timestamp && (
-                <div className="flex justify-between">
-                  <span className="text-xs sm:text-sm text-gray-600">Last Update</span>
-                  <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">
-                    {formatTimeSince(location.timestamp)}
-                  </span>
-                </div>
-              )}
-              
-              {location?.speed && location.speed > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-xs sm:text-sm text-gray-600">Speed</span>
-                  <span className="text-xs sm:text-sm font-medium text-gray-800">
-                    {(location.speed * 3.6).toFixed(1)} km/h
-                  </span>
-                </div>
-              )}
-              
-              <div className="flex justify-between">
-                <span className="text-xs sm:text-sm text-gray-600">Updates</span>
-                <span className="text-xs sm:text-sm font-medium text-gray-800">
-                  Every 30s
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Safety Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <FaShieldAlt className="text-blue-600 mt-0.5 flex-shrink-0" />
+    <div className="min-h-screen bg-[#060b16] text-white selection:bg-emerald-500/30">
+      {/* Dynamic Glassmorphism Header */}
+      <header className="sticky top-0 z-50 bg-[#060b16]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.back()} className="hover:text-emerald-500 transition-colors">
+              <FaArrowLeft />
+            </button>
             <div>
-              <h4 className="font-bold text-blue-800 mb-1 text-sm sm:text-base">Live Safety Tracking</h4>
-              <p className="text-xs sm:text-sm text-blue-700">
-                You are viewing real-time location updates of <span className="font-semibold">{userName}</span>. 
-                The map updates automatically every 30 seconds as they move. 
-                This tracking session will remain active as long as location sharing is enabled.
-              </p>
+              <h1 className="text-[11px] font-black tracking-[0.2em] text-slate-500 uppercase">Live Intelligence</h1>
+              <p className="text-sm font-bold text-white tracking-tight">{displayName}</p>
             </div>
           </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+            <div className={`w-1.5 h-1.5 rounded-full ${location ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`} />
+            <span className="text-[9px] font-black tracking-widest text-emerald-500 uppercase">
+              {location ? 'Active Relay' : 'Signal Lost'}
+            </span>
+          </div>
         </div>
+      </header>
 
-        {/* Big Promo Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-lg overflow-hidden mb-6">
-          <div className="p-6 text-white">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex-1">
-                <h3 className="text-xl font-bold mb-2">🚗 Need a Safe & Reliable Ride?</h3>
-                <p className="text-blue-100 mb-4">
-                  Book with Nomopoventures for premium car hire services with real-time tracking, 
-                  verified drivers, and 24/7 customer support.
+      <main className="max-w-4xl mx-auto px-6 pt-8 pb-20 space-y-8">
+
+        {/* THE TRACKER ENGINE */}
+        <section className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
+          <TripTracker
+            tripId={userData?.currentTripId || "active-session"}
+            driverId={params.userId as string}
+            customerId="external-viewer"
+          />
+        </section>
+
+        {/* DETAILS GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Driver Status Card */}
+          <div className="bg-[#0b1222] border border-white/5 p-6 rounded-[2rem] hover:border-emerald-500/20 transition-all">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-black text-xl">
+                <FaCrown />
+              </div>
+              <div>
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Premium Chauffeur</h3>
+                <p className="font-bold text-lg">{displayName}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-white/5">
+              <div className="flex items-start gap-3">
+                <FaMapMarkerAlt className="mt-1 text-emerald-500" />
+                <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                  {location?.address || "Calibrating precise location..."}
                 </p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <span className="px-3 py-1 bg-blue-700 rounded-full text-xs font-medium">✓ GPS Tracking</span>
-                  <span className="px-3 py-1 bg-blue-700 rounded-full text-xs font-medium">✓ Insured Vehicles</span>
-                  <span className="px-3 py-1 bg-blue-700 rounded-full text-xs font-medium">✓ 24/7 Support</span>
-                  <span className="px-3 py-1 bg-blue-700 rounded-full text-xs font-medium">✓ Cashless Payment</span>
-                </div>
               </div>
-              <div className="flex-shrink-0">
-                <button
-                  onClick={navigateToCarHire}
-                  className="px-6 py-3 bg-white text-blue-600 hover:bg-blue-50 font-bold rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                >
-                  Book Your Ride Now →
-                </button>
+              <div className="flex items-center gap-3">
+                <FaShieldAlt className="text-emerald-500" />
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Biometric Verified</span>
               </div>
             </div>
+          </div>
+
+          {/* Ad/Action Card */}
+          <div className="bg-gradient-to-br from-emerald-600/10 to-transparent border border-emerald-500/10 p-6 rounded-[2rem] flex flex-col justify-between group">
+            <div>
+              <div className="flex gap-1 mb-4">
+                {[...Array(5)].map((_, i) => <FaStar key={i} className="text-emerald-500 text-[10px]" />)}
+              </div>
+              <h3 className="text-xl font-bold mb-2 leading-tight">Need a professional ride like this?</h3>
+              <p className="text-xs text-slate-400 font-medium">Experience the Nomo difference with real-time tracking on every trip.</p>
+            </div>
+            <button
+              onClick={() => router.push('/user/car-hire')}
+              className="mt-8 w-full py-4 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-2xl group-hover:bg-emerald-500 transition-all"
+            >
+              Book My Own Chauffeur →
+            </button>
           </div>
         </div>
 
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <FaChild className="text-green-600" />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900">Safety First</h4>
-                <p className="text-sm text-gray-600">Verified drivers & 24/7 tracking</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <FaClock className="text-blue-600" />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900">Fast Response</h4>
-                <p className="text-sm text-gray-600">10-minute average wait time</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <FaStar className="text-purple-600" />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900">Premium Service</h4>
-                <p className="text-sm text-gray-600">Luxury cars & professional drivers</p>
-              </div>
-            </div>
-          </div>
+        {/* SECURITY FOOTER */}
+        <div className="p-5 bg-white/5 rounded-2xl border border-white/5 flex items-center gap-4">
+          <FaShieldAlt className="text-slate-500" />
+          <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+            This tracking link is unique to this session. Your location data is never stored on third-party servers and is wiped after the session expires.
+          </p>
         </div>
-      </div>
+
+      </main>
     </div>
   );
 }

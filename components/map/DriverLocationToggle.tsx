@@ -111,22 +111,40 @@ export default function DriverLocationToggle({
       if (!navigator.geolocation) return toast.error("GPS not supported");
       setIsLoading(true);
 
+      // Inside toggleLocation...
       const id = navigator.geolocation.watchPosition(
         async (pos) => {
-          const { latitude, longitude } = pos.coords;
+          const { latitude, longitude, heading } = pos.coords; // 1. Added 'heading'
           try {
             const response = await fetch(
               `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
             );
             const data = await response.json();
             const areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
-            const loc = { lat: latitude, lng: longitude, isSharing: true, address: areaName, timestamp: Timestamp.now() };
+
+            // 2. CRITICAL: Store lat/lng as raw numbers for the Google Map to read
+            const loc = {
+              lat: latitude,
+              lng: longitude,
+              heading: heading || 0, // 3. Store heading so the car icon can rotate
+              isSharing: true,
+              address: areaName,
+              timestamp: Timestamp.now()
+            };
+
             setCurrentLocation(loc);
             await updateDoc(doc(db, 'users', driverId), { location: loc, isLocationActive: true });
             setIsLocationOn(true);
             setIsLoading(false);
           } catch (error) {
-            const fallbackLoc = { lat: latitude, lng: longitude, isSharing: true, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, timestamp: Timestamp.now() };
+            // 4. Fallback also uses raw numbers
+            const fallbackLoc = {
+              lat: latitude,
+              lng: longitude,
+              isSharing: true,
+              address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+              timestamp: Timestamp.now()
+            };
             setCurrentLocation(fallbackLoc);
             await updateDoc(doc(db, 'users', driverId), { location: fallbackLoc, isLocationActive: true });
             setIsLocationOn(true);
@@ -137,8 +155,14 @@ export default function DriverLocationToggle({
           setIsLoading(false);
           toast.error("Enable GPS permissions");
         },
-        { enableHighAccuracy: true }
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,      // 5. Force fresh data
+          timeout: 5000      // 6. Don't wait forever
+        }
+
       );
+
       setWatchId(id);
     }
   };
@@ -146,39 +170,15 @@ export default function DriverLocationToggle({
   if (!isCurrentDriver) return null;
 
   return (
-    <div className="relative font-sans px-2">
+    <div className="relative font-sans">
       {/* MAIN WIDGET */}
-      <div className="bg-slate-900 border border-emerald-500/30 rounded-xl shadow-xl overflow-hidden text-white">
+      <div className="bg-slate-900 border border-emerald-500/30 rounded-md md:rounded-xl shadow-xl overflow-hidden text-white">
         <div className="p-3 flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-800">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isLocationOn ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
             <span className="text-[10px] font-bold uppercase text-slate-300">
               {isLocationOn ? 'Live' : 'Offline'}
             </span>
-
-            {/* INTERACTIVE DROPDOWN INFO BOX */}
-            <div className="px-3">
-              <button
-                onClick={() => setShowInfo(!showInfo)}
-                className="text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg p-1.5 flex flex-col transition-all active:bg-amber-500/20"
-              >
-                <div className="w-full">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight text-left">How This Helps You</p>
-                  </div>
-                </div>
-
-                {showInfo && (
-                  <div className="mt-2 space-y-1 animate-in slide-in-from-top-1 duration-200">
-                    <ul className="text-[9px] text-slate-300 space-y-1 leading-tight text-left border-t border-amber-500/10 pt-2">
-                      <li className="flex items-start gap-1"><span>•</span> Customers can see how close you are to their location</li>
-                      <li className="flex items-start gap-1"><span>•</span> Increases your chances of getting booked</li>
-                      <li className="flex items-start gap-1"><span>•</span> Shows customers you're active and available</li>
-                    </ul>
-                  </div>
-                )}
-              </button>
-            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -199,7 +199,7 @@ export default function DriverLocationToggle({
 
       {/* SETTINGS OVERLAY */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-0 md:p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-0">
           <div className="bg-slate-900 w-full max-w-lg rounded-t-xl md:rounded-xl border-t md:border border-emerald-500/20 shadow-2xl max-h-[95vh] overflow-y-auto">
             <div className="relative p-4 md:p-6 space-y-5">
               <button onClick={() => setSettingsOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><FaTimes /></button>
@@ -219,16 +219,50 @@ export default function DriverLocationToggle({
               </div>
 
               {isLocationOn && currentLocation && (
-                <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-3">
+                <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-t-lg p-3">
                   <div className="flex items-start gap-3">
                     <FaGlobe className="text-emerald-400 mt-1 text-xs" />
                     <div>
-                      <p className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Active Broadcasting</p>
+                      <p className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Active Live Location</p>
                       <p className="text-xs text-slate-200 leading-tight mt-1">{currentLocation.address}</p>
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* INTERACTIVE DROPDOWN INFO BOX */}
+              {!isLocationOn && currentLocation && <div>
+                <button
+                  className="-mt-4 w-full text-xs bg-amber-500/10 border border-amber-500/20 rounded p-1.5 flex flex-col transition-all active:bg-amber-500/20"
+                >
+                  <div className="w-full flex items-center justify-between">
+                    <div onClick={() => setShowInfo(!showInfo)} className="flex items-center gap-2">
+                      <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight text-left">How This Helps You</p>
+                      <FaChevronDown className="text-amber-500 text-xs" />
+                    </div>
+
+                    <div>
+                      <div
+                        onClick={toggleLocation}
+                        className={`px-3 py-1.5 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 ${isLocationOn ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'}`}
+                      >
+                        {isLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
+                          isLocationOn ? <><FaStopCircle /> Off</> : <><FaLocationArrow /> Go Live</>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {showInfo && (
+                    <div className="mt-2 space-y-1 animate-in slide-in-from-top-1 duration-200">
+                      <ul className="text-[10px] text-slate-300 space-y-1 leading-tight text-left border-t border-amber-500/10 pt-2">
+                        <li className="flex items-start gap-1"><span>•</span> Customers can see how close you are to their location</li>
+                        <li className="flex items-start gap-1"><span>•</span> Increases your chances of getting booked</li>
+                        <li className="flex items-start gap-1"><span>•</span> Shows customers you're active and available</li>
+                      </ul>
+                    </div>
+                  )}
+                </button>
+              </div>}
 
               <div className="bg-slate-950/50 rounded-lg p-4 border border-white/5">
                 <div className="flex items-center justify-between mb-2">

@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import { db } from '@/lib/firebaseConfig';
 import { doc, onSnapshot } from 'firebase/firestore';
+import LiveTracking from '@/components/map/LiveTracking';
 
 const LocationUi = () => {
   const router = useRouter();
@@ -172,17 +173,18 @@ const LocationUi = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="w-full h-full rounded-lg overflow-hidden shadow-2xl border border-white/10 bg-zinc-900 relative"
               >
-                <iframe
-                  title="Location Map"
-                  src={mapSource}
-                  className="w-full h-full border-0 md:grayscale invert brightness-90 contrast-125 opacity-90 hover:opacity-100 hover:grayscale-0 hover:invert-0 transition-all duration-1000"
-                  style={{ pointerEvents: 'auto' }}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
+                {/* REPLACEMENT: 
+                  If you have a specific driver to track, pass their ID here.
+                  If you just want the HQ map, keep the iframe.
+                */}
+
+                <LiveTracking driverId="REPLACE_WITH_ACTUAL_DRIVER_ID" />
+
+                {/* Overlay decoration to keep the premium look */}
                 <div className="absolute inset-0 pointer-events-none border-4 border-[#0a0a0a]/50 rounded-lg shadow-inner" />
               </motion.div>
             </div>
+
           </div>
         </div>
       </div>
