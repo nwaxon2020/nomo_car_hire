@@ -353,37 +353,33 @@ export default function DriverProfilePage() {
 
     try {
       const timestamp = Date.now();
-      const uploadPromises = [];
 
-      if (images.front) {
-        uploadPromises.push(uploadImage(images.front, `vehicleLog/${driverId}/${timestamp}_front_${images.front.name}`, "Front view"));
-      }
-      if (images.side) {
-        uploadPromises.push(uploadImage(images.side, `vehicleLog/${driverId}/${timestamp}_side_${images.side.name}`, "Side view"));
-      }
-      if (images.back) {
-        uploadPromises.push(uploadImage(images.back, `vehicleLog/${driverId}/${timestamp}_back_${images.back.name}`, "Back view"));
-      }
-      if (images.interior) {
-        uploadPromises.push(uploadImage(images.interior, `vehicleLog/${driverId}/${timestamp}_interior_${images.interior.name}`, "Interior view"));
-      }
+      const uploadPromises = [
+        images.front ? uploadImage(images.front, `vehicleLog/${driverId}/${timestamp}_front_${images.front.name}`, "Front view") : Promise.resolve(null),
+        images.side ? uploadImage(images.side, `vehicleLog/${driverId}/${timestamp}_side_${images.side.name}`, "Side view") : Promise.resolve(null),
+        images.back ? uploadImage(images.back, `vehicleLog/${driverId}/${timestamp}_back_${images.back.name}`, "Back view") : Promise.resolve(null),
+        images.interior ? uploadImage(images.interior, `vehicleLog/${driverId}/${timestamp}_interior_${images.interior.name}`, "Interior view") : Promise.resolve(null),
+        images.license ? uploadImage(images.license, `vehicleLog/${driverId}/${timestamp}_license_${images.license.name}`, "License document") : Promise.resolve(null),
+        images.ownership ? uploadImage(images.ownership, `vehicleLog/${driverId}/${timestamp}_ownership_${images.ownership.name}`, "Ownership document") : Promise.resolve(null),
+        images.insurance ? uploadImage(images.insurance, `vehicleLog/${driverId}/${timestamp}_insurance_${images.insurance.name}`, "Insurance document") : Promise.resolve(null)
+      ];
 
-      const [frontUrl, sideUrl, backUrl, interiorUrl] = await Promise.allSettled(uploadPromises)
-        .then((results) => results.map((result) => result.status === 'fulfilled' ? result.value : null));
+      const results = await Promise.allSettled(uploadPromises)
+        .then((resultArr) => resultArr.map((result) => result.status === 'fulfilled' ? result.value : null));
 
-      const finalFrontUrl = frontUrl || editingVehicle?.images.front;
-      const finalSideUrl = sideUrl || editingVehicle?.images.side;
-      const finalBackUrl = backUrl || editingVehicle?.images.back;
-      const finalInteriorUrl = interiorUrl || editingVehicle?.images.interior;
+      const [frontUrl, sideUrl, backUrl, interiorUrl, licenseUrl, ownershipUrl, insuranceUrl] = results;
 
       const vehicleDoc = {
         driverId,
         ...formData,
         images: {
-          front: finalFrontUrl!,
-          side: finalSideUrl!,
-          back: finalBackUrl!,
-          interior: finalInteriorUrl!
+          front: frontUrl || editingVehicle?.images?.front || "",
+          side: sideUrl || editingVehicle?.images?.side || "",
+          back: backUrl || editingVehicle?.images?.back || "",
+          interior: interiorUrl || editingVehicle?.images?.interior || "",
+          license: licenseUrl || editingVehicle?.images?.license || "",
+          ownership: ownershipUrl || editingVehicle?.images?.ownership || "",
+          insurance: insuranceUrl || editingVehicle?.images?.insurance || ""
         },
         createdAt: editingVehicle?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now(),

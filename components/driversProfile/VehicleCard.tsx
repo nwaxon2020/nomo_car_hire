@@ -46,6 +46,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
 }) => {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const [showDescription, setShowDescription] = useState(false);
+    const [showNoDocsOverlay, setShowNoDocsOverlay] = useState(false);
 
     const allImages = [
         { url: vehicle.images.front, label: 'Front View' },
@@ -56,6 +57,10 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
         { url: vehicle.images.ownership, label: 'Ownership Paper' },
         { url: vehicle.images.insurance, label: 'Insurance' },
     ].filter(img => img.url);
+
+    const firstDocIndex = allImages.findIndex(img => 
+        ['Vehicle License', 'Ownership Paper', 'Insurance'].includes(img.label)
+    );
 
     const nextImage = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -136,6 +141,20 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                         </div>
                     </div>
 
+                    <button
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            if (firstDocIndex !== -1) {
+                                setLightboxIndex(firstDocIndex); 
+                            } else {
+                                setShowNoDocsOverlay(true);
+                            }
+                        }}
+                        className="w-full mb-4 py-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"
+                    >
+                        <FileText size={14} /> Check Car Papers
+                    </button>
+
                     {/* Description Toggle */}
                     {vehicle.description && (
                         <div className="mb-4">
@@ -157,19 +176,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                         </div>
                     )}
 
-                    {/* Documents Preview Row */}
-                    <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
-                        {allImages.slice(4).map((doc, idx) => (
-                            <div
-                                key={idx}
-                                onClick={() => setLightboxIndex(idx + 4)}
-                                className="min-w-[50px] h-12 bg-white rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all"
-                            >
-                                <FileText size={14} className="text-gray-400" />
-                                <span className="text-[8px] font-bold text-gray-500 uppercase">DOC {idx + 1}</span>
-                            </div>
-                        ))}
-                    </div>
+
 
                     {/* Admin Approval Message */}
                     <div className={`mt-auto mb-4 p-2.5 rounded-xl border flex items-center gap-2 ${vehicle.isApproved
@@ -230,6 +237,33 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                         className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-300"
                         alt="Full view"
                     />
+                </div>
+            )}
+
+            {/* ERROR OVERLAY FOR MISSING PAPERS */}
+            {showNoDocsOverlay && (
+                <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm flex flex-col items-center text-center relative animate-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setShowNoDocsOverlay(false); }} 
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                        <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4">
+                            <FileText size={28} />
+                        </div>
+                        <h3 className="text-lg font-black text-gray-900 mb-2">No Papers Uploaded</h3>
+                        <p className="text-sm text-gray-500 mb-6 font-medium">
+                            It looks like no legal documents have been submitted for this {vehicle.carName} yet.
+                        </p>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setShowNoDocsOverlay(false); }}
+                            className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-colors"
+                        >
+                            Got It
+                        </button>
+                    </div>
                 </div>
             )}
         </>

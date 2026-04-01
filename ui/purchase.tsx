@@ -20,9 +20,20 @@ const VIP_CONFIG = {
   ],
 }
 
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "Expired"
+  const totalSec = Math.floor(ms / 1000)
+  const days = Math.floor(totalSec / 86400)
+  const hours = Math.floor((totalSec % 86400) / 3600)
+  const mins = Math.floor((totalSec % 3600) / 60)
+  const secs = totalSec % 60
+  if (days > 0)
+    return days + "d " + String(hours).padStart(2, "0") + "h " + String(mins).padStart(2, "0") + "m"
+  return String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0")
+}
+
 export default function PurchasePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
@@ -30,7 +41,14 @@ export default function PurchasePage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [showOverlay, setShowOverlay] = useState(false)
   const [selectedLevelData, setSelectedLevelData] = useState<any>(null)
+  const [adminConfig, setAdminConfig] = useState<any>(null)
   const [benefit, showBenefit] = useState(false)
+
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -40,8 +58,12 @@ export default function PurchasePage() {
       }
       setUserId(user.uid)
       try {
-        const userSnap = await getDoc(doc(db, "users", user.uid))
+        const [userSnap, configSnap] = await Promise.all([
+          getDoc(doc(db, "users", user.uid)),
+          getDoc(doc(db, "adminConfig", "pricing"))
+        ])
         if (userSnap.exists()) setUserData(userSnap.data())
+        if (configSnap.exists()) setAdminConfig(configSnap.data())
       } finally {
         setLoading(false)
       }
@@ -54,40 +76,47 @@ export default function PurchasePage() {
     setShowOverlay(true)
   }
 
+  const vipValidityDays = adminConfig?.vip?.validityDays ?? 365
+  const vipWarningMs = (adminConfig?.vip?.warningDays ?? 30) * 24 * 60 * 60 * 1000
+
+  const dynamicVips = VIP_CONFIG.levels.map((lvl) => {
+    const customPrice = adminConfig?.vip?.prices?.[lvl.level]
+    return {
+      ...lvl,
+      price: customPrice ?? lvl.price
+    }
+  })
+
   const handleFinalPurchase = async () => {
     if (!selectedLevelData || processing || !userId) return
     setProcessing(true)
 
     try {
       const userRef = doc(db, "users", userId)
-      const now = new Date()
-      const expiryDate = new Date(now)
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1)
+      const nowTime = new Date()
+      const expiryDate = new Date(nowTime)
+      expiryDate.setDate(expiryDate.getDate() + vipValidityDays)
 
       // Calculate expiry extension
       let finalExpiry = expiryDate
-      if (userData?.vipExpiryDate && userData.vipExpiryDate.toDate() > now) {
+      if (userData?.vipExpiryDate && userData.vipExpiryDate.toDate() > nowTime) {
         const currentExpiry = userData.vipExpiryDate.toDate()
-        currentExpiry.setFullYear(currentExpiry.getFullYear() + 1)
+        currentExpiry.setDate(currentExpiry.getDate() + vipValidityDays)
         finalExpiry = currentExpiry
       }
 
-      // 1. Send Notification using the shared helper (matches Admin style)
-      // This ensures the notification is added correctly to the user's collection
       await triggerNotification(
         userId,
         "VIP Upgrade Successful 🎉",
         `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active.`,
         "success"
-        // No viewLink included as requested
       )
 
-      // 2. Update the User Document with VIP details
       await updateDoc(userRef, {
         vip: true,
         vipLevel: selectedLevelData.level,
         purchasedVipLevel: selectedLevelData.level,
-        vipPurchaseDate: Timestamp.fromDate(now),
+        vipPurchaseDate: Timestamp.fromDate(nowTime),
         vipExpiryDate: Timestamp.fromDate(finalExpiry),
         updatedAt: Timestamp.now()
       })
@@ -111,7 +140,7 @@ export default function PurchasePage() {
   if (loading) return <div className="flex justify-center items-center min-h-screen"><LoadingRound /></div>
 
   return (
-    <div className="mx-auto max-w-[1100px] min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6">
+    <div className="mx-auto max-w-5xl h-[100vh] bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6">
       <Toaster position="top-right" />
 
       {/* PURCHASE OVERLAY DIV */}
@@ -134,7 +163,7 @@ export default function PurchasePage() {
                 </div>
                 <div className="flex justify-between border-t pt-3">
                   <span className="text-gray-500">Validity</span>
-                  <span className="font-medium text-gray-900">365 Days (1 Year)</span>
+                  <span className="font-medium text-gray-900">{vipValidityDays} Days</span>
                 </div>
               </div>
 
@@ -199,16 +228,27 @@ export default function PurchasePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {VIP_CONFIG.levels.map((level) => {
-            const isActive = userData?.purchasedVipLevel === level.level && userData?.vipExpiryDate?.toDate() > new Date()
+          {dynamicVips.map((level) => {
+            // Logic to check if this level is already owned or surpassed
+            const currentVipLevel = userData?.vipLevel || 0;
+            const isOwnedOrLower = currentVipLevel >= level.level;
+            const isExactLevel = currentVipLevel === level.level;
+
+            // Check for countdown warning
+            let remainingMs = 0
+            if (isExactLevel && userData?.vipExpiryDate) {
+              remainingMs = userData.vipExpiryDate.toDate().getTime() - now.getTime()
+            }
+            const inWarning = isExactLevel && remainingMs > 0 && remainingMs <= vipWarningMs
 
             return (
               <div
                 key={level.level}
-                className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden hover:shadow-xl transition-all flex flex-col"
+                className={`bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden transition-all flex flex-col relative ${isOwnedOrLower ? "opacity-60 grayscale-[0.5]" : "hover:shadow-xl"
+                  }`}
               >
                 <div className={`h-2 ${level.color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                <div className="p-5 flex-1 flex flex-col">
+                <div className={`p-5 flex-1 flex flex-col ${isOwnedOrLower ? "blur-[1px]" : ""}`}>
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold">{level.name}</h3>
                     <div className="flex">{Array.from({ length: level.stars }).map((_, i) => <span key={i}>⭐</span>)}</div>
@@ -216,7 +256,7 @@ export default function PurchasePage() {
 
                   <div className="mb-6 space-y-2">
                     <p className="text-3xl font-black text-gray-900">₦{level.price.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">Per Year</p>
+                    <p className="text-sm text-gray-500">For {vipValidityDays} Days</p>
                   </div>
 
                   <ul className="text-sm text-gray-600 space-y-3 mb-8 flex-1">
@@ -225,14 +265,43 @@ export default function PurchasePage() {
                     <li className="flex items-center">✅ VIP Profile Badge</li>
                   </ul>
 
-                  <button
-                    onClick={() => openOverlay(level)}
-                    disabled={isActive}
-                    className={`w-full py-3 rounded-xl font-bold transition-all ${isActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-900 text-white hover:bg-black active:scale-95'}`}
-                  >
-                    {isActive ? 'Current Plan' : 'Purchase Now'}
-                  </button>
+                  {inWarning ? (
+                    <>
+                      <div className="w-full py-3.5 mb-2 rounded-2xl text-center bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg">
+                        <p className="text-[10px] font-bold tracking-widest opacity-80 mb-0.5">⚠ Expires In</p>
+                        <p className="font-mono text-xl font-black leading-none tabular-nums">
+                          {formatCountdown(remainingMs)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => openOverlay(level)}
+                        className={`w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gray-900 text-white shadow-md hover:bg-black active:scale-95`}
+                      >
+                        Renew VIP
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => openOverlay(level)}
+                      disabled={isOwnedOrLower}
+                      className={`w-full py-3 rounded-xl font-bold transition-all ${isOwnedOrLower
+                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        : 'bg-gray-900 text-white hover:bg-black active:scale-95'
+                        }`}
+                    >
+                      {isExactLevel ? 'Current Plan' : isOwnedOrLower ? 'Purchased' : 'Purchase Now'}
+                    </button>
+                  )}
                 </div>
+
+                {/* Visual indicator for current/passed plans */}
+                {isOwnedOrLower && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="bg-white/80 px-4 py-1 rounded-full text-xs font-bold text-gray-600 border border-gray-200 shadow-sm">
+                      {isExactLevel ? "ACTIVE" : "COMPLETED"}
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}

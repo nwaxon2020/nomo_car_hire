@@ -12,7 +12,7 @@ export interface Vehicle {
     plateNumber: string;
     exteriorColor: string;
     interiorColor: string;
-    images: { front: string; side: string; back: string; interior: string; };
+    images: { front: string; side: string; back: string; interior: string; license?: string; ownership?: string; insurance?: string; };
     description?: string;
     status?: "available" | "unavailable" | "maintenance";
     createdAt: Timestamp;

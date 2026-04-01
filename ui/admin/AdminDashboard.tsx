@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { auth, db } from '@/lib/firebaseConfig';
 import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { FiSettings, FiShield, FiUserPlus, FiBriefcase } from 'react-icons/fi';
+import { FiSettings, FiShield, FiUserPlus, FiBriefcase, FiDollarSign } from 'react-icons/fi';
 import { FaCar } from "react-icons/fa";
 import AdminStatistics from '@/components/admin/AdminStatistics'; // Import the new component
 
@@ -138,6 +138,7 @@ export default function AdminDashboardUi() {
     { title: "Applicants", icon: <FiBriefcase />, link: "/admin/applicants", badge: unreadCounts.applicants },
     { title: "Broadcast", icon: <FiBriefcase />, link: "/admin/broadcast", badge: 0 },
     { title: "Complaints", icon: <FiUserPlus />, link: "/admin/complaints", badge: unreadCounts.complaints },
+    { title: "Finance Management", icon: <FiDollarSign />, link: "/admin/finance-management", badge: 0, ceoOnly: true },
     { title: "Add Staff", icon: <FiShield />, link: "/admin/add-staff", badge: 0 },
     { title: "Settings", icon: <FiSettings />, link: "/admin/admin-settings", badge: 0 },
   ];
@@ -155,7 +156,7 @@ export default function AdminDashboardUi() {
 
       <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
         {allCards.map((card) => {
-          const canSee = isCEO || allowedRoutes.includes(card.link);
+          const canSee = isCEO || (allowedRoutes.includes(card.link) && !(card as any).ceoOnly);
           if (!canSee) return null;
 
           return (

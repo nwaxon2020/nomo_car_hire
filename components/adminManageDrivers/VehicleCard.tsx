@@ -3,7 +3,7 @@ import { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { toast } from "react-hot-toast";
-import { FaWind, FaUsers, FaCheckCircle, FaEye, FaCarSide, FaExclamationTriangle } from "react-icons/fa";
+import { FaWind, FaUsers, FaCheckCircle, FaEye, FaCarSide, FaExclamationTriangle, FaChevronLeft, FaChevronRight } from "react-icons/fa";
 
 import { triggerNotification } from "@/lib/notifications";
 
@@ -11,6 +11,22 @@ export default function VehicleCard({ car }: any) {
   const [showDocs, setShowDocs] = useState(false);
   const [selectedView, setSelectedView] = useState<string>("front");
   const [showConfirm, setShowConfirm] = useState(false); // Confirmation overlay state
+
+  const paperImages = [
+    { url: car.images?.license, label: "License" },
+    { url: car.images?.ownership, label: "Ownership" },
+    { url: car.images?.insurance, label: "Insurance" }
+  ].filter(img => img.url);
+  const [paperIndex, setPaperIndex] = useState(0);
+
+  const nextPaper = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPaperIndex((prev) => (prev + 1) % paperImages.length);
+  };
+  const prevPaper = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPaperIndex((prev) => (prev - 1 + paperImages.length) % paperImages.length);
+  };
 
   const mainImage = car.images?.[selectedView] || car.images?.front || "";
 
@@ -128,13 +144,33 @@ export default function VehicleCard({ car }: any) {
         </div>
       </div>
 
-      {showDocs && (
+      {showDocs && paperImages.length > 0 && (
         <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col items-center justify-center p-6 animate-in fade-in">
-          <button onClick={() => setShowDocs(false)} className="absolute top-6 right-6 text-white text-3xl">✕</button>
-          <div className="max-w-4xl w-full">
-            <h3 className="text-white text-xl font-bold mb-4 uppercase tracking-tighter">Documents: {car.plateNumber}</h3>
-            <img src={car.images?.side} className="w-full max-h-[75vh] object-contain rounded-lg shadow-2xl" alt="Car Papers" />
+          <button onClick={() => setShowDocs(false)} className="absolute top-6 right-6 text-white text-3xl hover:text-red-500 z-50 transition-colors">✕</button>
+          
+          <button onClick={prevPaper} className="absolute left-4 md:left-12 top-1/2 -translate-y-1/2 p-4 text-white/50 hover:text-white z-50 transition-colors">
+            <FaChevronLeft size={40} />
+          </button>
+          
+          <button onClick={nextPaper} className="absolute right-4 md:right-12 top-1/2 -translate-y-1/2 p-4 text-white/50 hover:text-white z-50 transition-colors">
+            <FaChevronRight size={40} />
+          </button>
+
+          <div className="max-w-4xl w-full text-center relative flex flex-col items-center justify-center h-full">
+            <h3 className="text-white text-xl font-bold mb-1 uppercase tracking-tighter">
+              {paperImages[paperIndex].label} • {car.plateNumber}
+            </h3>
+            <p className="text-gray-400 text-xs mb-6 font-bold">{paperIndex + 1} / {paperImages.length}</p>
+            <img src={paperImages[paperIndex].url} className="w-full max-h-[75vh] object-contain rounded-lg shadow-2xl" alt={paperImages[paperIndex].label} />
           </div>
+        </div>
+      )}
+
+      {showDocs && paperImages.length === 0 && (
+        <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col items-center justify-center p-6 animate-in fade-in">
+          <button onClick={() => setShowDocs(false)} className="absolute top-6 right-6 text-white text-3xl hover:text-red-500 z-50 transition-colors">✕</button>
+          <h3 className="text-white text-xl font-bold uppercase tracking-tighter">No Papers Uploaded</h3>
+          <p className="text-gray-400 text-sm mt-2">The driver has not uploaded any documents.</p>
         </div>
       )}
     </div>

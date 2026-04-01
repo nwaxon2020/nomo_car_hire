@@ -80,6 +80,7 @@ export default function TicketPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [selectedTicket, setSelectedTicket] = useState<(typeof TICKET_CONFIG)[0] | null>(null)
   const [showOverlay, setShowOverlay] = useState(false)
+  const [adminConfig, setAdminConfig] = useState<any>(null)
 
   // Ticks every second — drives the live countdown displays
   const [now, setNow] = useState(new Date())
@@ -96,8 +97,12 @@ export default function TicketPage() {
       }
       setUserId(user.uid)
       try {
-        const snap = await getDoc(doc(db, "users", user.uid))
+        const [snap, configSnap] = await Promise.all([
+          getDoc(doc(db, "users", user.uid)),
+          getDoc(doc(db, "adminConfig", "pricing"))
+        ])
         if (snap.exists()) setUserData(snap.data())
+        if (configSnap.exists()) setAdminConfig(configSnap.data())
       } finally {
         setLoading(false)
       }
@@ -105,13 +110,25 @@ export default function TicketPage() {
     return () => unsubscribe()
   }, [router])
 
+  const dynamicTickets = TICKET_CONFIG.map((t) => {
+    const custom = adminConfig?.tickets?.[t.type]
+    if (!custom) return t
+    return {
+      ...t,
+      price: custom.price ?? t.price,
+      durationDays: custom.durationDays ?? t.durationDays,
+      duration: `${custom.durationDays ?? t.durationDays} Days`,
+      warningMs: custom.warningHours ? custom.warningHours * 60 * 60 * 1000 : t.warningMs
+    }
+  })
+
   const openOverlay = (ticket: (typeof TICKET_CONFIG)[0]) => {
     setSelectedTicket(ticket)
     setShowOverlay(true)
   }
 
   const handlePurchase = async (level: number) => {
-    const ticket = TICKET_CONFIG.find((t) => t.level === level)
+    const ticket = dynamicTickets.find((t) => t.level === level)
     if (!ticket || processing || !userId) return
     setProcessing(true)
 
@@ -356,7 +373,7 @@ export default function TicketPage() {
 
         {/* Ticket Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {TICKET_CONFIG.map((ticket) => {
+          {dynamicTickets.map((ticket) => {
             const active = isTicketActive(ticket)
             const expiryDisplay = getExpiryDisplay(ticket)
             const inWarning = isInWarningWindow(ticket.type, ticket.warningMs ?? 0)
