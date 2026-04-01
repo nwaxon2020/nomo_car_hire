@@ -19,25 +19,25 @@ export default function VehicleCard({ car }: any) {
 
   const handleApproveVehicle = async () => {
     try {
-      // Updates the specific vehicle in the vehicleLog collection
       await updateDoc(doc(db, "vehicleLog", car.id), {
         status: "approved",
+        isApproved: true,
         approvedAt: new Date().toISOString()
       });
 
-      // ADD THIS: Notify the owner/driver
       await triggerNotification(
-        car.driverId, // Ensure this field exists in your car object
+        car.driverId,
         "Vehicle Approved! ✅",
         `Your ${car.carName} has been verified and is now live.`,
         "success",
-        "/user/my-vehicles"
+        `/user/driver-profile/${car.driverId}#${car.id}` // <--- Targeted URL
       );
 
       toast.success(`${car.carName} Approved!`);
-      setShowConfirm(false); // Close overlay after success
+      setShowConfirm(false);
     } catch (error) {
-      toast.error("Failed to approve vehicle");
+      console.error(error);
+      toast.error("Permissions Denied: Only designated admins can approve.");
     }
   };
 
@@ -116,12 +116,15 @@ export default function VehicleCard({ car }: any) {
 
           {/* 1. Updated Approve Button with Confirmation Trigger */}
           <button
-            disabled={car.status === "approved"}
-            className={`flex-1 py-2 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-all ${car.status === "approved" ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+            disabled={car.isApproved === true && car.status === "approved"}
+            className={`flex-1 py-2 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-all 
+              ${(car.isApproved === true && car.status === "approved") ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
             onClick={() => setShowConfirm(true)}
           >
-            <FaCheckCircle /> {car.status === "approved" ? "APPROVED" : "APPROVE"}
+            <FaCheckCircle />
+            {(car.isApproved === true && car.status === "approved") ? "APPROVED" : "APPROVE"}
           </button>
+
         </div>
       </div>
 
@@ -136,4 +139,5 @@ export default function VehicleCard({ car }: any) {
       )}
     </div>
   );
+
 }

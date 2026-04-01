@@ -7,7 +7,7 @@ import { db, storage } from '@/lib/firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import {
   FaMapMarkerAlt, FaLocationArrow, FaStopCircle, FaPhone,
-  FaUser, FaTimes, FaEdit, FaWhatsapp, FaCamera, FaGlobe, FaInfoCircle, FaChevronDown
+  FaUser, FaTimes, FaEdit, FaWhatsapp, FaCamera, FaGlobe, FaInfoCircle, FaChevronDown, FaExclamationCircle
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 
@@ -20,7 +20,7 @@ export default function DriverLocationToggle({
   const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [showInfo, setShowInfo] = useState(false); // NEW: State for dropdown
+  const [showInfo, setShowInfo] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
 
   // Profile States
@@ -31,6 +31,10 @@ export default function DriverLocationToggle({
   const [profileImage, setProfileImage] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+
+  // ORIGINAL DATA STATE (To check if dirty)
+  const [originalData, setOriginalData] = useState<any>(null);
+
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,21 +42,43 @@ export default function DriverLocationToggle({
   const auth = getAuth();
   const isCurrentDriver = auth.currentUser?.uid === driverId;
 
+  // Check if any field is different from the original data
+  const isDirty = originalData && (
+    firstName !== originalData.firstName ||
+    lastName !== originalData.lastName ||
+    phoneNumber !== originalData.phoneNumber ||
+    whatsappPreferred !== originalData.whatsappPreferred ||
+    city !== originalData.city ||
+    state !== originalData.state
+  );
+
   useEffect(() => {
     if (!driverId) return;
     const loadData = async () => {
       const driverDoc = await getDoc(doc(db, 'users', driverId));
       if (driverDoc.exists()) {
         const data = driverDoc.data();
-        setFirstName(data.firstName || '');
-        setLastName(data.lastName || '');
-        setPhoneNumber(data.phoneNumber || '');
-        setWhatsappPreferred(data.whatsappPreferred || false);
+        const initialValues = {
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          phoneNumber: data.phoneNumber || '',
+          whatsappPreferred: data.whatsappPreferred || false,
+          city: data.city || 'Ikeja',
+          state: data.state || 'Lagos',
+        };
+
+        setFirstName(initialValues.firstName);
+        setLastName(initialValues.lastName);
+        setPhoneNumber(initialValues.phoneNumber);
+        setWhatsappPreferred(initialValues.whatsappPreferred);
         setProfileImage(data.profileImage || '');
-        setCity(data.city || 'Ikeja');
-        setState(data.state || 'Lagos');
+        setCity(initialValues.city);
+        setState(initialValues.state);
         setIsLocationOn(data.location?.isSharing || false);
         setCurrentLocation(data.location || null);
+
+        // Store the original state for comparison
+        setOriginalData(initialValues);
       }
     };
     loadData();
@@ -79,7 +105,7 @@ export default function DriverLocationToggle({
   const handleUpdateProfile = async () => {
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, 'users', driverId), {
+      const updatedFields = {
         firstName,
         lastName,
         phoneNumber,
@@ -87,7 +113,12 @@ export default function DriverLocationToggle({
         state,
         whatsappPreferred,
         updatedAt: Timestamp.now()
-      });
+      };
+      await updateDoc(doc(db, 'users', driverId), updatedFields);
+
+      // Update originalData so isDirty becomes false after save
+      setOriginalData({ firstName, lastName, phoneNumber, city, state, whatsappPreferred });
+
       setIsEditingLocation(false);
       toast.success("Profile synchronized!");
     } catch (err) {
@@ -111,10 +142,9 @@ export default function DriverLocationToggle({
       if (!navigator.geolocation) return toast.error("GPS not supported");
       setIsLoading(true);
 
-      // Inside toggleLocation...
       const id = navigator.geolocation.watchPosition(
         async (pos) => {
-          const { latitude, longitude, heading } = pos.coords; // 1. Added 'heading'
+          const { latitude, longitude, heading } = pos.coords;
           try {
             const response = await fetch(
               `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
@@ -122,11 +152,10 @@ export default function DriverLocationToggle({
             const data = await response.json();
             const areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
 
-            // 2. CRITICAL: Store lat/lng as raw numbers for the Google Map to read
             const loc = {
               lat: latitude,
               lng: longitude,
-              heading: heading || 0, // 3. Store heading so the car icon can rotate
+              heading: heading || 0,
               isSharing: true,
               address: areaName,
               timestamp: Timestamp.now()
@@ -137,7 +166,6 @@ export default function DriverLocationToggle({
             setIsLocationOn(true);
             setIsLoading(false);
           } catch (error) {
-            // 4. Fallback also uses raw numbers
             const fallbackLoc = {
               lat: latitude,
               lng: longitude,
@@ -155,14 +183,8 @@ export default function DriverLocationToggle({
           setIsLoading(false);
           toast.error("Enable GPS permissions");
         },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,      // 5. Force fresh data
-          timeout: 5000      // 6. Don't wait forever
-        }
-
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
       );
-
       setWatchId(id);
     }
   };
@@ -182,15 +204,22 @@ export default function DriverLocationToggle({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* DIRTY INDICATOR ON MAIN WIDGET */}
+            {isDirty && (
+              <div className="flex items-center gap-1 text-[9px] font-black text-amber-500 uppercase bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 animate-pulse">
+                <FaExclamationCircle /> Unsaved
+              </div>
+            )}
+
             <button
               onClick={toggleLocation}
               disabled={isLoading}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${isLocationOn ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'}`}
+              className={`hover:font-black px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${isLocationOn ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'}`}
             >
               {isLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
-                isLocationOn ? <><FaStopCircle /> Off</> : <><FaLocationArrow /> Go Live</>}
+                isLocationOn ? <><FaStopCircle /> Turn Off Location</> : <><FaLocationArrow /> Turn on Location</>}
             </button>
-            <button onClick={() => setSettingsOpen(true)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-slate-300 text-[10px] font-semibold border border-white/5">
+            <button onClick={() => setSettingsOpen(true)} className="hover:font-black px-3 py-1.5 bg-slate-800 rounded-lg text-slate-300 text-[10px] font-semibold border border-white/5">
               Settings
             </button>
           </div>
@@ -215,7 +244,12 @@ export default function DriverLocationToggle({
                     <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
                   </label>
                 </div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Driver Photo</p>
+
+                {/* DIRTY STATUS TEXT */}
+                <div className="flex flex-col items-center">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Driver Photo</p>
+                  {isDirty && <span className="text-[9px] font-black text-amber-500 mt-1 flex items-center gap-1"><FaExclamationCircle /> You have unsaved changes</span>}
+                </div>
               </div>
 
               {isLocationOn && currentLocation && (
@@ -247,7 +281,7 @@ export default function DriverLocationToggle({
                         className={`px-3 py-1.5 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 ${isLocationOn ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'}`}
                       >
                         {isLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
-                          isLocationOn ? <><FaStopCircle /> Off</> : <><FaLocationArrow /> Go Live</>}
+                          isLocationOn ? <><FaStopCircle /> Off</> : <><FaLocationArrow /> Turn on Location</>}
                       </div>
                     </div>
                   </div>
@@ -313,7 +347,7 @@ export default function DriverLocationToggle({
                     <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 pl-8 pr-3 text-sm text-white focus:border-emerald-500 outline-none" />
                   </div>
                   <button
-                    onClick={() => setWhatsappPreferred(!whatsappPreferred)}
+                    onClick={() => setWhatsappPreferred(!whatsappPreferred)} title="Turn on WhatsApp preference to be contacted via WhatsApp"
                     className={`px-3 rounded-lg flex items-center justify-center transition-all border ${whatsappPreferred ? 'bg-green-500/20 border-green-500 text-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
                   >
                     <FaWhatsapp className="text-lg" />
@@ -323,11 +357,11 @@ export default function DriverLocationToggle({
 
               <button
                 onClick={handleUpdateProfile}
-                disabled={isSaving}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+                disabled={isSaving || !isDirty}
+                className={`w-full py-3.5 rounded-lg font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 ${isDirty ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
               >
                 {isSaving && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                {isSaving ? 'Synchronizing...' : 'Save All Changes'}
+                {isSaving ? 'Synchronizing...' : isDirty ? 'Save All Changes' : 'Profile is Up to Date'}
               </button>
             </div>
           </div>

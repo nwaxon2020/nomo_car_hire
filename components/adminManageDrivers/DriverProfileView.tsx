@@ -256,7 +256,7 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
             {vehicles.map((car) => (
               <div key={car.id} className="relative group">
                 <VehicleCard car={car} />
-                <button onClick={() => { setSelectedCar(car); setCurrentImgIdx(0); }} className="absolute top-2 right-2 bg-white/80 backdrop-blur p-2 rounded-lg text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity border border-gray-100 shadow-sm">
+                <button onClick={() => { setSelectedCar(car); setCurrentImgIdx(0); }} className="absolute top-2 right-2 bg-white/80 backdrop-blur p-2 rounded-lg text-[10px] font-bold md:opacity-0 group-hover:opacity-100 transition-opacity border border-gray-100 shadow-sm">
                   VIEW FULL
                 </button>
               </div>

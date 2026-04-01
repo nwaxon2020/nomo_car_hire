@@ -17,19 +17,19 @@ import {
   X,
   MessageSquare,
   ChevronDown,
-  Bell // Added Bell
+  Bell
 } from "lucide-react";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
 import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
-import NotificationPanel from "@/components/notification/Notification"; // Assuming this is your component
+import NotificationPanel from "@/components/notification/Notification";
 import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
 
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false); // Added for Notif Panel
+  const [notifOpen, setNotifOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [isDriver, setIsDriver] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -37,11 +37,14 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [unreadNotifs, setUnreadNotifs] = useState(0); // Added for Bell count
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   const router = useRouter();
   const pathname = usePathname();
   const { unreadCount } = useUnreadChats();
+
+  // Combine counts for the mobile bubble
+  const totalUnreadMobile = Number(unreadCount) + unreadNotifs;
 
   const getFirstName = (name: string | null | undefined) => {
     if (!name) return "User";
@@ -66,7 +69,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       setUserId(user.uid);
       setIsAuthenticated(true);
 
-      // Real-time listener for user data (including notifications)
       const userDocRef = doc(db, "users", user.uid);
       const unsubDoc = onSnapshot(userDocRef, (snap) => {
         if (snap.exists()) {
@@ -80,7 +82,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           setDisplayName(capitalize(finalName));
           setPhotoURL(data.profileImage || user.photoURL || "/profile.png");
 
-          // Sync notification count
           const notifs = data.notifications || [];
           const unread = notifs.filter((n: any) => !n.read).length;
           setUnreadNotifs(unread);
@@ -152,8 +153,15 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
       <div className="flex h-screen bg-gray-100 overflow-hidden">
 
-        {/* Mobile Toggle Button (Position untouched) */}
-        <div className="md:hidden absolute top-6 right-4 z-[60]">
+        {/* Mobile Toggle Button Container */}
+        <div className="md:hidden absolute top-6 right-4 z-[60] flex items-center gap-2">
+          {/* Bubble to the left of the Menu button */}
+          {!sidebarOpen && totalUnreadMobile > 0 && (
+            <div className="h-6 min-w-[24px] px-1.5 bg-red-600 text-white text-[11px] font-black rounded-full flex items-center justify-center shadow-lg animate-bounce border border-white/20">
+              {totalUnreadMobile}
+            </div>
+          )}
+
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white text-2xl">
             {sidebarOpen ? <X /> : <Menu />}
           </button>
@@ -168,8 +176,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
           {/* Profile Header */}
           <div className="p-4 pt-8 md:pt-4 bg-gray-900 flex flex-col items-center border-b border-white/5 relative">
-
-            {/* Added Notification Bell in Sidebar Profile Header */}
             <button
               onClick={handleOpenNotifs}
               className="absolute top-10 right-6 md:top-6 md:right-6 p-2 text-gray-300 hover:text-amber-500 transition-colors"
@@ -252,7 +258,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           />
         </div>
 
-        {/* FCM Token Handler */}
         <FcmTokenHandler />
 
         {/* MAIN CONTENT AREA */}

@@ -9,6 +9,28 @@ interface VIPStarProps {
     isExpired?: boolean;
 }
 
+// --- Exported Logic for Vehicle Limits ---
+
+export const getVehicleLimit = (stars: number | string) => {
+    const s = Number(stars);
+    if (s >= 5) return 20;
+    if (s >= 4) return 6;
+    if (s >= 3) return 4;
+    if (s >= 2) return 3;
+    if (s >= 1) return 2;
+    return 1; // 0 stars or "no star"
+};
+
+export const getNextUpgrade = (stars: number | string) => {
+    const s = Number(stars);
+    if (s >= 5) return "You have reached the maximum limit.";
+    if (s >= 4) return "Upgrade to 5 stars to add up to 20 vehicles.";
+    if (s >= 3) return "Upgrade to 4 stars to add up to 6 vehicles.";
+    if (s >= 2) return "Upgrade to 3 stars to add up to 4 vehicles.";
+    if (s >= 1) return "Upgrade to 2 stars to add up to 3 vehicles.";
+    return "Upgrade to 1 star to add up to 2 vehicles.";
+};
+
 const VIP_CONFIG = {
     levels: [
         { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },
@@ -62,7 +84,7 @@ export const VIPStar: React.FC<VIPStarProps> = ({
     };
 
     return (
-        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getBackgroundColor(vipDetails.color)} border shadow-sm ${isExpired ? 'opacity-60' : ''}`}>
+        <div className={`inline-flex items-center gap-1 py-0.5 md:py-0.5 px-3 rounded-full ${getBackgroundColor(vipDetails.color)} border shadow-sm ${isExpired ? 'opacity-60' : ''}`}>
             {isExpired && (
                 <span className="text-xs text-red-600 font-semibold mr-1">EXPIRED</span>
             )}
@@ -78,13 +100,13 @@ export const VIPStar: React.FC<VIPStarProps> = ({
                 ))}
             </div>
             {prestigeLevel > 0 && (
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${vipDetails.color === 'black' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-white'
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${vipDetails.color === 'black' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-white'
                     }`}>
                     LV{prestigeLevel}
                 </span>
             )}
             {showLabel && (
-                <span className={`text-xs font-semibold ${vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
+                <span className={`text-[10px] font-semibold ${vipDetails.color === 'black' ? 'text-white' : vipDetails.color === 'gold' ? 'text-gray-900' : 'text-gray-800'
                     }`}>
                     {vipDetails.name}
                     {isExpired && ' (Expired)'}
