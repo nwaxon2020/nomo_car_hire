@@ -20,7 +20,7 @@ interface ShareButtonProps {
 export default function ShareButton({
   userId = "",
   title = "Get a Free Ride on Nomopoventures!",
-  text = "Join me on Nomopoventures for amazing rides!",
+  text = "Join me on *NOMO CARS* for amazing rides!",
   children // Destructure children here
 }: ShareButtonProps) {
   const [showShareOptions, setShowShareOptions] = useState(false);

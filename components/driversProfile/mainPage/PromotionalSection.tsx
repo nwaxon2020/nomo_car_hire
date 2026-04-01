@@ -38,8 +38,8 @@ export const PromotionalSection: React.FC<PromotionalSectionProps> = ({
                         <div className="mt-4">
                             <ShareButton
                                 userId={driverId}
-                                title="Book a Professional Driver on Nomopoventures!"
-                                text="Need a reliable driver? Book with me on Nomopoventures! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
+                                title="Book a Professional Driver on *NOMO CARS*!"
+                                text="Need a reliable driver? Book with me on Nomo Cars! I provide safe, comfortable rides with professional service. Use my link to book your ride! 🚗✨"
                             />
                         </div>
                     </div>

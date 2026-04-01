@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import ShareButton from "@/components/sharebutton";
 import WordGuessGame from "@/components/wordGame/wordGuessGame";
+import { VIPStar } from "@/components/driversProfile/VIPStar";
 
 interface ProfileHeaderProps {
     userData: any;
@@ -47,6 +48,10 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join(" ");
     };
+
+    // Get vipLevel from userData (default to 0 if not exists)
+    const vipLevel = userData?.vipLevel || 0;
+    const prestigeLevel = userData?.prestigeLevel || 0;
 
     return (
         <>
@@ -159,6 +164,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                             </motion.button>
                                         </div>
                                     )}
+
                                     <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2 mt-2">
                                         <div className="flex items-center gap-1">
                                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -172,24 +178,16 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                         </div>
                                     </div>
 
-                                    {userData.vip && (
-                                        <motion.div
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            transition={{ type: "spring", stiffness: 200 }}
-                                            className="mt-2"
-                                        >
-                                            <div className="inline-flex items-center gap-1 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 backdrop-blur-sm border border-yellow-500/30 px-3 py-0.5 rounded-full">
-                                                <motion.span
-                                                    animate={{ rotate: [0, 10, -10, 0] }}
-                                                    transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 3 }}
-                                                    className="text-yellow-400 text-[10px]"
-                                                >
-                                                    ⭐
-                                                </motion.span>
-                                                <span className="text-yellow-400 text-[10px] font-semibold">VIP Customer</span>
-                                            </div>
-                                        </motion.div>
+                                    {/* VIP Star - Show based on vipLevel from userData */}
+                                    {vipLevel > 0 && (
+                                        <div className="mt-2">
+                                            <VIPStar
+                                                level={vipLevel}
+                                                prestigeLevel={prestigeLevel}
+                                                size="md"
+                                                showLabel={true}
+                                            />
+                                        </div>
                                     )}
                                 </div>
                             </div>

@@ -78,8 +78,8 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
                                 */
                                 <ShareButton
                                     userId={userId}
-                                    title="Get a Free Ride on Nomopoventures!"
-                                    text="Join me on Nomopoventures for amazing rides! Use my link to sign up and earn points. 🚗✨"
+                                    title="Get a Free Ride on *NOMO CARS*!"
+                                    text="Join me on Nomo Cars for amazing rides! Use my link to sign up and earn points. 🚗✨"
                                 >
                                     <div className={buttonStyles + " flex items-center justify-center cursor-pointer"}>
                                         {card.button}

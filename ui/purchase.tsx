@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { doc, updateDoc, getDoc, Timestamp, arrayUnion } from "firebase/firestore"
+import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import { toast, Toaster } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
+// Import the notification helper used in your admin card
+import { triggerNotification } from "@/lib/notifications"
 
 const VIP_CONFIG = {
   levels: [
@@ -70,23 +72,23 @@ export default function PurchasePage() {
         finalExpiry = currentExpiry
       }
 
-      const notification = {
-        id: `notif-${Date.now()}`,
-        title: "VIP Upgrade Successful",
-        message: `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active.`,
-        timestamp: Timestamp.now(),
-        read: false,
-        type: "success"
+      // 1. Send Notification using the shared helper (matches Admin style)
+      // This ensures the notification is added correctly to the user's collection
+      await triggerNotification(
+        userId,
+        "VIP Upgrade Successful 🎉",
+        `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active.`,
+        "success"
         // No viewLink included as requested
-      }
+      )
 
+      // 2. Update the User Document with VIP details
       await updateDoc(userRef, {
         vip: true,
         vipLevel: selectedLevelData.level,
         purchasedVipLevel: selectedLevelData.level,
         vipPurchaseDate: Timestamp.fromDate(now),
         vipExpiryDate: Timestamp.fromDate(finalExpiry),
-        notifications: arrayUnion(notification), // Send notification
         updatedAt: Timestamp.now()
       })
 
@@ -98,6 +100,7 @@ export default function PurchasePage() {
       }, 2000)
 
     } catch (error) {
+      console.error("Purchase Error:", error)
       toast.error("Purchase failed. Please try again.")
     } finally {
       setProcessing(false)
@@ -164,7 +167,6 @@ export default function PurchasePage() {
             <p className="text-sm text-gray-600">Get priority placement and more features.</p>
           </div>
 
-          {/* Back Button */}
           <button
             onClick={() => router.back()}
             className="group flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl shadow-sm hover:bg-gray-50 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 active:scale-95"
@@ -183,7 +185,6 @@ export default function PurchasePage() {
           </button>
         </header>
 
-        {/* Benefits Toggle (Mobile) */}
         <p className="md:hidden cursor-pointer text-blue-600 font-semibold mb-4" onClick={() => showBenefit(!benefit)}>
           {benefit ? "Close Info" : "🚀 Why Upgrade to VIP?"}
         </p>
@@ -197,7 +198,6 @@ export default function PurchasePage() {
           </div>
         </div>
 
-        {/* PRICING GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {VIP_CONFIG.levels.map((level) => {
             const isActive = userData?.purchasedVipLevel === level.level && userData?.vipExpiryDate?.toDate() > new Date()
