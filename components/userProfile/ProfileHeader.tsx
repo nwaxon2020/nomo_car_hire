@@ -38,7 +38,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
     handleProfileImageChange,
 }) => {
     const [game, setGame] = useState(false);
-    const [showShareTooltip, setShowShareTooltip] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
 
     const capitalizeFullName = (name: string) => {
         return name
@@ -82,7 +82,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                         )}
                                     </div>
 
-                                    {/* Verified Badge - Absolute Bottom Right */}
                                     {userData.verified && (
                                         <div className="absolute bottom-1 right-1 z-10 bg-blue-500 rounded-full p-1 border-2 border-gray-900 shadow-lg">
                                             <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -173,13 +172,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                         </div>
                                     </div>
 
-                                    {/* VIP Badge */}
                                     {userData.vip && (
                                         <motion.div
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
                                             transition={{ type: "spring", stiffness: 200 }}
-                                            className=""
+                                            className="mt-2"
                                         >
                                             <div className="inline-flex items-center gap-1 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 backdrop-blur-sm border border-yellow-500/30 px-3 py-0.5 rounded-full">
                                                 <motion.span
@@ -263,44 +261,98 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Action Buttons Section */}
                     <div className="mt-8 flex flex-col md:flex-row items-center gap-4">
                         <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => setGame(true)}
-                            className="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg"
+                            className="w-full md:w-auto bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg flex items-center justify-center gap-2"
                         >
-                            🎮 Play Game
+                            <span>🎮</span> Play Game
                         </motion.button>
 
-                        <motion.div
+                        {/* Share Button - Click to open modal */}
+                        <motion.button
                             whileHover={{ scale: 1.05 }}
-                            className="relative flex-1 sm:flex-none"
-                            onMouseEnter={() => setShowShareTooltip(true)}
-                            onMouseLeave={() => setShowShareTooltip(false)}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowShareModal(true)}
+                            className="w-full md:w-auto bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg flex items-center justify-center gap-2"
                         >
-                            <ShareButton
-                                userId={userId}
-                                title="Get a Free Ride on Nomopoventures!"
-                                text="Join me on Nomopoventures for amazing rides! Use my link to sign up and earn points. 🚗✨"
-                            />
-                            <AnimatePresence>
-                                {showShareTooltip && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: 10 }}
-                                        className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-xs text-gray-300 rounded-lg whitespace-nowrap"
-                                    >
-                                        Share and earn 2 points per referral!
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
+                            <span>🔗</span> Share & Earn
+                        </motion.button>
                     </div>
                 </div>
             </motion.div>
+
+            {/* Share Modal */}
+            <AnimatePresence>
+                {showShareModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+                        onClick={() => setShowShareModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-700"
+                        >
+                            {/* Close Button - X at top right */}
+                            <button
+                                onClick={() => setShowShareModal(false)}
+                                className="absolute top-4 right-4 z-10 w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-gray-300 hover:text-white transition-all"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+
+                            {/* Modal Content */}
+                            <div className="p-6 pt-12">
+                                <div className="text-center mb-6">
+                                    <div className="w-16 h-16 mx-auto bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center mb-4">
+                                        <span className="text-2xl">🔗</span>
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-white mb-2">Share & Earn Points!</h3>
+                                    <p className="text-gray-400 text-sm">
+                                        Share your referral link with friends and earn points towards free rides!
+                                    </p>
+                                </div>
+
+                                {/* Points Info */}
+                                <div className="bg-gray-800/50 rounded-xl p-4 mb-6 border border-gray-700">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-gray-400 text-sm">Current Points:</span>
+                                        <span className="text-white font-bold text-lg">{referralPoints}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-gray-400 text-sm">Points to Free Ride:</span>
+                                        <span className="text-yellow-400 font-bold text-lg">{pointsToNextFreeRide}</span>
+                                    </div>
+                                </div>
+
+                                {/* Share Button Inside Modal */}
+                                <div className="mb-4">
+                                    <ShareButton
+                                        userId={userId}
+                                        title="Get a Free Ride on Nomopoventures!"
+                                        text="Join me on Nomopoventures for amazing rides! Use my link to sign up and earn points. 🚗✨"
+                                    />
+                                </div>
+
+                                <p className="text-center text-xs text-gray-500 mt-4">
+                                    Share the link above with friends. When they sign up, you earn points!
+                                </p>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Game Modal */}
             <AnimatePresence>
@@ -309,14 +361,14 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        onClick={() => setGame(false)} // Click background to close
+                        onClick={() => setGame(false)}
                         className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
                     >
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
-                            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking the game itself
+                            onClick={(e) => e.stopPropagation()}
                             className="w-full max-w-xl"
                         >
                             <WordGuessGame onClose={() => setGame(false)} />

@@ -262,7 +262,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
         {/* MAIN CONTENT AREA */}
         <main className="flex-1 h-screen overflow-y-auto bg-[#F8F9FA]">
-          <div className="md:p-1 max-w-7xl mx-auto">
+          <div className="md:p-1 md:pb-0 max-w-7xl mx-auto">
             {msg && (
               <div className="bg-green-500 text-white p-4 rounded-2xl mb-6 text-center shadow-lg font-bold animate-in fade-in slide-in-from-top-4">
                 {msg}

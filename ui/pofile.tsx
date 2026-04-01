@@ -283,8 +283,9 @@ export default function UserProfilePageUi() {
 
                 {/* Promotional Cards */}
                 <PromotionalCards
+                    userId={userId}
                     onUpgradeVIP={() => router.push('/user/purchase')}
-                    onBookKeke={() => router.push('/user/car-hire')}
+                    onBookKeke={() => router.push('/user/car-hire?category=keke')}
                 />
 
                 {/* Contact Section */}

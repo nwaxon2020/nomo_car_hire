@@ -2,570 +2,257 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
+import { doc, updateDoc, getDoc, Timestamp, arrayUnion } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import { toast, Toaster } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
 
-// VIP Configuration
 const VIP_CONFIG = {
   levels: [
-    { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },
-    { level: 2, name: "Yellow VIP", color: "yellow", stars: 2, referralsRequired: 20, price: 7500 },
-    { level: 3, name: "Purple VIP", color: "purple", stars: 3, referralsRequired: 25, price: 11000 },
-    { level: 4, name: "Gold VIP", color: "gold", stars: 4, referralsRequired: 30, price: 15000 },
-    { level: 5, name: "Black VIP", color: "black", stars: 5, referralsRequired: 35, price: 20000 },
+    { level: 1, name: "Green VIP", color: "green", stars: 1, price: 5000 },
+    { level: 2, name: "Yellow VIP", color: "yellow", stars: 2, price: 7500 },
+    { level: 3, name: "Purple VIP", color: "purple", stars: 3, price: 11000 },
+    { level: 4, name: "Gold VIP", color: "gold", stars: 4, price: 15000 },
+    { level: 5, name: "Black VIP", color: "black", stars: 5, price: 20000 },
   ],
-  maxLevel: 5,
-  referralMultiplier: 5,
 }
 
 export default function PurchasePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
+
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [userData, setUserData] = useState<any>(null)
-  const [selectedLevel, setSelectedLevel] = useState<number>(1)
   const [userId, setUserId] = useState<string | null>(null)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [confirmationData, setConfirmationData] = useState<{level: number, name: string, price: number} | null>(null)
-
+  const [showOverlay, setShowOverlay] = useState(false)
+  const [selectedLevelData, setSelectedLevelData] = useState<any>(null)
   const [benefit, showBenefit] = useState(false)
 
   useEffect(() => {
-    const levelFromUrl = searchParams.get("level")
-    if (levelFromUrl) {
-      const level = parseInt(levelFromUrl)
-      if (level >= 1 && level <= 5) {
-        setSelectedLevel(level)
-      }
-    }
-    
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        toast.error("Please log in to purchase VIP")
-        router.push(`/login?redirect=${encodeURIComponent('/purchase')}`)
+        router.push("/login")
         return
       }
-
       setUserId(user.uid)
-      
       try {
-        const userRef = doc(db, "users", user.uid)
-        const userSnap = await getDoc(userRef)
-
-        if (userSnap.exists()) {
-          const data = userSnap.data()
-          setUserData(data)
-          
-          if (!levelFromUrl && data.purchasedVipLevel) {
-            setSelectedLevel(data.purchasedVipLevel)
-          }
-        } else {
-          toast.error("User data not found")
-          router.push("/login")
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error)
-        toast.error("Failed to load user data")
-        router.push("/login")
+        const userSnap = await getDoc(doc(db, "users", user.uid))
+        if (userSnap.exists()) setUserData(userSnap.data())
       } finally {
         setLoading(false)
       }
     })
-
     return () => unsubscribe()
-  }, [router, searchParams])
+  }, [router])
 
-  const initiatePurchase = (level: number) => {
-    const vipLevel = VIP_CONFIG.levels.find(l => l.level === level)
-    if (!vipLevel) {
-      toast.error("Invalid VIP level")
-      return
-    }
-
-    setConfirmationData({
-      level: vipLevel.level,
-      name: vipLevel.name,
-      price: vipLevel.price
-    })
-    setShowConfirmation(true)
+  const openOverlay = (levelConfig: any) => {
+    setSelectedLevelData(levelConfig)
+    setShowOverlay(true)
   }
 
-  const handlePurchase = async () => {
-    if (!confirmationData || processing || !userId) return
-
+  const handleFinalPurchase = async () => {
+    if (!selectedLevelData || processing || !userId) return
     setProcessing(true)
-    setShowConfirmation(false)
-    
+
     try {
       const userRef = doc(db, "users", userId)
       const now = new Date()
       const expiryDate = new Date(now)
       expiryDate.setFullYear(expiryDate.getFullYear() + 1)
 
-      const userSnap = await getDoc(userRef)
-      const currentData = userSnap.data()
-      
-      let newExpiryDate = expiryDate
-      let newPurchaseDate = now
-
-      if (currentData?.vipExpiryDate && currentData.vipExpiryDate.toDate() > now) {
-        const currentExpiry = currentData.vipExpiryDate.toDate()
+      // Calculate expiry extension
+      let finalExpiry = expiryDate
+      if (userData?.vipExpiryDate && userData.vipExpiryDate.toDate() > now) {
+        const currentExpiry = userData.vipExpiryDate.toDate()
         currentExpiry.setFullYear(currentExpiry.getFullYear() + 1)
-        newExpiryDate = currentExpiry
-        newPurchaseDate = currentData.vipPurchaseDate?.toDate() || now
+        finalExpiry = currentExpiry
       }
 
-      const paymentId = `PAY-${Date.now()}`
-      const newPurchaseRecord = {
-        level: confirmationData.level,
-        paymentId: paymentId,
-        price: confirmationData.price,
-        purchaseDate: Timestamp.fromDate(now),
-        previousLevel: currentData?.purchasedVipLevel || 0
+      const notification = {
+        id: `notif-${Date.now()}`,
+        title: "VIP Upgrade Successful",
+        message: `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active.`,
+        timestamp: Timestamp.now(),
+        read: false,
+        type: "success"
+        // No viewLink included as requested
       }
-
-      const existingHistory = currentData?.vipPurchaseHistory || []
-      const updatedHistory = [...existingHistory, newPurchaseRecord]
 
       await updateDoc(userRef, {
-        purchasedVipLevel: confirmationData.level,
-        vipLevel: confirmationData.level,
-        vipPurchaseDate: Timestamp.fromDate(newPurchaseDate),
-        vipExpiryDate: Timestamp.fromDate(newExpiryDate),
-        vipPurchaseHistory: updatedHistory,
+        vip: true,
+        vipLevel: selectedLevelData.level,
+        purchasedVipLevel: selectedLevelData.level,
+        vipPurchaseDate: Timestamp.fromDate(now),
+        vipExpiryDate: Timestamp.fromDate(finalExpiry),
+        notifications: arrayUnion(notification), // Send notification
         updatedAt: Timestamp.now()
       })
 
-      toast.success(`🎉 Successfully purchased ${confirmationData.name}! Valid for 1 year.`)
-      
+      toast.success(`🎉 ${selectedLevelData.name} Activated!`)
+
       setTimeout(() => {
-        if (currentData?.isDriver) {
-          router.push(`/user/driver-profile/${userId}?purchaseSuccess=true`)
-        } else {
-          router.push(`/user/profile/${userId}?purchaseSuccess=true`)
-        }
+        const path = userData?.isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`
+        router.push(`${path}?purchaseSuccess=true`)
       }, 2000)
 
     } catch (error) {
-      console.error("Error processing purchase:", error)
-      toast.error("Failed to process purchase")
+      toast.error("Purchase failed. Please try again.")
     } finally {
       setProcessing(false)
-      setConfirmationData(null)
+      setShowOverlay(false)
     }
   }
 
-  const cancelPurchase = () => {
-    setShowConfirmation(false)
-    setConfirmationData(null)
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <LoadingRound />
-      </div>
-    )
-  }
+  if (loading) return <div className="flex justify-center items-center min-h-screen"><LoadingRound /></div>
 
   return (
     <div className="mx-auto max-w-[1100px] min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6">
       <Toaster position="top-right" />
-      
-      {/* Confirmation Modal */}
-      {showConfirmation && confirmationData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-4 md:p-6 animate-scaleIn">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-2xl">₦</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Purchase</h3>
-              <p className="text-sm md:text-base text-gray-600">Are you sure you want to purchase this VIP package?</p>
-            </div>
 
-            <div className="bg-gray-50 rounded-lg p-2 md:p-4 mb-6">
-              <div className="text-sm md:text-base flex justify-between items-center mb-3">
-                <span className="text-gray-600">VIP Package:</span>
-                <span className="font-semibold text-gray-900">{confirmationData.name}</span>
+      {/* PURCHASE OVERLAY DIV */}
+      {showOverlay && selectedLevelData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
+            <div className={`h-2 ${selectedLevelData.color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />
+            <div className="p-6">
+              <h3 className="text-2xl font-bold text-gray-900 mb-2 text-center">Complete Purchase</h3>
+              <p className="text-gray-600 text-center mb-6">Review your VIP selection below</p>
+
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3 mb-6">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Plan</span>
+                  <span className="font-bold text-gray-900">{selectedLevelData.name}</span>
+                </div>
+                <div className="flex justify-between border-t pt-3">
+                  <span className="text-gray-500">Price</span>
+                  <span className="font-bold text-xl text-green-600">₦{selectedLevelData.price.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-t pt-3">
+                  <span className="text-gray-500">Validity</span>
+                  <span className="font-medium text-gray-900">365 Days (1 Year)</span>
+                </div>
               </div>
-              <div className="text-sm md:text-base flex justify-between items-center mb-3">
-                <span className="text-gray-600">Amount:</span>
-                <span className="text-lg md:text-xl font-bold text-gray-900">₦{confirmationData.price.toLocaleString()}</span>
-              </div>
-              <div className="text-sm md:text-base flex justify-between items-center">
-                <span className="text-gray-600">Duration:</span>
-                <span className="font-medium text-gray-900">1 Year</span>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowOverlay(false)}
+                  disabled={processing}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFinalPurchase}
+                  disabled={processing}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
+                >
+                  {processing ? 'Processing...' : 'Pay Now'}
+                </button>
               </div>
             </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={cancelPurchase}
-                disabled={processing}
-                className="text-sm md:text-base flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePurchase}
-                disabled={processing}
-                className="text-sm md:text-base flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50"
-              >
-                {processing ? 'Processing...' : 'Yes, Proceed'}
-              </button>
-            </div>
-
-            <p className="text-center text-xs text-gray-500 mt-4">
-              By proceeding, you agree to our Terms of Service
-            </p>
           </div>
         </div>
       )}
-      
+
+      {/* MAIN UI CONTENT */}
       <div className="max-w-6xl mx-auto">
+        <header className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-xl md:text-3xl font-bold text-gray-900">Upgrade Your VIP Status</h1>
+            <p className="text-sm text-gray-600">Get priority placement and more features.</p>
+          </div>
 
-        <div className="mb-8">
-          <div className="flex flex-col gap-4 justify-between items-start mb-6">
-            <div className="w-full flex gap-6 justify-between items-start">
-              <div>
-                <h1 className="text-xl md:text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-                  Upgrade Your VIP Status
-                </h1>
-                <p className="text-xs md:text-sm text-base text-gray-600">
-                  Purchase VIP status to get more vehicles, priority in search results, and exclusive benefits
-                </p>
-              </div>
-              <button
-                onClick={() => router.back()}
-                className="cursor-pointer text-sm md:text-base text-gray-600 hover:text-gray-800 font-medium px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+          {/* Back Button */}
+          <button
+            onClick={() => router.back()}
+            className="group flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl shadow-sm hover:bg-gray-50 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 active:scale-95"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2.5}
+              stroke="currentColor"
+              className="w-4 h-4 group-hover:-translate-x-1 transition-transform"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            <span className="hidden sm:inline font-semibold text-sm">Go Back</span>
+          </button>
+        </header>
+
+        {/* Benefits Toggle (Mobile) */}
+        <p className="md:hidden cursor-pointer text-blue-600 font-semibold mb-4" onClick={() => showBenefit(!benefit)}>
+          {benefit ? "Close Info" : "🚀 Why Upgrade to VIP?"}
+        </p>
+
+        <div className={`${benefit ? 'block' : 'hidden'} md:block w-full bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4 shadow-lg mb-8`}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <BenefitItem icon="🏆" title="Priority" desc="Top search placement." />
+            <BenefitItem icon="🚗" title="Vehicles" desc="Up to 10 or Unlimited." />
+            <BenefitItem icon="💎" title="Badge" desc="Trusted VIP status." />
+            <BenefitItem icon="📈" title="Growth" desc="More customer bookings." />
+          </div>
+        </div>
+
+        {/* PRICING GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          {VIP_CONFIG.levels.map((level) => {
+            const isActive = userData?.purchasedVipLevel === level.level && userData?.vipExpiryDate?.toDate() > new Date()
+
+            return (
+              <div
+                key={level.level}
+                className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden hover:shadow-xl transition-all flex flex-col"
               >
-                ← Back
-              </button>
-            </div>
-            <p className="md:hidden cursor-pointer text-blue-600 font-semibold" onClick={()=> showBenefit(!benefit)}>{benefit? "Close": "Learn More!!!"}</p>
-            {benefit && <div className="md:hidden bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3 shadow-lg">
-              <h2 className="md:text-xl font-bold text-purple-800 mb-4">🚀 Why Upgrade to VIP?</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-2 md:p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-purple-600">🏆</span>
+                <div className={`h-2 ${level.color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold">{level.name}</h3>
+                    <div className="flex">{Array.from({ length: level.stars }).map((_, i) => <span key={i}>⭐</span>)}</div>
                   </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">Priority in Search</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Appear at the TOP when customers search for drivers</p>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-green-600">🚗</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">More Vehicles</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Add up to 10 vehicles (VIP 1-3) or unlimited (VIP 4-5)</p>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-yellow-600">💎</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">Exclusive Badge</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Stand out with VIP badge that builds trust with customers</p>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-blue-600">📈</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">Higher Earnings</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Get more bookings with premium positioning and visibility</p>
-                </div>
-              </div>
-            </div>
-            }
-            <div className="hidden md:block bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3 shadow-lg">
-              <h2 className="md:text-xl font-bold text-purple-800 mb-4">🚀 Why Upgrade to VIP?</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-2 md:p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-purple-600">🏆</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">Priority in Search</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Appear at the TOP when customers search for drivers</p>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-green-600">🚗</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">More Vehicles</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Add up to 10 vehicles (VIP 1-3) or unlimited (VIP 4-5)</p>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-yellow-600">💎</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">Exclusive Badge</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Stand out with VIP badge that builds trust with customers</p>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-purple-100">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-                    <span className="text-blue-600">📈</span>
-                  </div>
-                  <h3 className="font-semibold text-xs md:text-sm text-gray-800 mb-1">Higher Earnings</h3>
-                  <p className="text-xs md:text-sm text-gray-600">Get more bookings with premium positioning and visibility</p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {userData && (
-            <div className="bg-white rounded-xl shadow p-3 mb-8">
-              <h2 className="md:text-lg font-semibold text-gray-800 mb-3">Your Current Status</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-blue-50 rounded-lg p-2">
-                  <p className="text-sm text-gray-600">VIP Level</p>
-                  <p className="text-sm md:text-base font-bold text-gray-900">
-                    {userData.vipLevel > 0 ? `Level ${userData.vipLevel}` : "No VIP"}
-                  </p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-2">
-                  <p className="text-sm text-gray-600">Referrals</p>
-                  <p className="text-sm md:text-base font-bold text-gray-900">
-                    {userData.referralCount || 0}
-                  </p>
-                </div>
-                <div className="bg-amber-50 rounded-lg p-2">
-                  <p className="text-sm text-gray-600">VIP Expiry</p>
-                  <p className="text-sm md:text-base font-bold text-gray-900">
-                    {userData.vipExpiryDate 
-                      ? new Date(userData.vipExpiryDate.toDate()).toLocaleDateString()
-                      : "No VIP"
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {VIP_CONFIG.levels.map((level) => {
-              const isCurrentLevel = userData?.purchasedVipLevel === level.level
-              const isSelected = selectedLevel === level.level
-              
-              return (
-                <div
-                  key={level.level}
-                  className={`bg-white rounded-xl shadow border overflow-hidden transition-all duration-300 ${
-                    isSelected ? 'border-blue-500 border-2 scale-[1.02]' : 'border-gray-200 hover:border-gray-300'
-                  } ${isCurrentLevel ? 'border-green-500' : ''}`}
-                >
-                  <div 
-                    className={`h-2 ${
-                      level.color === 'green' ? 'bg-green-500' :
-                      level.color === 'yellow' ? 'bg-yellow-500' :
-                      level.color === 'purple' ? 'bg-purple-500' :
-                      level.color === 'gold' ? 'bg-yellow-600' :
-                      'bg-gray-900'
-                    }`}
-                  />
-                  
-                  <div className="p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900">{level.name}</h3>
-                        <p className="text-sm text-gray-600">Level {level.level}</p>
-                      </div>
-                      <div className="flex">
-                        {Array.from({ length: level.stars }).map((_, i) => (
-                          <span key={i} className="text-yellow-400">⭐</span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mb-4">
-                      <div className="text-base flex justify-between">
-                        <span className="text-sm md:text-base text-gray-600">Price:</span>
-                        <span className="font-bold text-gray-900">
-                          ₦{level.price.toLocaleString()}
-                        </span>
-                      </div>
-                      
-                      <div className="text-base flex justify-between">
-                        <span className="text-sm md:text-base text-gray-600">Duration:</span>
-                        <span className="font-medium text-gray-900">1 Year</span>
-                      </div>
-                      
-                      <div className="text-base flex justify-between">
-                        <span className="text-sm md:text-base text-gray-600">Vehicles:</span>
-                        <span className="font-medium text-gray-900">
-                          {level.level <= 3 ? 'Up to 10' : 'Unlimited'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => setSelectedLevel(level.level)}
-                        className={`w-full py-2 rounded-lg font-medium transition-colors ${
-                          isSelected
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                        }`}
-                      >
-                        {isSelected ? '✓ Selected' : 'Select This Plan'}
-                      </button>
-
-                      <button
-                        onClick={() => initiatePurchase(level.level)}
-                        disabled={processing || (isCurrentLevel && userData?.vipExpiryDate?.toDate() > new Date())}
-                        className={`w-full py-2 rounded-lg font-medium transition-colors ${
-                          isCurrentLevel && userData?.vipExpiryDate?.toDate() > new Date()
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
-                        }`}
-                      >
-                        {processing
-                          ? 'Processing...'
-                          : isCurrentLevel && userData?.vipExpiryDate?.toDate() > new Date()
-                          ? 'Already Active'
-                          : 'Purchase Now'
-                        }
-                      </button>
-                    </div>
+                  <div className="mb-6 space-y-2">
+                    <p className="text-3xl font-black text-gray-900">₦{level.price.toLocaleString()}</p>
+                    <p className="text-sm text-gray-500">Per Year</p>
                   </div>
+
+                  <ul className="text-sm text-gray-600 space-y-3 mb-8 flex-1">
+                    <li className="flex items-center">✅ {level.level <= 3 ? '10' : 'Unlimited'} Vehicles Max</li>
+                    <li className="flex items-center">✅ Priority Search Listing</li>
+                    <li className="flex items-center">✅ VIP Profile Badge</li>
+                  </ul>
+
+                  <button
+                    onClick={() => openOverlay(level)}
+                    disabled={isActive}
+                    className={`w-full py-3 rounded-xl font-bold transition-all ${isActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-900 text-white hover:bg-black active:scale-95'}`}
+                  >
+                    {isActive ? 'Current Plan' : 'Purchase Now'}
+                  </button>
                 </div>
-              )
-            })}
-          </div>
-
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg p-6 mb-8 border border-blue-200">
-            <h2 className="md:text-xl text-center md:text-left font-semibold text-gray-800 mb-4">Complete Your Purchase</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 text-sm md:text-base">Selected Plan:</span>
-                <span className="font-semibold text-sm md:text-lg text-gray-900">
-                  {VIP_CONFIG.levels.find(l => l.level === selectedLevel)?.name || 'None'}
-                </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 text-sm md:text-base">Amount:</span>
-                <span className="text-xl md:text-2xl font-bold text-gray-900">
-                  ₦{VIP_CONFIG.levels.find(l => l.level === selectedLevel)?.price.toLocaleString() || '0'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 text-sm md:text-base">Duration:</span>
-                <span className="font-medium text-sm md:text-base text-gray-900">1 Year (365 days)</span>
-              </div>
-              <div className="pt-4 border-t border-blue-200">
-                <button
-                  onClick={() => initiatePurchase(selectedLevel)}
-                  disabled={processing}
-                  className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-sm md:text-base hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                >
-                  {processing ? 'Processing Purchase...' : 'Complete Purchase Now'}
-                </button>
-                <p className="text-center text-xs md:text-sm text-gray-500 mt-3">
-                  By purchasing, you agree to our Terms of Service. Your VIP status will be activated immediately.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-3 md:p-6 border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">FAQ</h2>
-            
-            <div className="space-y-4">
-              <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                <h3 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
-                  <span className="mr-2">❓</span> What happens when my VIP expires?
-                </h3>
-                <p className="text-sm text-gray-700">
-                  Your VIP level will reset to 0, and you'll lose all VIP benefits including priority search placement, vehicle limits, and exclusive badge. You can renew anytime to restore your benefits.
-                </p>
-              </div>
-              
-              <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                <h3 className="text-sm font-semibold text-green-800 mb-2 flex items-center">
-                  <span className="mr-2">🎯</span> How does VIP help me get more customers?
-                </h3>
-                <p className="text-sm text-gray-700">
-                  VIP drivers appear <strong>FIRST</strong> in search results when customers look for drivers. Higher VIP levels get even better placement. This means more visibility and more bookings!
-                </p>
-              </div>
-              
-              <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
-                <h3 className="text-sm font-semibold text-purple-800 mb-2 flex items-center">
-                  <span className="mr-2">🔄</span> Can I get VIP through referrals instead of payment?
-                </h3>
-                <p className="text-sm text-gray-700">
-                  Yes! You can reach VIP levels through referrals alone. Each level requires a certain number of referrals. However, referral-based VIP also expires after 1 year and needs to be maintained.
-                </p>
-              </div>
-              
-              <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                <h3 className="text-sm font-semibold text-amber-800 mb-2 flex items-center">
-                  <span className="mr-2">⏰</span> What if I purchase a higher VIP level than my current one?
-                </h3>
-                <p className="text-sm text-gray-700">
-                  Your VIP level will upgrade immediately to the purchased level. Your expiry date will be extended by 1 year from your current expiry date (or from today if you have no active VIP).
-                </p>
-              </div>
-              
-              <div className="bg-red-50 rounded-lg p-4 border border-red-100">
-                <h3 className="text-sm font-semibold text-red-800 mb-2 flex items-center">
-                  <span className="mr-2">💰</span> Is there a refund policy?
-                </h3>
-                <p className="text-sm text-gray-700">
-                  VIP purchases are non-refundable. Once activated, your VIP status cannot be reversed. Please choose your level carefully.
-                </p>
-              </div>
-              
-              <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
-                <h3 className="text-sm font-semibold text-indigo-800 mb-2 flex items-center">
-                  <span className="mr-2">🚗</span> What are the vehicle limits for each VIP level?
-                </h3>
-                <p className="text-sm text-gray-700">
-                  <strong>Regular Driver:</strong> 2 vehicles max • <strong>VIP 1-3:</strong> 10 vehicles max • <strong>VIP 4-5:</strong> Unlimited vehicles
-                </p>
-              </div>
-            </div>
-          </div>
+            )
+          })}
         </div>
       </div>
 
-      <div className="text-center">
-        <button
-          onClick={() => router.back()}
-          className="text-sm md:text-base text-gray-600 hover:text-gray-800 font-medium px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-        >
-          CLOSE
-        </button>
-      </div>
-
-      {/* Add CSS for animation */}
       <style jsx>{`
-        @keyframes scaleIn {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        .animate-scaleIn {
-          animation: scaleIn 0.2s ease-out;
-        }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-scaleIn { animation: scaleIn 0.2s ease-out; }
       `}</style>
+    </div>
+  )
+}
 
+function BenefitItem({ icon, title, desc }: any) {
+  return (
+    <div className="bg-white p-3 rounded-lg border border-purple-100">
+      <p className="text-xl mb-1">{icon}</p>
+      <h4 className="font-bold text-gray-800 text-sm">{title}</h4>
+      <p className="text-xs text-gray-500">{desc}</p>
     </div>
   )
 }

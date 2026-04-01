@@ -642,6 +642,18 @@ export default function CarHireUi() {
             const driverId = searchParams.get('driver')
             const vehicleId = searchParams.get('vehicle')
             const searchQuery = searchParams.get('search')
+            const category = searchParams.get('category')
+
+            // Handle category filter from external link (e.g., profile page)
+            if (category) {
+                setSelectedCategory(category)
+                setTimeout(() => {
+                    const element = document.getElementById('search-results')
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth' })
+                    }
+                }, 500)
+            }
 
             // Handle search query from homepage
             if (searchQuery) {
