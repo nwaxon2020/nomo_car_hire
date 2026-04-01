@@ -20,7 +20,7 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
             icon: "🎁",
             title: "Share & Earn",
             image: "/customerSmiling.jpeg",
-            description: "Invite friends, earn 2 points each! Score 20 points and unlock a FREE ride!",
+            description: "Invite friends, earn 2 points each! Score 20 points and unlock a FREE ride! and stand a chance to be our ambasador",
             button: "Share Now",
             action: "share"
         },

@@ -59,27 +59,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-pink-600/10" />
 
                 <div className="relative py-6 px-4 md:p-8">
-                    {/* VIP Badge */}
-                    {userData.vip && (
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 200 }}
-                            className="absolute top-4 right-4 md:top-6 md:right-6"
-                        >
-                            <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 backdrop-blur-sm border border-yellow-500/30 px-3 py-1.5 rounded-full">
-                                <motion.span
-                                    animate={{ rotate: [0, 10, -10, 0] }}
-                                    transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 3 }}
-                                    className="text-yellow-400 text-lg"
-                                >
-                                    ⭐
-                                </motion.span>
-                                <span className="text-yellow-400 text-sm font-semibold">VIP Customer</span>
-                            </div>
-                        </motion.div>
-                    )}
-
                     <div className="flex flex-col lg:flex-row gap-8">
                         {/* Profile Section */}
                         <div className="flex-1">
@@ -181,16 +160,39 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                             </motion.button>
                                         </div>
                                     )}
-                                    <div className="flex items-center gap-2 mt-2">
+                                    <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2 mt-2">
                                         <div className="flex items-center gap-1">
                                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                                             <span className="text-sm text-gray-400">Active Member</span>
                                         </div>
-                                        <span className="text-gray-600">•</span>
-                                        <span className="text-sm text-gray-400">
-                                            Passenger since {new Date(userData.createdAt?.toDate?.() || Date.now()).getFullYear()}
-                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-gray-600">•</span>
+                                            <span className="text-sm text-gray-400">
+                                                Passenger since {new Date(userData.createdAt?.toDate?.() || Date.now()).getFullYear()}
+                                            </span>
+                                        </div>
                                     </div>
+
+                                    {/* VIP Badge */}
+                                    {userData.vip && (
+                                        <motion.div
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            transition={{ type: "spring", stiffness: 200 }}
+                                            className=""
+                                        >
+                                            <div className="inline-flex items-center gap-1 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 backdrop-blur-sm border border-yellow-500/30 px-3 py-0.5 rounded-full">
+                                                <motion.span
+                                                    animate={{ rotate: [0, 10, -10, 0] }}
+                                                    transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 3 }}
+                                                    className="text-yellow-400 text-[10px]"
+                                                >
+                                                    ⭐
+                                                </motion.span>
+                                                <span className="text-yellow-400 text-[10px] font-semibold">VIP Customer</span>
+                                            </div>
+                                        </motion.div>
+                                    )}
                                 </div>
                             </div>
 

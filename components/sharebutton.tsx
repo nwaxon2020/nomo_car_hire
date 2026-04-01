@@ -125,13 +125,14 @@ export default function ShareButton({
     <>
       {/* Text link style */}
       {
-        pathname.startsWith("/user/driver-profile/") ? <button
-          onClick={handleNativeShare}
-          className="mx-auto text-white hover:text-white transition-colors flex items-center gap-1"
-        >
-          <Share2 size={14} />
-          Share Link & Upgrade VIP status
-        </button> :
+        pathname.startsWith("/user/driver-profile/") ?
+          <button
+            onClick={handleNativeShare}
+            className="w-full mx-auto flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-purple-200/50 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 active:scale-95 transition-all duration-300"
+          >
+            <Share2 size={16} className="animate-pulse" />
+            <span>Share Link & Upgrade VIP status</span>
+          </button> :
 
           <button
             onClick={handleNativeShare}

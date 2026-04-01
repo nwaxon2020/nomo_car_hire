@@ -63,7 +63,7 @@ export const PromotionalSection: React.FC<PromotionalSectionProps> = ({
                             </h3>
                         </div>
                         <p className="text-sm text-gray-600 mb-4">
-                            VIP drivers appear first in search results and get more bookings!
+                            VIP drivers appear first in search results and get more bookings! Upgrade your VIP level to get started
                         </p>
                         <button
                             onClick={onUpgradeVIP}
