@@ -67,7 +67,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     <div className="flex flex-col lg:flex-row gap-8">
                         {/* Profile Section */}
                         <div className="flex-1">
-                            <div className="flex items-center gap-6">
+                            <div className="flex flex-col md:flex-row justify-center items-center md:justify-start  gap-6">
                                 <motion.div
                                     whileHover={{ scale: 1.05 }}
                                     className="relative"
@@ -147,7 +147,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                             </div>
                                         </motion.div>
                                     ) : (
-                                        <div className="flex items-center gap-3 flex-wrap">
+                                        <div className="flex justify-center md:justify-start items-center gap-3 flex-wrap">
                                             <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                                                 {capitalizeFullName(userData.fullName || "Unnamed User")}
                                             </h1>
@@ -165,7 +165,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                         </div>
                                     )}
 
-                                    <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2 mt-2">
+                                    <div className="flex justify-center md:justify-start items-center gap-1 md:gap-2 mt-2">
                                         <div className="flex items-center gap-1">
                                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                                             <span className="text-sm text-gray-400">Active Member</span>
@@ -180,7 +180,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 
                                     {/* VIP Star - Show based on vipLevel from userData */}
                                     {vipLevel > 0 && (
-                                        <div className="mt-2">
+                                        <div className="mt-2 text-center md:text-left">
                                             <VIPStar
                                                 level={vipLevel}
                                                 prestigeLevel={prestigeLevel}

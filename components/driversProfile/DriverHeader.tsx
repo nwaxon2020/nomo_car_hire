@@ -1,8 +1,8 @@
 // components/driver/DriverHeader.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import { VIPStar, getVehicleLimit } from './VIPStar';
 import ShareButton from '@/components/sharebutton';
-import { FaWhatsapp, FaMapMarkerAlt, FaUsers, FaStar, FaCar, FaUserCheck, FaLock, FaTimes, FaArrowRight } from 'react-icons/fa';
+import { FaWhatsapp, FaMapMarkerAlt, FaUsers, FaStar, FaCar, FaUserCheck } from 'react-icons/fa';
 
 interface DriverHeaderProps {
     driverData: any;
@@ -14,10 +14,9 @@ interface DriverHeaderProps {
     averageRating: string;
     ratingsCount: number;
     vehiclesCount: number;
-    canAddVehicle: boolean;
-    onAddVehicle: (limitData?: { isReached: boolean, max: number }) => void;
     onUpgradeVIP: () => void;
     onPlayGame: () => void;
+    onBuyTicket: () => void;
     whatsappPreferred: boolean;
     onToggleWhatsapp: () => void;
     vipDetails: any;
@@ -33,66 +32,18 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
     averageRating,
     ratingsCount,
     vehiclesCount,
-    onAddVehicle,
     onUpgradeVIP,
     onPlayGame,
+    onBuyTicket,
     whatsappPreferred,
     onToggleWhatsapp,
     vipDetails
 }) => {
-    const [showLimitOverlay, setShowLimitOverlay] = useState(false);
-
-    // --- VIP LIMIT LOGIC ---
+    // Vehicle limit shown in stats (adding logic lives in VehicleSection)
     const maxVehicles = getVehicleLimit(vipLevel);
-    const isLimitReached = vehiclesCount >= maxVehicles;
-
-    const handleAddClick = () => {
-        if (isLimitReached) {
-            setShowLimitOverlay(true);
-        } else {
-            onAddVehicle({ isReached: false, max: maxVehicles });
-        }
-    };
 
     return (
         <div className="bg-slate-900 border border-emerald-500/20 shadow-2xl rounded md:rounded-xl px-3 py-5 md:p-6 mb-8 overflow-hidden relative">
-
-            {/* --- LIMIT EXHAUSTED OVERLAY --- */}
-            {showLimitOverlay && (
-                <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-300">
-                    <button
-                        onClick={() => setShowLimitOverlay(false)}
-                        className="absolute top-4 right-4 text-slate-400 hover:text-white p-2"
-                    >
-                        <FaTimes size={20} />
-                    </button>
-
-                    <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
-                        <FaLock className="text-amber-500 text-2xl" />
-                    </div>
-
-                    <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Fleet Limit Reached!</h3>
-                    <p className="text-slate-400 text-sm max-w-xs mb-6">
-                        Your current level allows a maximum of <span className="text-emerald-400 font-bold">{maxVehicles} {maxVehicles === 1 ? 'vehicle' : 'vehicles'}</span>.
-                        Upgrade your VIP status to add more!
-                    </p>
-
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => { setShowLimitOverlay(false); onUpgradeVIP(); }}
-                            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase rounded-lg shadow-lg flex items-center gap-2"
-                        >
-                            Upgrade Now <FaArrowRight />
-                        </button>
-                        <button
-                            onClick={() => setShowLimitOverlay(false)}
-                            className="px-6 py-3 bg-slate-800 text-white text-xs font-black uppercase rounded-lg border border-white/10"
-                        >
-                            Maybe Later
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Subtle Premium Background Glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] -z-10" />
@@ -221,22 +172,17 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
                     />
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 justify-center sm:justify-end gap-3 md:gap-4 w-full lg:w-auto">
+                <div className="grid grid-cols-2 md:grid-cols-3 justify-center sm:justify-end gap-2 md:gap-3 md:gap-4 w-full lg:w-auto">
                     <button
-                        onClick={handleAddClick}
-                        className={`col-span-2 md:col-span-1 px-6 py-3 rounded-md md:rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl border flex items-center justify-center gap-2
-                            ${isLimitReached
-                                ? 'bg-slate-900 text-slate-500 border-slate-800'
-                                : 'bg-slate-800 hover:bg-slate-700 text-white border-white/10'
-                            }`}
+                        onClick={onBuyTicket}
+                        className="mb-3 md:mb-0 px-3 md:px-6 py-4 md:py-3 col-span-2 sm:col-span-1 rounded-md md:rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.4)]"
                     >
-                        {isLimitReached ? <FaLock className="text-amber-500" /> : '+'}
-                        Add Vehicle ({vehiclesCount}/{maxVehicles})
+                        🎫 Buy Ticket
                     </button>
 
                     <button
                         onClick={onUpgradeVIP}
-                        className="px-3 md:px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
+                        className="px-3 md:px-6 py-3 rounded-md md:rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
                     >
                         {vipLevel > 0 ? '⭐ Upgrade VIP' : '🌟 Become VIP'}
                     </button>
@@ -244,7 +190,7 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
                     {/* Restored Previous Game Button Design */}
                     <button
                         onClick={onPlayGame}
-                        className="px-3 md:px-6 py-3 flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg"
+                        className="px-3 md:px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md md:rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg"
                     >
                         🎮 Play Game
                     </button>

@@ -1,7 +1,5 @@
 "use client"
 
-import React from "react";
-
 interface VIPLevel {
     level: number;
     name: string;
@@ -12,9 +10,10 @@ interface PaymentProps {
     selectedLevelData: VIPLevel | undefined;
     processing: boolean;
     onInitiate: (level: number) => void;
+    duration?: string;
 }
 
-export default function PaymentSection({ selectedLevelData, processing, onInitiate }: PaymentProps) {
+export default function PaymentSection({ selectedLevelData, processing, onInitiate, duration }: PaymentProps) {
     if (!selectedLevelData) return null;
 
     return (
@@ -35,7 +34,7 @@ export default function PaymentSection({ selectedLevelData, processing, onInitia
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-gray-600 text-sm md:text-base">Duration:</span>
-                    <span className="font-medium text-sm md:text-base text-gray-900">1 Year (365 days)</span>
+                    <span className="font-medium text-sm md:text-base text-gray-900">{duration ?? '1 Year (365 days)'}</span>
                 </div>
                 <div className="pt-4 border-t border-blue-200">
                     <button

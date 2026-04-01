@@ -1,11 +1,15 @@
 // components/driverProfile/VehicleSection.tsx
-import React, { useRef, useEffect } from 'react'; // Added useEffect
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react'; // Added useEffect
+import { ChevronLeft, ChevronRight, Plus, Lock, ArrowRight, X } from 'lucide-react';
 import { VehicleCard } from '@/components/driversProfile/VehicleCard';
 import { Vehicle } from '@/components/driversProfile/driver';
+import { getVehicleLimit } from '@/components/driversProfile/VIPStar';
 
 interface VehicleSectionProps {
     vehicles: Vehicle[];
+    vipLevel: number;
+    vehiclesCount: number;
+    onUpgradeVIP: () => void;
     onAddVehicle: () => void;
     onEditVehicle: (vehicle: Vehicle) => void;
     onDeleteVehicle: (id?: string) => void;
@@ -14,12 +18,28 @@ interface VehicleSectionProps {
 
 export const VehicleSection: React.FC<VehicleSectionProps> = ({
     vehicles,
+    vipLevel,
+    vehiclesCount,
+    onUpgradeVIP,
     onAddVehicle,
     onEditVehicle,
     onDeleteVehicle,
     onMarkAvailable
 }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [showLimitOverlay, setShowLimitOverlay] = useState(false);
+
+    // Live VIP limit check — reads vipLevel passed from driver-profile.tsx (from Firebase)
+    const maxVehicles = getVehicleLimit(vipLevel);
+    const isLimitReached = vehiclesCount >= maxVehicles;
+
+    const handleAddClick = () => {
+        if (isLimitReached) {
+            setShowLimitOverlay(true);
+        } else {
+            onAddVehicle();
+        }
+    };
 
     // --- NEW SCROLL LOGIC FOR NOTIFICATIONS ---
     useEffect(() => {
@@ -54,6 +74,45 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
             {/* Background Glow */}
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-600/10 blur-[100px] pointer-events-none" />
 
+            {/* Fleet Limit Overlay */}
+            {showLimitOverlay && (
+                <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center rounded-md md:rounded-xl animate-in fade-in zoom-in duration-300">
+                    <button
+                        onClick={() => setShowLimitOverlay(false)}
+                        className="absolute top-4 right-4 text-slate-400 hover:text-white p-2"
+                    >
+                        <X size={20} />
+                    </button>
+
+                    <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
+                        <Lock className="text-amber-500 w-8 h-8" />
+                    </div>
+
+                    <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Fleet Limit Reached!</h3>
+                    <p className="text-slate-400 text-sm max-w-xs mb-6">
+                        Your current level allows a maximum of{' '}
+                        <span className="text-emerald-400 font-bold">
+                            {maxVehicles} {maxVehicles === 1 ? 'vehicle' : 'vehicles'}
+                        </span>. Upgrade your VIP status to add more!
+                    </p>
+
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => { setShowLimitOverlay(false); onUpgradeVIP(); }}
+                            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase rounded-lg shadow-lg flex items-center gap-2"
+                        >
+                            Upgrade Now <ArrowRight size={14} />
+                        </button>
+                        <button
+                            onClick={() => setShowLimitOverlay(false)}
+                            className="px-6 py-3 bg-slate-800 text-white text-xs font-black uppercase rounded-lg border border-white/10"
+                        >
+                            Maybe Later
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 relative z-10">
                 <div>
                     <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
@@ -64,8 +123,20 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
                     </h2>
                 </div>
 
-                {/* Navigation Buttons & Count */}
-                <div className="flex items-center gap-4">
+                {/* Add Vehicle Button + Navigation */}
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleAddClick}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg border
+                            ${isLimitReached
+                                ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed'
+                                : 'bg-slate-800 hover:bg-slate-700 text-white border-white/10'
+                            }`}
+                    >
+                        {isLimitReached ? <Lock size={13} className="text-amber-500" /> : <Plus size={13} />}
+                        Add Vehicle ({vehiclesCount}/{maxVehicles})
+                    </button>
+
                     <div className="hidden md:flex items-center gap-2">
                         <button
                             onClick={() => scroll('left')}
@@ -100,7 +171,7 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
                     </div>
 
                     <button
-                        onClick={onAddVehicle}
+                        onClick={handleAddClick}
                         className="relative z-10 flex items-center gap-3 bg-white hover:bg-blue-600 text-slate-900 hover:text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all duration-500 group/btn shadow-[0_10px_20px_rgba(0,0,0,0.3)] active:scale-95"
                     >
                         <div className="bg-slate-100 group-hover/btn:bg-white/20 p-1 rounded-lg transition-colors">

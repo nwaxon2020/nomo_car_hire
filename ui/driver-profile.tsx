@@ -694,10 +694,9 @@ export default function DriverProfilePage() {
         averageRating={averageRating}
         ratingsCount={ratings.length}
         vehiclesCount={vehicles.length}
-        canAddVehicle={canAddVehicle()}
-        onAddVehicle={handleAddVehicleClick}
         onUpgradeVIP={() => setShowVIPUpgradeModal(true)}
         onPlayGame={() => setGame(true)}
+        onBuyTicket={() => router.push("/user/ticket")}
         whatsappPreferred={whatsappPreferred}
         onToggleWhatsapp={toggleWhatsappPreference}
         vipDetails={vipDetails}
@@ -727,7 +726,10 @@ export default function DriverProfilePage() {
       {/* Vehicles Section */}
       <VehicleSection
         vehicles={vehicles}
-        onAddVehicle={handleAddVehicleClick}
+        vipLevel={vipLevel}
+        vehiclesCount={vehicles.length}
+        onAddVehicle={() => setShowVehicleForm(true)}
+        onUpgradeVIP={() => setShowVIPUpgradeModal(true)}
         onEditVehicle={startEdit}
         onDeleteVehicle={confirmDeleteVehicle}
         onMarkAvailable={markVehicleAsAvailable}
