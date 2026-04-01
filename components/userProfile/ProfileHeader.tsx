@@ -102,7 +102,17 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                             </div>
                                         )}
                                     </div>
-                                    <label className="absolute bottom-1 right-1 bg-gray-800 border border-gray-600 rounded-full p-2 cursor-pointer hover:bg-gray-700 transition-colors shadow-lg">
+
+                                    {/* Verified Badge - Absolute Bottom Right */}
+                                    {userData.verified && (
+                                        <div className="absolute bottom-1 right-1 z-10 bg-blue-500 rounded-full p-1 border-2 border-gray-900 shadow-lg">
+                                            <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    )}
+
+                                    <label className="absolute -bottom-1 -left-1 bg-gray-800 border border-gray-600 rounded-full p-2 cursor-pointer hover:bg-gray-700 transition-colors shadow-lg z-20">
                                         <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
@@ -305,7 +315,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking the game itself
-                            className="w-full max-w-xl" // Removed bg-gray-900 and extra classes
+                            className="w-full max-w-xl"
                         >
                             <WordGuessGame onClose={() => setGame(false)} />
                         </motion.div>
