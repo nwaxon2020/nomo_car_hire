@@ -18,7 +18,7 @@ export default function AddStaffPageUi() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [passcode, setPasscode] = useState("");
   const [routeInput, setRouteInput] = useState("");
-  const [routes, setRoutes] = useState<string[]>([]); 
+  const [routes, setRoutes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const isCEO = auth.currentUser?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY;
@@ -55,9 +55,9 @@ export default function AddStaffPageUi() {
     if (!formattedRoute) return;
     if (!formattedRoute.startsWith('/')) formattedRoute = '/' + formattedRoute;
     if (!formattedRoute.startsWith('/admin')) {
-        formattedRoute = '/admin' + (formattedRoute === '/' ? '' : formattedRoute);
+      formattedRoute = '/admin' + (formattedRoute === '/' ? '' : formattedRoute);
     }
-    
+
     if (globalRoutes.includes(formattedRoute)) return toast.error("Route already exists");
 
     try {
@@ -90,7 +90,7 @@ export default function AddStaffPageUi() {
     if (passcode !== MASTER_PASSCODE) return toast.error("Invalid Passcode");
     try {
       const targetId = selectedUser.id || selectedUser.uid;
-      
+
       await setDoc(doc(db, "adminStaffs", targetId), {
         uid: targetId,
         email: selectedUser.email,
@@ -114,12 +114,12 @@ export default function AddStaffPageUi() {
   const revokeAccess = async () => {
     if (passcode !== MASTER_PASSCODE) return toast.error("Invalid Passcode");
     try {
-        await deleteDoc(doc(db, "adminStaffs", showDeleteConfirm!));
-        await updateDoc(doc(db, "users", showDeleteConfirm!), { isAdmin: false });
-        toast.success("Access Revoked");
-        setShowDeleteConfirm(null); setPasscode("");
+      await deleteDoc(doc(db, "adminStaffs", showDeleteConfirm!));
+      await updateDoc(doc(db, "users", showDeleteConfirm!), { isAdmin: false });
+      toast.success("Access Revoked");
+      setShowDeleteConfirm(null); setPasscode("");
     } catch (e) {
-        toast.error("Revocation failed");
+      toast.error("Revocation failed");
     }
   };
 
@@ -129,31 +129,37 @@ export default function AddStaffPageUi() {
   return (
     <div className="bg-[#F8FAFC] min-h-screen pt-10 pb-20 px-4 md:px-12 font-sans">
       <div className="max-w-4xl mx-auto">
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-6 bg-blue-600 rounded-full" />
-              <h1 className="text-2xl font-black uppercase italic text-[#0B2A4A] tracking-tighter">
-                Staff <span className="text-blue-600">Permissions</span>
-              </h1>
+          <div className='w-full'>
+            <div className="flex items-center justify-between gap-2">
+              <div className='flex items-center gap-1'>
+                <div className="w-2 h-6 bg-blue-600 rounded-full" />
+                <h1 className="text-2xl font-black uppercase italic text-[#0B2A4A] tracking-tighter">
+                  Staff <span className="text-blue-600">Permissions</span>
+                </h1>
+              </div>
+
+              <Link href="/admin" className="md:hidden flex items-center justify-center p-3 bg-white rounded-md md:rounded-lg border border-gray-100 shadow-sm transition-all">
+                <FiNavigation className="text-[#0B2A4A]" />
+              </Link>
             </div>
             <p className="text-gray-400 text-[9px] font-black uppercase tracking-[0.4em]">Administrative Control</p>
           </div>
-          
-          <div className="flex items-center gap-3">
-              <div className="bg-[#0B2A4A] text-white px-6 py-3 rounded-md md:rounded-lg shadow-lg flex items-center gap-3">
-                <FiUsers className="text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{adminStaff.length} Staff</span>
-              </div>
-              {/* ADMIN BUTTON RE-ADDED */}
-              <button className="p-3 bg-blue-600 text-white rounded-md md:rounded-lg shadow-sm">
-                <FiShield />
-              </button>
-              <Link href="/admin" className="p-3 bg-white rounded-md md:rounded-lg border border-gray-100 shadow-sm transition-all">
-                <FiNavigation className="text-[#0B2A4A]" />
-              </Link>
+
+          <div className="w-full flex md:justify-end items-center gap-3">
+            <div className="bg-[#0B2A4A] text-white px-6 py-3 rounded-md md:rounded-lg shadow-lg flex items-center gap-3">
+              <FiUsers className="text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">{adminStaff.length} Staff</span>
+            </div>
+            {/* ADMIN BUTTON RE-ADDED */}
+            <button className="p-3 bg-blue-600 text-white rounded-md md:rounded-lg shadow-sm">
+              <FiShield />
+            </button>
+            <Link href="/admin" className="hidden md:flex justify-center items-center md:px-10 p-3 bg-white rounded-md md:rounded-lg border border-gray-100 shadow-sm transition-all">
+              <FiNavigation className="text-[#0B2A4A]" />
+            </Link>
           </div>
         </div>
 
@@ -163,12 +169,12 @@ export default function AddStaffPageUi() {
               <h3 className="text-[10px] font-black uppercase text-[#0B2A4A] mb-4 flex items-center gap-2">
                 <FiPlus className="text-blue-600" /> 1. Manage & Assign Routes
               </h3>
-              
+
               <div className="flex flex-col md:flex-row gap-2 mb-6">
-                <input 
-                  value={routeInput} 
+                <input
+                  value={routeInput}
                   onChange={(e) => setRouteInput(e.target.value)}
-                  placeholder="Create route e.target /cars-manager" 
+                  placeholder="Create route e.target /cars-manager"
                   className="flex-1 bg-gray-50 border p-3 rounded-md text-xs font-bold outline-none"
                 />
                 <button onClick={handleCreateRouteInLibrary} className="bg-[#0B2A4A] text-white py-3 md:py-0 px-6 rounded-md font-black uppercase text-[10px] tracking-widest">
@@ -180,21 +186,21 @@ export default function AddStaffPageUi() {
               <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto no-scrollbar border-t pt-4">
                 {globalRoutes.length === 0 && <p className="text-gray-300 text-[10px] italic">Library is empty...</p>}
                 {globalRoutes.map(r => (
-                  <div 
-                    key={r} 
+                  <div
+                    key={r}
                     onClick={() => toggleRouteSelection(r)}
                     className={`cursor-pointer px-3 py-2 rounded-full text-[9px] font-black flex items-center gap-2 border transition-all ${routes.includes(r) ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
                   >
                     {routes.includes(r) && <FiCheck size={10} />}
                     {r}
                     {!routes.includes(r) && (
-                        <FiX 
-                          className="hover:text-red-500 transition-colors ml-1" 
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            await updateDoc(doc(db, "adminRoutes", "config"), { availableRoutes: arrayRemove(r) });
-                          }} 
-                        />
+                      <FiX
+                        className="hover:text-red-500 transition-colors ml-1"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await updateDoc(doc(db, "adminRoutes", "config"), { availableRoutes: arrayRemove(r) });
+                        }}
+                      />
                     )}
                   </div>
                 ))}
@@ -206,8 +212,8 @@ export default function AddStaffPageUi() {
                 <h3 className="text-[10px] font-black uppercase text-[#0B2A4A] mb-4 flex items-center gap-2">
                   <FiSearch className="text-blue-600" /> 2. Select Target User
                 </h3>
-                <input 
-                  placeholder="Search user email..." 
+                <input
+                  placeholder="Search user email..."
                   className="w-full bg-gray-50 border-none p-4 rounded-md text-xs font-bold mb-4 outline-none"
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -218,7 +224,7 @@ export default function AddStaffPageUi() {
                         <p className="text-[10px] font-black text-[#0B2A4A] uppercase">{user.name || 'User'}</p>
                         <p className="text-[9px] font-bold text-gray-400">{user.email}</p>
                       </div>
-                      <button 
+                      <button
                         onClick={() => setSelectedUser(user)}
                         className={`px-4 py-2 rounded-md text-[8px] font-black uppercase tracking-widest ${selectedUser?.id === user.id ? 'bg-[#0B2A4A] text-white' : 'bg-white border text-blue-600'}`}
                       >
@@ -238,9 +244,9 @@ export default function AddStaffPageUi() {
                 <p className="font-black italic uppercase text-lg leading-tight">{selectedUser.email}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => {setSelectedUser(null); setIsEditing(false); setRoutes([]);}} className="bg-white/10 px-5 py-3 rounded-md font-black uppercase text-[9px] tracking-widest hover:bg-white/20">Cancel</button>
+                <button onClick={() => { setSelectedUser(null); setIsEditing(false); setRoutes([]); }} className="bg-white/10 px-5 py-3 rounded-md font-black uppercase text-[9px] tracking-widest hover:bg-white/20">Cancel</button>
                 <button onClick={() => setShowConfirm(true)} disabled={routes.length === 0} className="bg-white text-gray-900 px-8 py-3 rounded-md font-black uppercase text-[9px] tracking-widest shadow-lg disabled:opacity-50">
-                    {isEditing ? 'Confirm Update' : 'Promote Staff'}
+                  {isEditing ? 'Confirm Update' : 'Promote Staff'}
                 </button>
               </div>
             </div>
@@ -248,7 +254,7 @@ export default function AddStaffPageUi() {
 
           <div className="mt-8">
             <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest flex items-center gap-2">
-                <FiActivity /> Active Administrative Team
+              <FiActivity /> Active Administrative Team
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {adminStaff.map((staff) => (
@@ -257,18 +263,18 @@ export default function AddStaffPageUi() {
                     <p className="text-[10px] font-black uppercase text-[#0B2A4A]">{staff.name}</p>
                     <p className="text-[9px] font-bold text-gray-400 mb-3">{staff.email}</p>
                     <div className="flex flex-wrap gap-1">
-                        {staff.allowedRoutes?.map((r:string) => (
-                            <span key={r} className="text-[7px] font-bold bg-gray-50 border px-1.5 py-0.5 rounded uppercase text-blue-600">{r.replace('/admin/', '')}</span>
-                        ))}
+                      {staff.allowedRoutes?.map((r: string) => (
+                        <span key={r} className="text-[7px] font-bold bg-gray-50 border px-1.5 py-0.5 rounded uppercase text-blue-600">{r.replace('/admin/', '')}</span>
+                      ))}
                     </div>
                   </div>
                   {/* REMOVED opacity-0 FOR MOBILE, ADDED md:opacity-0 FOR DESKTOP HOVER */}
                   <div className="flex flex-col gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => handleEditInitiate(staff)} className="text-blue-600 p-2 bg-blue-50 rounded-md hover:bg-blue-600 hover:text-white transition-all">
-                        <FiEdit3 size={14} />
+                      <FiEdit3 size={14} />
                     </button>
                     <button onClick={() => setShowDeleteConfirm(staff.id)} className="text-red-500 p-2 bg-red-50 rounded-md hover:bg-red-600 hover:text-white transition-all">
-                        <FiTrash2 size={14} />
+                      <FiTrash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -285,7 +291,7 @@ export default function AddStaffPageUi() {
               </div>
               <h3 className="text-[#0B2A4A] font-black uppercase italic text-lg mb-1">{showDeleteConfirm ? "Revoke Access" : "Verify Action"}</h3>
               <p className="text-gray-400 text-[9px] font-bold uppercase mb-6 italic">Master Authority Passcode Required</p>
-              <input 
+              <input
                 type="password"
                 value={passcode}
                 onChange={(e) => setPasscode(e.target.value)}

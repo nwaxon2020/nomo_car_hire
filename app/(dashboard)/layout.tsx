@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react"; // Added useRef
 import { useRouter, usePathname } from "next/navigation";
 import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 import Script from "next/script";
@@ -22,7 +22,7 @@ import {
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import NotificationPanel from "@/components/notification/Notification";
 import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
 
@@ -42,6 +42,40 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const { unreadCount } = useUnreadChats();
+
+  // --- AUTO-CLOSE LOGIC ---
+  const CLOSE_TIMER = 80000; // 8 seconds
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Function to start/reset the idle timer
+    const startIdleTimer = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (sidebarOpen) {
+        timerRef.current = setTimeout(() => {
+          setSidebarOpen(false);
+        }, CLOSE_TIMER);
+      }
+    };
+
+    // Events that count as "activity" to reset the timer
+    const activityEvents = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
+
+    if (sidebarOpen) {
+      startIdleTimer();
+      activityEvents.forEach(event => {
+        window.addEventListener(event, startIdleTimer);
+      });
+    }
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, startIdleTimer);
+      });
+    };
+  }, [sidebarOpen]);
+  // -------------------------
 
   // Combine counts for the mobile bubble
   const totalUnreadMobile = Number(unreadCount) + unreadNotifs;

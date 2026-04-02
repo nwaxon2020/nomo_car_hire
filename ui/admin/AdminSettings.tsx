@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { auth } from '@/lib/firebaseConfig';
-import { FiInfo, FiGlobe, FiShield, FiHelpCircle, FiArrowLeft,FiNavigation } from 'react-icons/fi';
+import { FiInfo, FiGlobe, FiShield, FiHelpCircle, FiArrowLeft, FiNavigation } from 'react-icons/fi';
 import Link from 'next/link';
 
 // Import the sub-components (We will create these below)
@@ -13,7 +13,7 @@ import FaqSettings from '@/components/admin/adminSettings/FaqSettings';
 
 export default function AdminSettingsPageUi() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  
+
   const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
   const isCEO = auth.currentUser?.uid === CEO_ID;
 
@@ -51,13 +51,13 @@ export default function AdminSettingsPageUi() {
           </div>
 
           <div className='flex items-center gap-7'>
-              <div className="hidden md:block text-right">
+            <div className="hidden md:block text-right">
               <p className="text-[10px] text-gray-500 font-black uppercase">Auth Level</p>
               <p className="text-emerald-400 font-black italic">CEO PRIVILEGE</p>
             </div>
-            
-            <Link href="/admin" className="p-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all self-start md:self-auto">
-                <FiNavigation className="text-[#0B2A4A]" />
+
+            <Link href="/admin" className="md:px-10 p-3 bg-white rounded-md md:rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all self-start md:self-auto">
+              <FiNavigation className="text-[#0B2A4A]" />
             </Link>
           </div>
         </div>
@@ -88,7 +88,7 @@ export default function AdminSettingsPageUi() {
           /* Sub-Component View */
           <div className="bg-white md:rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="p-4 bg-gray-50 border-b flex items-center justify-between">
-              <button 
+              <button
                 onClick={() => setActiveTab(null)}
                 className="text-[10px] font-black uppercase text-gray-500 hover:text-blue-600 flex items-center gap-2"
               >
@@ -98,7 +98,7 @@ export default function AdminSettingsPageUi() {
                 Editing: {activeTab}
               </span>
             </div>
-            
+
             <div className="p-2 md:p-8">
               {activeTab === 'about' && <AboutSettings />}
               {activeTab === 'site' && <SiteSettings />}

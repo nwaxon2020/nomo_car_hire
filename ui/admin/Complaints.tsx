@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import Link from "next/link";
 import { db, auth } from '@/lib/firebaseConfig';
-import { 
+import {
   collection, query, orderBy, onSnapshot, where, getDocs, writeBatch,
-  updateDoc, doc, deleteDoc, arrayUnion, Timestamp, getDoc 
+  updateDoc, doc, deleteDoc, arrayUnion, Timestamp, getDoc
 } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FiMessageSquare, FiPhone, FiMail, FiSend, 
-  FiCheckCircle, FiClock, FiTrash2, FiAlertCircle, FiUser, FiNavigation, FiLock 
+import {
+  FiMessageSquare, FiPhone, FiMail, FiSend,
+  FiCheckCircle, FiClock, FiTrash2, FiAlertCircle, FiUser, FiNavigation, FiLock
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -19,7 +19,7 @@ interface Reply {
   timestamp: Timestamp;
   sender: 'admin' | 'user';
   senderName: string;
-  senderEmail?: string; 
+  senderEmail?: string;
 }
 
 interface Complaint {
@@ -39,7 +39,7 @@ const AdminComplaintsUi = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false); 
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [enteredPassCode, setEnteredPassCode] = useState('');
 
@@ -97,7 +97,7 @@ const AdminComplaintsUi = () => {
 
   const handleSendReply = async (id: string) => {
     if (!replyText[id]?.trim()) return toast.error("Message required");
-    
+
     setLoadingId(id);
     try {
       const reply: Reply = {
@@ -105,14 +105,14 @@ const AdminComplaintsUi = () => {
         timestamp: Timestamp.now(),
         sender: 'admin',
         senderName: 'Nomo Support',
-        senderEmail: auth.currentUser?.email || 'Admin' 
+        senderEmail: auth.currentUser?.email || 'Admin'
       };
 
       await updateDoc(doc(db, "complains", id), {
         replies: arrayUnion(reply),
-        status: 'read' 
+        status: 'read'
       });
-      
+
       toast.success("Response dispatched");
       setReplyText(prev => ({ ...prev, [id]: '' }));
     } catch (error) {
@@ -149,14 +149,14 @@ const AdminComplaintsUi = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
       <div className="text-center p-8 bg-white rounded-3xl shadow-2xl border border-red-100 max-w-sm">
         <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FiAlertCircle size={40} className="text-red-500" />
+          <FiAlertCircle size={40} className="text-red-500" />
         </div>
         <h2 className="text-[#0B2A4A] font-black uppercase italic tracking-tighter text-2xl">Access Restricted</h2>
         <p className="text-gray-400 text-[10px] font-bold uppercase mt-3 tracking-[0.2em] leading-relaxed">
-            Nomopo Administrative Protocol Only.<br/>Your credentials lack sufficient clearance.
+          Nomopo Administrative Protocol Only.<br />Your credentials lack sufficient clearance.
         </p>
         <Link href="/" className="mt-8 inline-block bg-[#0B2A4A] text-white px-8 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all">
-            Return to Base
+          Return to Base
         </Link>
       </div>
     </div>
@@ -182,17 +182,17 @@ const AdminComplaintsUi = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-[#0B2A4A]/60 backdrop-blur-md">
               <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center border-t-4 border-red-600">
                 <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FiLock size={24} />
+                  <FiLock size={24} />
                 </div>
                 <h2 className="text-[#0B2A4A] font-black uppercase italic text-xl mb-1">Authorization Required</h2>
                 <p className="text-gray-400 text-[9px] font-bold uppercase mb-6 tracking-widest">Enter 6-digit administrative pass code</p>
-                <input 
-                    type="password"
-                    maxLength={6}
-                    value={enteredPassCode}
-                    onChange={(e) => setEnteredPassCode(e.target.value)}
-                    placeholder="******"
-                    className="w-full text-center bg-gray-50 border-2 border-gray-100 rounded-xl py-3 mb-6 text-xl font-black tracking-[0.5em] focus:border-red-600 outline-none"
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={enteredPassCode}
+                  onChange={(e) => setEnteredPassCode(e.target.value)}
+                  placeholder="******"
+                  className="w-full text-center bg-gray-50 border-2 border-gray-100 rounded-xl py-3 mb-6 text-xl font-black tracking-[0.5em] focus:border-red-600 outline-none"
                 />
                 <div className="flex gap-3">
                   <button onClick={() => { setDeleteId(null); setEnteredPassCode(''); }} className="flex-1 px-4 py-3 rounded-xl border font-black uppercase text-[10px] tracking-widest text-gray-400">Cancel</button>
@@ -204,38 +204,43 @@ const AdminComplaintsUi = () => {
         </AnimatePresence>
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-6 bg-blue-600 rounded-full" />
-              <h1 className="text-2xl font-black uppercase italic text-[#0B2A4A] tracking-tighter">Nomo <span className="text-blue-600">Concierge</span></h1>
+          <div className='w-full'>
+            <div className="flex justify-between items-center gap-2 mb-1">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-6 bg-blue-600 rounded-full" />
+                <h1 className="text-2xl font-black uppercase italic text-[#0B2A4A] tracking-tighter">Nomo <span className="text-blue-600">Concierge</span></h1>
+              </div>
+              <Link href="/admin" className="flex md:hidden justify-center items-center p-3 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                <FiNavigation className="text-[#0B2A4A]" />
+              </Link>
             </div>
             <p className="text-gray-400 text-[9px] font-black uppercase tracking-[0.4em]">Customer Support & Relations</p>
           </div>
-          
-          <div className="flex items-center gap-3">
-             <div className="bg-[#0B2A4A] text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3">
-                <FiClock className="text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{complaints.length} Active Requests</span>
-             </div>
-             <Link href="/admin" className="p-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                <FiNavigation className="text-[#0B2A4A]" />
-             </Link>
+
+          <div className="w-full md:justify-end flex items-center gap-3">
+            <div className="bg-[#0B2A4A] text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3">
+              <FiClock className="text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">{complaints.length} Active Requests</span>
+            </div>
+            <Link href="/admin" className="hidden md:flex justify-center items-center px-12 py-3 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+              <FiNavigation className="text-[#0B2A4A]" />
+            </Link>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
           {complaints.map((c) => (
-            <motion.div 
-              key={c.id} 
-              layout 
+            <motion.div
+              key={c.id}
+              layout
               className={`bg-white rounded-xl border-2 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col group h-full relative 
                 ${c.status !== 'read' ? 'border-red-500 animate-blink-5s' : 'border-gray-100'}`}
             >
-              
+
               {c.status !== 'read' && (
                 <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-red-600 text-white px-2 py-1 rounded-full shadow-lg animate-pulse">
-                   <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                   <span className="text-[8px] font-black uppercase tracking-tighter">Action Required</span>
+                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+                  <span className="text-[8px] font-black uppercase tracking-tighter">Action Required</span>
                 </div>
               )}
 
@@ -267,11 +272,10 @@ const AdminComplaintsUi = () => {
                   <div className="space-y-3 pt-2">
                     {c.replies.map((reply, idx) => (
                       <div key={idx} className={`flex flex-col ${reply.sender === 'admin' ? 'items-end' : 'items-start'}`}>
-                        <div className={`max-w-[85%] p-3 rounded-xl text-[10px] font-bold ${
-                          reply.sender === 'admin' 
-                          ? 'bg-[#0B2A4A] text-white rounded-tr-none shadow-md shadow-blue-900/10' 
+                        <div className={`max-w-[85%] p-3 rounded-xl text-[10px] font-bold ${reply.sender === 'admin'
+                          ? 'bg-[#0B2A4A] text-white rounded-tr-none shadow-md shadow-blue-900/10'
                           : 'bg-blue-50 text-blue-700 rounded-tl-none'
-                        }`}>
+                          }`}>
                           {reply.text}
                         </div>
                         {reply.sender === 'admin' && reply.senderEmail && (
@@ -287,13 +291,13 @@ const AdminComplaintsUi = () => {
 
               <div className="p-4 bg-[#F8FAFC] border-t border-gray-50 mt-auto">
                 <div className="flex gap-2">
-                  <input 
+                  <input
                     value={replyText[c.id] || ''}
                     onChange={(e) => setReplyText(prev => ({ ...prev, [c.id]: e.target.value }))}
                     placeholder="Type official response..."
                     className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-xs font-bold focus:outline-none focus:border-blue-500"
                   />
-                  <button 
+                  <button
                     onClick={() => handleSendReply(c.id)}
                     disabled={loadingId === c.id || !replyText[c.id]}
                     className="w-12 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-lg disabled:opacity-50"

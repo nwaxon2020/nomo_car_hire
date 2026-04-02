@@ -59,14 +59,21 @@ export default function AdminDriversPage() {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="px-4 py-6 md:px-6 bg-gray-50 min-h-screen">
       <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-800 uppercase italic tracking-tighter">Drivers Master List</h1>
-          <p className="text-[10px] text-gray-400 font-bold uppercase">Managing {drivers.length} Registered Drivers</p>
+        <div className="flex items-start justify-between md:items-center gap-4">
+          <div className="flex flex-col items-center">
+            <h1 className="text-xl md:text-2xl font-black text-gray-800 uppercase italic tracking-tighter">Drivers Master List</h1>
+            <p className="text-[10px] text-gray-400 font-bold uppercase">Managing {drivers.length} Registered Drivers</p>
+          </div>
+
+          {/*Navigation Back*/}
+          <Link href="/admin" className="md:hidden flex justify-center items-center p-3 bg-white rounded-md md:rounded-xl border border-gray-100 shadow-sm transition-all">
+            <FiNavigation className="text-[#0B2A4A]" />
+          </Link>
         </div>
 
-        <div className="flex flex-col md:flex-row  gap-3 w-full md:w-auto">
+        <div className="px-1 flex flex-col md:flex-row  gap-3 w-full md:w-auto">
           {/* SEARCH BAR */}
           <div className="relative flex-1 md:w-64">
             <FaSearch className="absolute left-3 top-3 text-gray-400" />
@@ -80,11 +87,11 @@ export default function AdminDriversPage() {
 
 
           {/* filter buttons */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 md:grid-cols-4 gap-1 md:gap-2">
             {/* 60-DAY FILTER */}
             <button
               onClick={() => setFilterNewOnly(!filterNewOnly)}
-              className={`px-4 py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
+              className={`px-2 md:px-4 py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
               ${filterNewOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-500 hover:border-green-400 shadow-sm'}`}
             >
               <FaCalendarAlt /> New (60D)
@@ -96,7 +103,7 @@ export default function AdminDriversPage() {
                 setFilterAnyFlags(!filterAnyFlags);
                 if (filterThreeFlags) setFilterThreeFlags(false); // Toggle off 3-flags if this is on
               }}
-              className={`px-4 py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
+              className={`px-2 md:px-4 py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
               ${filterAnyFlags ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-white border-gray-100 text-orange-500 hover:border-orange-400 shadow-sm'}`}
             >
               <FaExclamationTriangle /> Flagged
@@ -108,14 +115,14 @@ export default function AdminDriversPage() {
                 setFilterThreeFlags(!filterThreeFlags);
                 if (filterAnyFlags) setFilterAnyFlags(false); // Toggle off "Any" if 3-flags is on
               }}
-              className={`px-4  py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
+              className={`px-2 md:px-4  py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
               ${filterThreeFlags ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white border-gray-100 text-red-600 shadow-sm'}`}
             >
               <FaFlag /> Critical (3)
             </button>
 
             {/*Navigation Back*/}
-            <Link href="/admin" className="flex justify-center items-center p-3 bg-white rounded-md md:rounded-xl border border-gray-100 shadow-sm transition-all">
+            <Link href="/admin" className="hidden md:flex justify-center items-center p-3 bg-white rounded-md md:rounded-xl border border-gray-100 shadow-sm transition-all">
               <FiNavigation className="text-[#0B2A4A]" />
             </Link>
           </div>
@@ -123,7 +130,7 @@ export default function AdminDriversPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div className="px-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {filtered.map(driver => (
           <DriverCard
             key={driver.id}
