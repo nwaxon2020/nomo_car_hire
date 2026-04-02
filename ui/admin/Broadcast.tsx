@@ -88,26 +88,57 @@ export default function AdminBroadcast() {
     return (
         <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-12">
             <section className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <div>
+                <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
                         <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight uppercase italic">
                             Broadcast <span className="text-blue-600">Hub</span>
                         </h1>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
-                            <ShieldCheck size={14} className="text-blue-500" /> Administrative Notification System
-                        </p>
+
+                        <div className="flex flex-col md:flex-row md:mr-14 md:justify-between gap-2">
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
+                                <ShieldCheck size={14} className="text-blue-500" /> Administrative Notification System
+                            </p>
+                            <button onClick={() => setShowPreview(!showPreview)} className={`w-40 p-3 rounded-xl border transition-all flex items-center gap-2 text-[10px] font-black uppercase ${showPreview ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-white border-slate-100 text-slate-400'}`}>
+                                {showPreview ? <EyeOff size={16} /> : <Eye size={16} />} {showPreview ? "Close Preview" : "Live Preview"}
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setShowPreview(!showPreview)} className={`p-3 rounded-xl border transition-all flex items-center gap-2 text-[10px] font-black uppercase ${showPreview ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-white border-slate-100 text-slate-400'}`}>
-                            {showPreview ? <EyeOff size={16} /> : <Eye size={16} />} {showPreview ? "Close Preview" : "Live Preview"}
-                        </button>
-                        <Link href="/admin" className="p-3 bg-white rounded-lg md:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                            <FiNavigation className="text-[#0B2A4A]" />
-                        </Link>
-                    </div>
+
+                    <Link href="/admin" className="p-3 md:px-10 md:py-2 bg-white rounded-lg md:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                        <FiNavigation className="text-[#0B2A4A]" />
+                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                    {/* PREVIEW MOBILE */}
+                    <div className="md:hidden">
+                        {showPreview && (
+                            <div className="p-4 lg:col-span-5 sticky top-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Eye size={14} className="text-amber-500" /> Recipient View</p>
+                                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xl ring-1 ring-blue-600/10">
+                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600" />
+                                    <div className="p-5">
+                                        <h3 className="font-extrabold text-sm uppercase leading-tight text-blue-900 pr-6 mb-2">{formData.title || "Your Title Here"}</h3>
+                                        <p className="text-[13px] text-slate-500 font-medium mb-4 whitespace-pre-wrap">{formData.message.replace(/\[name\]/gi, adminName) || "Your message..."}</p>
+                                        {(imagePreview || formData.image) && (
+                                            <div className="relative w-full h-40 mb-4 rounded-2xl overflow-hidden border border-slate-100 shadow-inner">
+                                                <img src={imagePreview || formData.image} className="w-full h-full object-cover" alt="preview" />
+                                            </div>
+                                        )}
+                                        {formData.link && (
+                                            <div className="flex items-center justify-between w-full p-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-200 mb-4">
+                                                {formData.actionLabel || "View Details"} <ArrowRight size={16} />
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Today</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+
                     <div className={`${showPreview ? 'lg:col-span-7' : 'lg:col-span-12'} bg-white rounded-xl shadow-xl p-4 md:p-8 border border-gray-100 transition-all duration-500`}>
                         <div className="space-y-4">
                             <input className="w-full p-4 bg-gray-50 border-none rounded md:rounded-2xl font-bold uppercase text-sm outline-blue-100" placeholder="Notification Title" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
@@ -150,30 +181,32 @@ export default function AdminBroadcast() {
                         </div>
                     </div>
 
-                    {/* PREVIEW SIDE */}
-                    {showPreview && (
-                        <div className="p-4 lg:col-span-5 sticky top-8 animate-in fade-in slide-in-from-right-4 duration-500">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Eye size={14} className="text-amber-500" /> Recipient View</p>
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xl ring-1 ring-blue-600/10">
-                                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600" />
-                                <div className="p-5">
-                                    <h3 className="font-extrabold text-sm uppercase leading-tight text-blue-900 pr-6 mb-2">{formData.title || "Your Title Here"}</h3>
-                                    <p className="text-[13px] text-slate-500 font-medium mb-4 whitespace-pre-wrap">{formData.message.replace(/\[name\]/gi, adminName) || "Your message..."}</p>
-                                    {(imagePreview || formData.image) && (
-                                        <div className="relative w-full h-40 mb-4 rounded-2xl overflow-hidden border border-slate-100 shadow-inner">
-                                            <img src={imagePreview || formData.image} className="w-full h-full object-cover" alt="preview" />
-                                        </div>
-                                    )}
-                                    {formData.link && (
-                                        <div className="flex items-center justify-between w-full p-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-200 mb-4">
-                                            {formData.actionLabel || "View Details"} <ArrowRight size={16} />
-                                        </div>
-                                    )}
-                                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Today</div>
+                    {/* PREVIEW DESKTOP */}
+                    <div className="hidden md:block md:col-span-5 ">
+                        {showPreview && (
+                            <div className="p-4 sticky top-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Eye size={14} className="text-amber-500" /> Recipient View</p>
+                                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xl ring-1 ring-blue-600/10">
+                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600" />
+                                    <div className="p-5">
+                                        <h3 className="font-extrabold text-sm uppercase leading-tight text-blue-900 pr-6 mb-2">{formData.title || "Your Title Here"}</h3>
+                                        <p className="text-[13px] text-slate-500 font-medium mb-4 whitespace-pre-wrap">{formData.message.replace(/\[name\]/gi, adminName) || "Your message..."}</p>
+                                        {(imagePreview || formData.image) && (
+                                            <div className="relative w-full h-40 mb-4 rounded-2xl overflow-hidden border border-slate-100 shadow-inner">
+                                                <img src={imagePreview || formData.image} className="w-full h-full object-cover" alt="preview" />
+                                            </div>
+                                        )}
+                                        {formData.link && (
+                                            <div className="flex items-center justify-between w-full p-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-200 mb-4">
+                                                {formData.actionLabel || "View Details"} <ArrowRight size={16} />
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Today</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </section>
             <WelcomeNoteSection />

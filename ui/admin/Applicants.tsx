@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { db, storage, auth } from '@/lib/firebaseConfig';
-import { 
-  collection, query, orderBy, onSnapshot, doc, 
-  updateDoc, deleteDoc, getDoc 
+import {
+  collection, query, orderBy, onSnapshot, doc,
+  updateDoc, deleteDoc, getDoc
 } from 'firebase/firestore';
 import { ref, getDownloadURL, deleteObject } from 'firebase/storage';
-import { 
+import {
   FaEnvelope, FaPhone, FaFileDownload, FaUserCircle, FaSpinner,
-  FaCheckCircle, FaTrash, FaLock, FaEyeSlash, 
+  FaCheckCircle, FaTrash, FaLock, FaEyeSlash,
 } from 'react-icons/fa';
 import { FiNavigation } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,8 +21,8 @@ export default function EmploymentAdminUi() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState('all'); 
-  
+  const [filter, setFilter] = useState('all');
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [selectedAppName, setSelectedAppName] = useState('');
@@ -92,7 +92,7 @@ export default function EmploymentAdminUi() {
   const handleMarkAsRead = async (id: string, currentStatus: string) => {
     try {
       const newStatus = currentStatus === 'read' ? 'pending' : 'read';
-      await updateDoc(doc(db, "employment_applications", id), { 
+      await updateDoc(doc(db, "employment_applications", id), {
         status: newStatus,
         readAt: newStatus === 'read' ? new Date() : null
       });
@@ -112,7 +112,7 @@ export default function EmploymentAdminUi() {
   const confirmDeletion = async () => {
     if (passcode !== ADMIN_PASSCODE) return toast.error("Invalid Admin Passcode");
     if (!selectedAppId) return;
-    
+
     setDeleting(true);
     try {
       const app = apps.find(a => a.id === selectedAppId);
@@ -151,7 +151,7 @@ export default function EmploymentAdminUi() {
         </div>
         <h2 className="text-[#0B2A4A] font-black uppercase italic tracking-tighter text-2xl">Access Restricted</h2>
         <p className="text-gray-400 text-[10px] font-bold uppercase mt-3 tracking-[0.2em] leading-relaxed">
-          Administrative Clearance Required.<br/>Protocol "Applicant Tracking" Locked.
+          Administrative Clearance Required.<br />Protocol "Applicant Tracking" Locked.
         </p>
         <Link href="/admin" className="mt-8 inline-block bg-[#0B2A4A] text-white px-8 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest">
           Return to Admin
@@ -163,25 +163,27 @@ export default function EmploymentAdminUi() {
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen pb-20">
       <div className="max-w-4xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-             <div>
-                <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight italic uppercase">Applicant Tracking</h1>
+        <header className="mb-8 flex flex-row items-center justify-between gap-2">
+          <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex flex-col md:flex-row md:items-center gap-4">
+              <div>
+                <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight italic uppercase">Applicant Tracking</h1>
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{apps.length} Submissions Logged</p>
-             </div>
-          </div>
-          
-          <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm self-start">
-            {['all', 'unread', 'read'].map((f) => (
-              <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>
-                {f} ({f === 'all' ? apps.length : apps.filter(a => f === 'read' ? a.status === 'read' : a.status !== 'read').length})
-              </button>
-            ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm self-start">
+              {['all', 'unread', 'read'].map((f) => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>
+                  {f} ({f === 'all' ? apps.length : apps.filter(a => f === 'read' ? a.status === 'read' : a.status !== 'read').length})
+                </button>
+              ))}
+            </div>
           </div>
 
-            <Link href="/admin" className="p-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all self-start md:self-auto">
-                <FiNavigation className="text-[#0B2A4A]" />
-            </Link>
+          <Link href="/admin" className="p-3 bg-white rounded-lg md:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all self-start md:self-auto">
+            <FiNavigation className="text-[#0B2A4A]" />
+          </Link>
         </header>
 
         <div className="grid gap-4">
@@ -198,8 +200,8 @@ export default function EmploymentAdminUi() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <a href={`mailto:${app.email}`} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaEnvelope size={14}/></a>
-                  <a href={`tel:${app.phone}`} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-green-600 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaPhone size={14}/></a>
+                  <a href={`mailto:${app.email}`} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaEnvelope size={14} /></a>
+                  <a href={`tel:${app.phone}`} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-green-600 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaPhone size={14} /></a>
                 </div>
               </div>
 
@@ -208,31 +210,31 @@ export default function EmploymentAdminUi() {
                   {app.coverLetter || "No cover letter."}
                 </p>
                 <div className="flex items-center justify-between">
-                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                     {app.createdAt?.toDate().toLocaleDateString('en-GB')}
-                   </span>
-                   <div className="flex gap-2">
-                      {/* Mark as Read/Unread Toggle Button */}
-                      <button onClick={() => handleMarkAsRead(app.id, app.status)} className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-slate-200">
-                        {app.status === 'read' ? (
-                          <>
-                            <FaEyeSlash /> <span>Mark Unread</span>
-                          </>
-                        ) : (
-                          <>
-                            <FaCheckCircle /> <span>Mark Read</span>
-                          </>
-                        )}
-                      </button>
-                      
-                      <button onClick={() => handleViewCV(app)} disabled={downloadingId === app.id} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase shadow-sm">
-                        {downloadingId === app.id ? "..." : <><FaFileDownload /> CV</>}
-                      </button>
-                      
-                      <button onClick={() => handleDeleteClick(app)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                        <FaTrash size={14} />
-                      </button>
-                   </div>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    {app.createdAt?.toDate().toLocaleDateString('en-GB')}
+                  </span>
+                  <div className="flex gap-2">
+                    {/* Mark as Read/Unread Toggle Button */}
+                    <button onClick={() => handleMarkAsRead(app.id, app.status)} className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-lg text-[10px] font-black uppercase transition-colors hover:bg-slate-200">
+                      {app.status === 'read' ? (
+                        <>
+                          <FaEyeSlash /> <span>Mark Unread</span>
+                        </>
+                      ) : (
+                        <>
+                          <FaCheckCircle /> <span>Mark Read</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button onClick={() => handleViewCV(app)} disabled={downloadingId === app.id} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase shadow-sm">
+                      {downloadingId === app.id ? "..." : <><FaFileDownload /> CV</>}
+                    </button>
+
+                    <button onClick={() => handleDeleteClick(app)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                      <FaTrash size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
