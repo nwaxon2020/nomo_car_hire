@@ -3,6 +3,8 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import ExpiryCountdown from "@/components/ExpiryCountdown";
 import ShareButton from "@/components/sharebutton";
 import WordGuessGame from "@/components/wordGame/wordGuessGame";
 import { VIPStar } from "@/components/driversProfile/VIPStar";
@@ -40,6 +42,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 }) => {
     const [game, setGame] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
+    const router = useRouter();
 
     const capitalizeFullName = (name: string) => {
         return name
@@ -270,15 +273,27 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                             <span>🎮</span> Play Game
                         </motion.button>
 
-                        {/* Share Button - Click to open modal */}
                         <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => setShowShareModal(true)}
-                            className="w-full md:w-auto bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                            onClick={() => router.push(`/user/purchase?userId=${userData?.id || userData?.uid || ''}`)}
+                            className="w-full md:w-auto bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg flex items-center justify-center gap-2"
                         >
-                            <span>🔗</span> Share & Earn
+                            <span>⭐</span> Upgrade VIP
                         </motion.button>
+
+                        {/* Share Button - Click to open modal */}
+                        <div className="w-full md:w-auto flex flex-col items-center">
+                            <ExpiryCountdown userData={userData} />
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setShowShareModal(true)}
+                                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <span>🔗</span> Share & Earn
+                            </motion.button>
+                        </div>
                     </div>
                 </div>
             </motion.div>

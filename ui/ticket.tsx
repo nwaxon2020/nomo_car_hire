@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
-import { toast, Toaster } from "react-hot-toast"
+import { toast } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
 import { triggerNotification } from "@/lib/notifications"
 import PaymentSection from "@/components/Payment"
@@ -59,21 +59,10 @@ const TICKET_CONFIG = [
   },
 ]
 
-function formatCountdown(ms: number): string {
-  if (ms <= 0) return "Expired"
-  const totalSec = Math.floor(ms / 1000)
-  const days = Math.floor(totalSec / 86400)
-  const hours = Math.floor((totalSec % 86400) / 3600)
-  const mins = Math.floor((totalSec % 3600) / 60)
-  const secs = totalSec % 60
-  if (days > 0)
-    return days + "d " + String(hours).padStart(2, "0") + "h " + String(mins).padStart(2, "0") + "m"
-  return String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0")
-}
-
 export default function TicketPage() {
   const router = useRouter()
 
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [userData, setUserData] = useState<any>(null)
@@ -82,33 +71,44 @@ export default function TicketPage() {
   const [showOverlay, setShowOverlay] = useState(false)
   const [adminConfig, setAdminConfig] = useState<any>(null)
 
-  // Ticks every second — drives the live countdown displays
-  const [now, setNow] = useState(new Date())
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
+    const targetUserId = searchParams.get('userId')
 
-  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/login")
         return
       }
-      setUserId(user.uid)
-      try {
-        const [snap, configSnap] = await Promise.all([
-          getDoc(doc(db, "users", user.uid)),
-          getDoc(doc(db, "adminConfig", "pricing"))
-        ])
-        if (snap.exists()) setUserData(snap.data())
-        if (configSnap.exists()) setAdminConfig(configSnap.data())
-      } finally {
-        setLoading(false)
+      
+      let uidToUse = targetUserId || user.uid
+      if (typeof window !== "undefined") {
+        const fallbackId = new URLSearchParams(window.location.search).get("userId")
+        if (fallbackId) uidToUse = fallbackId
       }
+      setUserId(uidToUse)
+      
+      try {
+        const userSnap = await getDoc(doc(db, "users", uidToUse))
+        if (userSnap.exists()) {
+          setUserData(userSnap.data())
+        }
+      } catch (err) {
+        console.error("Error fetching user data:", err)
+      }
+
+      try {
+        const configSnap = await getDoc(doc(db, "adminfinance", "pricing"))
+        if (configSnap.exists()) {
+          setAdminConfig(configSnap.data())
+        }
+      } catch (err) {
+        console.error("Error fetching admin config:", err)
+      }
+
+      setLoading(false)
     })
     return () => unsubscribe()
-  }, [router])
+  }, [router, searchParams])
 
   const dynamicTickets = TICKET_CONFIG.map((t) => {
     const custom = adminConfig?.tickets?.[t.type]
@@ -239,7 +239,7 @@ export default function TicketPage() {
     const tickets: any[] = userData?.tickets || []
     return (
       tickets
-        .filter((t) => t.type === type && !t.expired && t.expiryDate?.toDate() > now)
+        .filter((t) => t.type === type && !t.expired && t.expiryDate?.toDate() > new Date())
         .sort((a, b) => (b.purchaseDate?.toDate()?.getTime() ?? 0) - (a.purchaseDate?.toDate()?.getTime() ?? 0))[0] ?? null
     )
   }
@@ -247,7 +247,7 @@ export default function TicketPage() {
   const getRemainingMs = (type: string): number => {
     const t = getActiveTicket(type)
     if (!t) return 0
-    return t.expiryDate.toDate().getTime() - now.getTime()
+    return t.expiryDate.toDate().getTime() - new Date().getTime()
   }
 
   const isInWarningWindow = (type: string, warningMs: number): boolean => {
@@ -264,7 +264,7 @@ export default function TicketPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#050d1a] via-[#0a1628] to-[#0d1f3c] relative overflow-hidden">
-      <Toaster position="top-right" />
+
 
       {/* Ambient background orbs */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -379,16 +379,24 @@ export default function TicketPage() {
             const inWarning = isInWarningWindow(ticket.type, ticket.warningMs ?? 0)
             const remainingMs = getRemainingMs(ticket.type)
 
+            const currentTicketType = userData?.hasActiveTicket && userData?.ticketExpiryDate?.toDate() > new Date() ? userData.ticketType : null;
+            const currentTicketLevel = currentTicketType ? Number(TICKET_CONFIG.find(t => t.type === currentTicketType)?.level || 0) : 0;
+            const isOwnedOrLower = currentTicketLevel >= ticket.level;
+            const isExactLevel = currentTicketLevel === ticket.level;
+
+            const disabled = active || (isOwnedOrLower && !isExactLevel);
+
             return (
               <div
                 key={ticket.level}
                 className={`relative group bg-white rounded-3xl overflow-hidden flex flex-col transition-all duration-300
-                  ${ticket.featured
+                  ${ticket.featured && !isOwnedOrLower
                     ? "shadow-2xl shadow-indigo-500/20 scale-[1.02] ring-2 ring-indigo-400/50"
                     : "shadow-xl hover:shadow-2xl hover:-translate-y-1"
                   }
                   ${active && !inWarning ? "ring-2 ring-emerald-400/60" : ""}
                   ${inWarning ? "ring-2 ring-amber-400/70" : ""}
+                  ${isOwnedOrLower ? "opacity-60 grayscale-[0.5]" : ""}
                 `}
               >
                 {/* Featured badge */}
@@ -468,34 +476,26 @@ export default function TicketPage() {
                     )}
                   </ul>
 
-                  {/* CTA — countdown replaces button when near expiry */}
+                  {/* CTA — renew ticket when near expiry */}
                   {inWarning ? (
-                    <>
-                      <div className="w-full py-3.5 rounded-2xl text-center bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg">
-                        <p className="text-[10px] font-bold tracking-widest opacity-80 mb-0.5">⚠ Expires In</p>
-                        <p className="font-mono text-xl font-black leading-none tabular-nums">
-                          {formatCountdown(remainingMs)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => openOverlay(ticket)}
-                        className={`mt-2 w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gradient-to-r ${ticket.color} text-white shadow-md hover:opacity-90 transition-all active:scale-95`}
-                      >
-                        Renew Ticket
-                      </button>
-                    </>
+                    <button
+                      onClick={() => openOverlay(ticket)}
+                      className={`mt-2 w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gradient-to-r ${ticket.color} text-white shadow-md hover:opacity-90 transition-all active:scale-95`}
+                    >
+                      Renew Ticket
+                    </button>
                   ) : (
                     <button
-                      onClick={() => !active && openOverlay(ticket)}
-                      disabled={active}
+                      onClick={() => !disabled && openOverlay(ticket)}
+                      disabled={disabled}
                       className={`w-full py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-200 active:scale-95
-                        ${active
+                        ${disabled
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : `bg-gradient-to-r ${ticket.color} text-white shadow-lg ${ticket.glow} hover:shadow-xl hover:opacity-90`
                         }
                       `}
                     >
-                      {active ? "Currently Active" : "Buy Now"}
+                      {active ? "Currently Active" : (isOwnedOrLower ? "Purchase Disabled" : "Buy Now")}
                     </button>
                   )}
                 </div>

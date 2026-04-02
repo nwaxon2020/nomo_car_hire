@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
 import { ProfileHeader } from "@/components/userProfile/ProfileHeader";
 import { ContactHistory } from "@/components/userProfile/ContactHistory";
@@ -239,13 +239,7 @@ export default function UserProfilePageUi() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-            <Toaster position="top-right" toastOptions={{
-                style: {
-                    background: '#1f2937',
-                    color: '#fff',
-                    borderRadius: '12px',
-                },
-            }} />
+
 
             <div className="relative max-w-7xl mx-auto px-3 py-8 lg:px-8">
                 {/* Profile Header */}

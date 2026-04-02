@@ -90,7 +90,7 @@ export default function ShareButton({
         pathname.startsWith("/user/driver-profile/") ? (
           <button
             onClick={handleNativeShare}
-            className="w-full mx-auto flex items-center gap-2 px-6 py-4 md:py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-sm font-bold rounded-md md:rounded-xl shadow-lg hover:from-indigo-700 transition-all duration-300"
+            className="w-full mx-auto flex items-center gap-2 px-6 py-4 md:py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-sm font-bold rounded-xl shadow-lg hover:from-indigo-700 transition-all duration-300"
           >
             <Share2 size={16} className="animate-pulse" />
             <span>Share Link & Upgrade VIP status</span>

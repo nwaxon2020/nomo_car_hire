@@ -16,7 +16,7 @@ import {
   increment,
   setDoc
 } from "firebase/firestore";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { X, Check, Phone, Car, Calendar, Users, MapPin, MessageCircle, AlertCircle, Trash2, Edit2, Send, Eye, Navigation } from 'lucide-react';
 import ChatWindow from "../PreChat/chat-window";
 
@@ -770,18 +770,7 @@ export default function ViewRequests({
 
   return (
     <div className="w-full space-y-6">
-      <div>    
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: '#fff',
-              color: '#374151',
-              border: '1px solid #e5e7eb'
-            },
-          }}
-        />
-      </div>
+
 
       <div className="w-full">
         <MaxRequestsWarning />

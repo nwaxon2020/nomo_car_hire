@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
-import { toast, Toaster } from "react-hot-toast"
+import { toast } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
 // Import the notification helper used in your admin card
 import { triggerNotification } from "@/lib/notifications"
@@ -20,21 +20,10 @@ const VIP_CONFIG = {
   ],
 }
 
-function formatCountdown(ms: number): string {
-  if (ms <= 0) return "Expired"
-  const totalSec = Math.floor(ms / 1000)
-  const days = Math.floor(totalSec / 86400)
-  const hours = Math.floor((totalSec % 86400) / 3600)
-  const mins = Math.floor((totalSec % 3600) / 60)
-  const secs = totalSec % 60
-  if (days > 0)
-    return days + "d " + String(hours).padStart(2, "0") + "h " + String(mins).padStart(2, "0") + "m"
-  return String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0")
-}
-
 export default function PurchasePage() {
   const router = useRouter()
 
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [userData, setUserData] = useState<any>(null)
@@ -44,32 +33,46 @@ export default function PurchasePage() {
   const [adminConfig, setAdminConfig] = useState<any>(null)
   const [benefit, showBenefit] = useState(false)
 
-  const [now, setNow] = useState(new Date())
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
+    const targetUserId = searchParams.get('userId')
 
-  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/login")
         return
       }
-      setUserId(user.uid)
-      try {
-        const [userSnap, configSnap] = await Promise.all([
-          getDoc(doc(db, "users", user.uid)),
-          getDoc(doc(db, "adminConfig", "pricing"))
-        ])
-        if (userSnap.exists()) setUserData(userSnap.data())
-        if (configSnap.exists()) setAdminConfig(configSnap.data())
-      } finally {
-        setLoading(false)
+      
+      let uidToUse = targetUserId || user.uid
+      if (typeof window !== "undefined") {
+        const fallbackId = new URLSearchParams(window.location.search).get("userId")
+        if (fallbackId) uidToUse = fallbackId
       }
+      setUserId(uidToUse)
+      
+      try {
+        const userSnap = await getDoc(doc(db, "users", uidToUse))
+        if (userSnap.exists()) {
+          setUserData(userSnap.data())
+        } else {
+          console.error("User not found in DB!")
+        }
+      } catch (err) {
+        console.error("Error fetching user data:", err)
+      }
+
+      try {
+        const configSnap = await getDoc(doc(db, "adminfinance", "pricing"))
+        if (configSnap.exists()) {
+          setAdminConfig(configSnap.data())
+        }
+      } catch (err) {
+        console.error("Error fetching admin config:", err)
+      }
+
+      setLoading(false)
     })
     return () => unsubscribe()
-  }, [router])
+  }, [router, searchParams])
 
   const openOverlay = (levelConfig: any) => {
     setSelectedLevelData(levelConfig)
@@ -140,8 +143,8 @@ export default function PurchasePage() {
   if (loading) return <div className="flex justify-center items-center min-h-screen"><LoadingRound /></div>
 
   return (
-    <div className="mx-auto max-w-5xl h-[100vh] bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6">
-      <Toaster position="top-right" />
+    <div className="mx-auto max-w-5xl h-[100vh] bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6 pb-10">
+
 
       {/* PURCHASE OVERLAY DIV */}
       {showOverlay && selectedLevelData && (
@@ -189,7 +192,7 @@ export default function PurchasePage() {
       )}
 
       {/* MAIN UI CONTENT */}
-      <div className="max-w-6xl mx-auto">
+      <div className="pt-3 pb-10 max-w-6xl mx-auto">
         <header className="mb-8 flex justify-between items-start">
           <div>
             <h1 className="text-xl md:text-3xl font-bold text-gray-900">Upgrade Your VIP Status</h1>
@@ -230,11 +233,12 @@ export default function PurchasePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {dynamicVips.map((level) => {
             // Logic to check if this level is already owned or surpassed
-            const currentVipLevel = userData?.vipLevel || 0;
+            const currentVipLevel = Number(userData?.vipLevel || 0);
             const isOwnedOrLower = currentVipLevel >= level.level;
             const isExactLevel = currentVipLevel === level.level;
 
             // Check for countdown warning
+            const now = new Date();
             let remainingMs = 0
             if (isExactLevel && userData?.vipExpiryDate) {
               remainingMs = userData.vipExpiryDate.toDate().getTime() - now.getTime()
@@ -266,23 +270,15 @@ export default function PurchasePage() {
                   </ul>
 
                   {inWarning ? (
-                    <>
-                      <div className="w-full py-3.5 mb-2 rounded-2xl text-center bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg">
-                        <p className="text-[10px] font-bold tracking-widest opacity-80 mb-0.5">⚠ Expires In</p>
-                        <p className="font-mono text-xl font-black leading-none tabular-nums">
-                          {formatCountdown(remainingMs)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => openOverlay(level)}
-                        className={`w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gray-900 text-white shadow-md hover:bg-black active:scale-95`}
-                      >
-                        Renew VIP
-                      </button>
-                    </>
-                  ) : (
                     <button
                       onClick={() => openOverlay(level)}
+                      className={`w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gray-900 text-white shadow-md hover:bg-black active:scale-95`}
+                    >
+                      Renew VIP
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => !isOwnedOrLower && openOverlay(level)}
                       disabled={isOwnedOrLower}
                       className={`w-full py-3 rounded-xl font-bold transition-all ${isOwnedOrLower
                         ? 'bg-gray-200 text-gray-500 cursor-not-allowed'

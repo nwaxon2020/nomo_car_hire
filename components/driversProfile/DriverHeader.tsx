@@ -1,6 +1,6 @@
-// components/driver/DriverHeader.tsx
 import React from 'react';
 import { VIPStar, getVehicleLimit } from './VIPStar';
+import ExpiryCountdown from '@/components/ExpiryCountdown';
 import ShareButton from '@/components/sharebutton';
 import { FaWhatsapp, FaMapMarkerAlt, FaUsers, FaStar, FaCar, FaUserCheck } from 'react-icons/fa';
 
@@ -164,7 +164,8 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
 
             {/* Action Buttons Section */}
             <div className="mt-8 pt-8 border-t border-white/5 flex flex-col lg:flex-row justify-between items-center gap-6">
-                <div className="w-full lg:w-auto">
+                <div className="w-full lg:w-auto flex flex-col gap-2">
+                    <ExpiryCountdown userData={driverData} />
                     <ShareButton
                         userId={driverData?.id}
                         title="Book a Professional Driver!"

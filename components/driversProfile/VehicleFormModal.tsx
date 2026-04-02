@@ -143,7 +143,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     return (
         <div className="h-[100vh] fixed inset-0 z-60 flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[85vh] overflow-hidden">
 
                 <div className="px-4 py-4 border-b border-gray-100 flex justify-between items-center bg-white">
                     <div>

@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useParams, useRouter } from "next/navigation";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
 import { Vehicle, Comment, VIP_CONFIG } from "@/components/driversProfile/driver";
 import { DriverHeader } from "@/components/driversProfile/DriverHeader";
@@ -207,7 +207,6 @@ export default function DriverProfilePage() {
   const [tripHistory, setTripHistory] = useState<any[]>([]);
   const [loadingTripHistory, setLoadingTripHistory] = useState(false);
   const [showVIPModal, setShowVIPModal] = useState(false);
-  const [showVIPUpgradeModal, setShowVIPUpgradeModal] = useState(false);
 
   const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
   const averageRating = ratings.length > 0
@@ -495,7 +494,7 @@ export default function DriverProfilePage() {
 
   const handleVIPPurchase = async (level: number) => {
     try {
-      router.push(`/user/purchase?level=${level}`);
+      router.push(`/user/purchase?userId=${driverId}`);
     } catch (err) {
       console.error("Error redirecting to purchase:", err);
       toast.error("Failed to redirect to purchase page");
@@ -646,19 +645,13 @@ export default function DriverProfilePage() {
 
   return (
     <div className="space-y-12 p-2 md:p-3 min-h-screen bg-gradient-to-br from-gray-700 via-gray-600 to-black grid grid-cols-1 items-center justify-center">
-      <Toaster position="top-right" />
+
 
       {/* VIP Modals */}
       <VIPModals
         showVIPModal={showVIPModal}
         setShowVIPModal={setShowVIPModal}
-        showVIPUpgradeModal={showVIPUpgradeModal}
-        setShowVIPUpgradeModal={setShowVIPUpgradeModal}
         vipLevel={vipLevel}
-        prestigeLevel={prestigeLevel}
-        referralCount={referralCount}
-        vipDetails={vipDetails}
-        purchasedVipLevel={purchasedVipLevel}
         driverId={driverId}
         onVIPPurchase={handleVIPPurchase}
       />
@@ -690,9 +683,9 @@ export default function DriverProfilePage() {
         averageRating={averageRating}
         ratingsCount={ratings.length}
         vehiclesCount={vehicles.length}
-        onUpgradeVIP={() => setShowVIPUpgradeModal(true)}
+        onUpgradeVIP={() => handleVIPPurchase(0)}
         onPlayGame={() => setGame(true)}
-        onBuyTicket={() => router.push("/user/ticket")}
+        onBuyTicket={() => router.push(`/user/ticket?userId=${driverId}`)}
         whatsappPreferred={whatsappPreferred}
         onToggleWhatsapp={toggleWhatsappPreference}
         vipDetails={vipDetails}
@@ -725,7 +718,7 @@ export default function DriverProfilePage() {
         vipLevel={vipLevel}
         vehiclesCount={vehicles.length}
         onAddVehicle={() => setShowVehicleForm(true)}
-        onUpgradeVIP={() => setShowVIPUpgradeModal(true)}
+        onUpgradeVIP={() => handleVIPPurchase(0)}
         onEditVehicle={startEdit}
         onDeleteVehicle={confirmDeleteVehicle}
         onMarkAvailable={markVehicleAsAvailable}
@@ -746,7 +739,7 @@ export default function DriverProfilePage() {
       <PromotionalSection
         driverId={driverId}
         vipLevel={vipLevel}
-        onUpgradeVIP={() => setShowVIPUpgradeModal(true)}
+        onUpgradeVIP={() => handleVIPPurchase(0)}
       />
 
       <p className="mt-36 pb-10 text-gray-500 font-bold italic text-center text-[10px]">Powered by Nomop Ventures&reg;</p>

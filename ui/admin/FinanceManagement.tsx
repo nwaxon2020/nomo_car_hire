@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
-import { toast, Toaster } from "react-hot-toast"
+import { toast } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
 
 // ─── Default pricing (fallback if Firestore doc doesn't exist yet) ────────────
@@ -15,8 +15,8 @@ export const DEFAULT_PRICING = {
     prices: { 1: 5000, 2: 7500, 3: 11000, 4: 15000, 5: 20000 },
   },
   tickets: {
-    daily:   { price: 200,  durationDays: 1,  warningHours: 3  },
-    weekly:  { price: 1000, durationDays: 7,  warningHours: 48 },
+    daily: { price: 200, durationDays: 1, warningHours: 3 },
+    weekly: { price: 1000, durationDays: 7, warningHours: 48 },
     monthly: { price: 2000, durationDays: 30, warningHours: 96 },
   },
 }
@@ -30,40 +30,40 @@ const VIP_NAMES: Record<number, string> = {
 }
 
 const TICKET_LABELS: Record<string, { label: string; icon: string }> = {
-  daily:   { label: "Daily Ticket",   icon: "🎫" },
-  weekly:  { label: "Weekly Ticket",  icon: "🗓️" },
+  daily: { label: "Daily Ticket", icon: "🎫" },
+  weekly: { label: "Weekly Ticket", icon: "🗓️" },
   monthly: { label: "Monthly Ticket", icon: "💎" },
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function FinanceManagement() {
   const router = useRouter()
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<any>(null)
   const [updatedBy, setUpdatedBy] = useState<string>("")
 
   // Working copies of the config
   const [vipValidityDays, setVipValidityDays] = useState(DEFAULT_PRICING.vip.validityDays)
-  const [vipWarningDays,  setVipWarningDays]  = useState(DEFAULT_PRICING.vip.warningDays)
+  const [vipWarningDays, setVipWarningDays] = useState(DEFAULT_PRICING.vip.warningDays)
   const [vipPrices, setVipPrices] = useState<Record<number, number>>({ ...DEFAULT_PRICING.vip.prices })
-  const [tickets, setTickets]     = useState({ ...DEFAULT_PRICING.tickets })
+  const [tickets, setTickets] = useState({ ...DEFAULT_PRICING.tickets })
 
   // ─── Load from Firestore ──────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, "adminConfig", "pricing"))
+        const snap = await getDoc(doc(db, "adminfinance", "pricing"))
         if (snap.exists()) {
           const d = snap.data()
           if (d.vip) {
             setVipValidityDays(d.vip.validityDays ?? DEFAULT_PRICING.vip.validityDays)
-            setVipWarningDays(d.vip.warningDays  ?? DEFAULT_PRICING.vip.warningDays)
+            setVipWarningDays(d.vip.warningDays ?? DEFAULT_PRICING.vip.warningDays)
             if (d.vip.prices) setVipPrices(d.vip.prices)
           }
           if (d.tickets) setTickets(d.tickets)
           if (d.lastUpdated) setLastUpdated(d.lastUpdated.toDate())
-          if (d.updatedBy)   setUpdatedBy(d.updatedBy)
+          if (d.updatedBy) setUpdatedBy(d.updatedBy)
         }
       } catch (err) {
         console.error("Failed to load pricing config:", err)
@@ -83,20 +83,20 @@ export default function FinanceManagement() {
       const payload = {
         vip: {
           validityDays: Number(vipValidityDays),
-          warningDays:  Number(vipWarningDays),
+          warningDays: Number(vipWarningDays),
           prices: Object.fromEntries(
             Object.entries(vipPrices).map(([k, v]) => [k, Number(v)])
           ),
         },
         tickets: {
-          daily:   { price: Number(tickets.daily.price),   durationDays: Number(tickets.daily.durationDays),   warningHours: Number(tickets.daily.warningHours)   },
-          weekly:  { price: Number(tickets.weekly.price),  durationDays: Number(tickets.weekly.durationDays),  warningHours: Number(tickets.weekly.warningHours)  },
+          daily: { price: Number(tickets.daily.price), durationDays: Number(tickets.daily.durationDays), warningHours: Number(tickets.daily.warningHours) },
+          weekly: { price: Number(tickets.weekly.price), durationDays: Number(tickets.weekly.durationDays), warningHours: Number(tickets.weekly.warningHours) },
           monthly: { price: Number(tickets.monthly.price), durationDays: Number(tickets.monthly.durationDays), warningHours: Number(tickets.monthly.warningHours) },
         },
         lastUpdated: Timestamp.now(),
         updatedBy: adminUser?.email || adminUser?.uid || "Unknown",
       }
-      await setDoc(doc(db, "adminConfig", "pricing"), payload)
+      await setDoc(doc(db, "adminfinance", "pricing"), payload)
       setLastUpdated(new Date())
       setUpdatedBy(adminUser?.email || adminUser?.uid || "Unknown")
       toast.success("✅ Pricing config saved successfully!")
@@ -122,7 +122,7 @@ export default function FinanceManagement() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#040b18] via-[#071020] to-[#0a1628] relative overflow-hidden">
-      <Toaster position="top-right" />
+
 
       {/* Ambient glows */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -168,7 +168,7 @@ export default function FinanceManagement() {
         )}
 
         {/* ════════════════ VIP SECTION ════════════════ */}
-        <section className="bg-white/4 border border-white/10 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+        <section className="bg-white/4 border border-white/10 rounded-2xl p-3 mb-8 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl">⭐</div>
             <div>
@@ -230,7 +230,7 @@ export default function FinanceManagement() {
         </section>
 
         {/* ════════════════ TICKET SECTION ════════════════ */}
-        <section className="bg-white/4 border border-white/10 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+        <section className="bg-white/4 border border-white/10 rounded-2xl p-3 mb-8 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-xl">🎫</div>
             <div>
@@ -302,13 +302,13 @@ export default function FinanceManagement() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:opacity-90 transition-all duration-200 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-xl font-black text-sm uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:opacity-90 transition-all duration-200 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? "Saving Changes…" : "💾 Save Pricing Config"}
         </button>
 
         <p className="text-center text-slate-500 text-xs mt-4">
-          Changes are saved to <span className="text-slate-300 font-semibold">adminConfig/pricing</span> and take effect immediately across all purchase pages.
+          Changes are saved to <span className="text-slate-300 font-semibold">adminfinance/pricing</span> and take effect immediately across all purchase pages.
         </p>
       </div>
     </div>
