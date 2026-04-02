@@ -312,10 +312,10 @@ export default function TicketPage() {
       )}
 
       {/* Main content */}
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8 md:py-10">
 
         {/* Header */}
-        <div className="flex justify-between items-start mb-10">
+        <div className="flex justify-between items-start mb-8 md:mb-10">
           <div>
             <p className="text-blue-400 text-xs font-bold uppercase tracking-[0.2em] mb-2">
               Nomopo Pass
@@ -372,7 +372,7 @@ export default function TicketPage() {
         )}
 
         {/* Ticket Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div className="px-3 md:px-0 grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {dynamicTickets.map((ticket) => {
             const active = isTicketActive(ticket)
             const expiryDisplay = getExpiryDisplay(ticket)
@@ -420,12 +420,12 @@ export default function TicketPage() {
                 <div className={`h-1.5 bg-gradient-to-r ${ticket.color}`} />
 
                 {/* Card content */}
-                <div className="p-6 flex-1 flex flex-col">
+                <div className="p-4 md:p-6 flex-1 flex flex-col">
 
                   {/* Icon & Title */}
-                  <div className="mb-5">
+                  <div className="mb-3 md:mb-5">
                     <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${ticket.color} flex items-center justify-center text-2xl shadow-lg ${ticket.glow} mb-4`}
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${ticket.color} flex items-center justify-center text-2xl shadow-lg ${ticket.glow} mb-2 md:mb-4`}
                     >
                       {ticket.icon}
                     </div>
@@ -436,10 +436,10 @@ export default function TicketPage() {
                   </div>
 
                   {/* Price */}
-                  <div className="mb-6">
+                  <div className="mb-4 md:mb-6">
                     <div className="flex items-end gap-1">
                       <span className="text-gray-400 text-lg font-semibold">₦</span>
-                      <span className="text-5xl font-black text-gray-900 leading-none">
+                      <span className="text-4xl md:text-5xl font-black text-gray-900 leading-none">
                         {ticket.price.toLocaleString()}
                       </span>
                     </div>
@@ -447,7 +447,7 @@ export default function TicketPage() {
                   </div>
 
                   {/* Perks */}
-                  <ul className="space-y-2.5 mb-8 flex-1">
+                  <ul className="space-y-2.5 mb-6 md:mb-8 flex-1">
                     {ticket.perks.map((perk, i) => (
                       <li key={i} className="flex items-center gap-2.5 text-sm text-gray-600">
                         <span
