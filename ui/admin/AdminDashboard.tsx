@@ -6,27 +6,27 @@ import { auth, db } from '@/lib/firebaseConfig';
 import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { FiSettings, FiShield, FiUserPlus, FiBriefcase, FiDollarSign } from 'react-icons/fi';
 import { FaCar } from "react-icons/fa";
-import AdminStatistics from '@/components/admin/AdminStatistics'; // Import the new component
+import AdminStatistics from '@/components/admin/AdminStatistics';
 
 export default function AdminDashboardUi() {
   const [allowedRoutes, setAllowedRoutes] = useState<string[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>({
     applicants: 0,
     complaints: 0,
-    manageDrivers: 0 // Track raw count from DB
+    manageDrivers: 0
   });
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastSeenDriversCount, setLastSeenDriversCount] = useState(0);
 
-  const MOCK_TICKET_REVENUE = 100000000;
-  const MOCK_TICKET_COUNT = 4;
-
+  // Initialize stats with ticket-specific fields
   const [stats, setStats] = useState({
     totalDrivers: 0,
     totalCustomers: 0,
     totalRevenue: 0,
     vipRevenueOnly: 0,
+    ticketRevenueOnly: 0, // Added for your logic
+    ticketCount: 0,        // Count of valid ticket holders
     siteRating: 0,
     totalReviews: 0,
     vipCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
@@ -35,7 +35,6 @@ export default function AdminDashboardUi() {
   const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
   const isCEO = auth.currentUser?.uid === CEO_ID;
 
-  // Load seen count from LocalStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('admin_seen_drivers_count');
     if (saved) setLastSeenDriversCount(parseInt(saved));
@@ -60,10 +59,8 @@ export default function AdminDashboardUi() {
       setUnreadCounts(prev => ({ ...prev, complaints: snap.size }));
     });
 
-    // Listener for Manage Drivers (New Drivers + Vehicles)
     const unsubNewDrivers = onSnapshot(query(collection(db, "users"), where("isDriver", "==", true), where("verified", "==", false)), (dSnap) => {
       const unsubNewVehicles = onSnapshot(collection(db, "vehicleLog"), (vSnap) => {
-        // You can adjust this filter to specific 'new' vehicle criteria if needed
         setUnreadCounts(prev => ({ ...prev, manageDrivers: dSnap.size + vSnap.size }));
       });
       return () => unsubNewVehicles();
@@ -81,8 +78,11 @@ export default function AdminDashboardUi() {
       }));
     });
 
+    // --- CORRECTED TICKETING & REVENUE LOGIC ---
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       let vipRevenue = 0;
+      let ticketRevenue = 0;
+      let validTicketUserCount = 0;
       let drivers = 0;
       let customers = 0;
       const vips = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -92,14 +92,46 @@ export default function AdminDashboardUi() {
         if (data.isDriver) drivers++;
         else customers++;
 
-        if (data.vipPurchaseHistory && Array.isArray(data.vipPurchaseHistory)) {
-          data.vipPurchaseHistory.forEach((item: any) => {
+        // Calculate VIP Revenue
+        if (data.vipHistory && Array.isArray(data.vipHistory)) {
+          data.vipHistory.forEach((item: any) => {
             vipRevenue += (item.price || 0);
           });
         }
 
-        if (data.vipLevel >= 1 && data.vipLevel <= 5) {
-          vips[data.vipLevel as keyof typeof vips]++;
+        // Target 'tickets' array for Revenue and Valid User count
+        if (data.tickets && Array.isArray(data.tickets)) {
+          let userHasActiveTicket = false;
+
+          data.tickets.forEach((ticket: any) => {
+            // Add all money ever spent on tickets to revenue
+            ticketRevenue += (ticket.amount || 0);
+
+            // If even one ticket in their array is not expired, they are a valid user
+            if (ticket.expired === false) {
+              userHasActiveTicket = true;
+            }
+          });
+
+          if (userHasActiveTicket) validTicketUserCount++;
+        }
+
+        let calculatedVipLevel = data.vipLevel || 0;
+        if (data.vipHistory && Array.isArray(data.vipHistory)) {
+          const activeVips = data.vipHistory.filter((v: any) => {
+            if (v.expired) return false;
+            if (!v.expiryDate) return false;
+            const expDate = v.expiryDate.toDate ? v.expiryDate.toDate() : new Date(v.expiryDate.seconds * 1000);
+            return expDate > new Date();
+          });
+          if (activeVips.length > 0) {
+            const purchasedLvl = Math.max(...activeVips.map((v: any) => v.level || 0));
+            calculatedVipLevel = Math.max(calculatedVipLevel, purchasedLvl);
+          }
+        }
+
+        if (calculatedVipLevel >= 1 && calculatedVipLevel <= 5) {
+          vips[calculatedVipLevel as keyof typeof vips]++;
         }
       });
 
@@ -108,7 +140,9 @@ export default function AdminDashboardUi() {
         totalDrivers: drivers,
         totalCustomers: customers,
         vipRevenueOnly: vipRevenue,
-        totalRevenue: vipRevenue + MOCK_TICKET_REVENUE,
+        ticketRevenueOnly: ticketRevenue,
+        ticketCount: validTicketUserCount,
+        totalRevenue: vipRevenue + ticketRevenue,
         vipCounts: vips
       }));
     });
@@ -123,12 +157,10 @@ export default function AdminDashboardUi() {
   }, []);
 
   const handleClearDrivers = () => {
-    // Save the current total to local storage to "clear" the badge
     localStorage.setItem('admin_seen_drivers_count', unreadCounts.manageDrivers.toString());
     setLastSeenDriversCount(unreadCounts.manageDrivers);
   };
 
-  // Calculate display badge: only show if the DB count is higher than what we've seen
   const driverBadgeCount = unreadCounts.manageDrivers > lastSeenDriversCount
     ? unreadCounts.manageDrivers - lastSeenDriversCount
     : 0;
@@ -150,8 +182,7 @@ export default function AdminDashboardUi() {
         isCEO={isCEO}
         isExpanded={isExpanded}
         setIsExpanded={setIsExpanded}
-        MOCK_TICKET_REVENUE={MOCK_TICKET_REVENUE}
-        MOCK_TICKET_COUNT={MOCK_TICKET_COUNT}
+      // Removed MOCK props as they are no longer needed
       />
 
       <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">

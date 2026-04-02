@@ -7,7 +7,6 @@ import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import { toast } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
-// Import the notification helper used in your admin card
 import { triggerNotification } from "@/lib/notifications"
 
 const VIP_CONFIG = {
@@ -22,7 +21,6 @@ const VIP_CONFIG = {
 
 export default function PurchasePage() {
   const router = useRouter()
-
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
@@ -41,14 +39,14 @@ export default function PurchasePage() {
         router.push("/login")
         return
       }
-      
+
       let uidToUse = targetUserId || user.uid
       if (typeof window !== "undefined") {
         const fallbackId = new URLSearchParams(window.location.search).get("userId")
         if (fallbackId) uidToUse = fallbackId
       }
       setUserId(uidToUse)
-      
+
       try {
         const userSnap = await getDoc(doc(db, "users", uidToUse))
         if (userSnap.exists()) {
@@ -90,6 +88,45 @@ export default function PurchasePage() {
     }
   })
 
+  // Get active VIP entry from array (non-expired and valid)
+  const getActiveVipEntry = () => {
+    const entries: any[] = userData?.vipHistory || []
+    return entries
+      .filter((entry) => !entry.expired && entry.expiryDate?.toDate() > new Date())
+      .sort((a, b) => (b.purchaseDate?.toDate()?.getTime() ?? 0) - (a.purchaseDate?.toDate()?.getTime() ?? 0))[0] ?? null
+  }
+
+  // Get current VIP level from active entry
+  const getCurrentVipLevel = () => {
+    const activeEntry = getActiveVipEntry()
+    return activeEntry?.level ?? 0
+  }
+
+  // Check if user has ever purchased a specific level
+  const hasPurchasedLevel = (level: number) => {
+    const currentLvl = getCurrentVipLevel()
+    return currentLvl >= level
+  }
+
+  // Check if user has higher level than current
+  const hasHigherLevel = (level: number) => {
+    const currentLvl = getCurrentVipLevel()
+    return currentLvl > level
+  }
+
+  // Check if exact level is currently active
+  const isExactLevelActive = (level: number) => {
+    const activeEntry = getActiveVipEntry()
+    return activeEntry?.level === level
+  }
+
+  // Get expiry date for warning
+  const getRemainingMs = () => {
+    const activeEntry = getActiveVipEntry()
+    if (!activeEntry) return 0
+    return activeEntry.expiryDate.toDate().getTime() - new Date().getTime()
+  }
+
   const handleFinalPurchase = async () => {
     if (!selectedLevelData || processing || !userId) return
     setProcessing(true)
@@ -102,20 +139,44 @@ export default function PurchasePage() {
 
       // Calculate expiry extension
       let finalExpiry = expiryDate
-      if (userData?.vipExpiryDate && userData.vipExpiryDate.toDate() > nowTime) {
-        const currentExpiry = userData.vipExpiryDate.toDate()
+      const activeEntry = getActiveVipEntry()
+      if (activeEntry && activeEntry.expiryDate?.toDate() > nowTime) {
+        const currentExpiry = activeEntry.expiryDate.toDate()
         currentExpiry.setDate(currentExpiry.getDate() + vipValidityDays)
         finalExpiry = currentExpiry
+      }
+
+      // Get existing history
+      const existingHistory: any[] = userData?.vipHistory || []
+
+      // Mark previous entries of same level as expired (but keep history)
+      const updatedHistory = existingHistory.map((entry: any) =>
+        entry.level === selectedLevelData.level ? { ...entry, expired: true } : entry
+      )
+
+      // Create new VIP entry
+      const newEntry = {
+        level: selectedLevelData.level,
+        name: selectedLevelData.name,
+        price: selectedLevelData.price,
+        purchaseDate: Timestamp.fromDate(nowTime),
+        expiryDate: Timestamp.fromDate(finalExpiry),
+        expired: false,
+        stars: selectedLevelData.stars,
+        color: selectedLevelData.color,
       }
 
       await triggerNotification(
         userId,
         "VIP Upgrade Successful 🎉",
-        `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active.`,
+        `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active for ${vipValidityDays} days.`,
         "success"
       )
 
       await updateDoc(userRef, {
+        // Array history - stores every VIP purchase
+        vipHistory: [...updatedHistory, newEntry],
+        // Flat convenience fields for quick reads
         vip: true,
         vipLevel: selectedLevelData.level,
         purchasedVipLevel: selectedLevelData.level,
@@ -123,6 +184,16 @@ export default function PurchasePage() {
         vipExpiryDate: Timestamp.fromDate(finalExpiry),
         updatedAt: Timestamp.now()
       })
+
+      // Update local state
+      setUserData((prev: any) => ({
+        ...prev,
+        vipHistory: [...updatedHistory, newEntry],
+        vip: true,
+        vipLevel: selectedLevelData.level,
+        purchasedVipLevel: selectedLevelData.level,
+        vipExpiryDate: Timestamp.fromDate(finalExpiry),
+      }))
 
       toast.success(`🎉 ${selectedLevelData.name} Activated!`)
 
@@ -140,17 +211,23 @@ export default function PurchasePage() {
     }
   }
 
-  if (loading) return <div className="flex justify-center items-center min-h-screen"><LoadingRound /></div>
+  const currentVipLevel = getCurrentVipLevel()
+  const remainingMs = getRemainingMs()
+  const inWarning = currentVipLevel > 0 && remainingMs > 0 && remainingMs <= vipWarningMs
+
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      <LoadingRound />
+    </div>
+  )
 
   return (
-    <div className="mx-auto max-w-5xl h-[100vh] bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6 pb-10">
-
-
+    <div className="mx-auto max-w-5xl min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-6 pb-10">
       {/* PURCHASE OVERLAY DIV */}
       {showOverlay && selectedLevelData && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
-            <div className={`h-2 ${selectedLevelData.color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />
+            <div className={`h-2 ${selectedLevelData.color === 'green' ? 'bg-green-500' : selectedLevelData.color === 'yellow' ? 'bg-yellow-500' : selectedLevelData.color === 'purple' ? 'bg-purple-500' : selectedLevelData.color === 'gold' ? 'bg-yellow-600' : 'bg-gray-800'}`} />
             <div className="p-6">
               <h3 className="text-2xl font-bold text-gray-900 mb-2 text-center">Complete Purchase</h3>
               <p className="text-gray-600 text-center mb-6">Review your VIP selection below</p>
@@ -232,30 +309,61 @@ export default function PurchasePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {dynamicVips.map((level) => {
-            // Logic to check if this level is already owned or surpassed
-            const currentVipLevel = Number(userData?.vipLevel || 0);
-            const isOwnedOrLower = currentVipLevel >= level.level;
-            const isExactLevel = currentVipLevel === level.level;
+            // Logic based on array history
+            const isOwnedOrLower = hasPurchasedLevel(level.level)
+            const isExactLevel = isExactLevelActive(level.level)
+            const hasHigher = hasHigherLevel(level.level)
 
-            // Check for countdown warning
-            const now = new Date();
-            let remainingMs = 0
-            if (isExactLevel && userData?.vipExpiryDate) {
-              remainingMs = userData.vipExpiryDate.toDate().getTime() - now.getTime()
+            // Determine if card should be disabled/blurred
+            const isDisabled = (isOwnedOrLower && !isExactLevel) || hasHigher
+            const isActive = isExactLevel && !inWarning
+            const isExpiring = isExactLevel && inWarning
+
+            // Determine button text and action
+            let buttonText = "Purchase Now"
+            let buttonAction = () => openOverlay(level)
+            let buttonDisabled = false
+            let buttonClass = "bg-gray-900 text-white hover:bg-black"
+
+            if (isExpiring) {
+              buttonText = "Renew VIP"
+              buttonAction = () => openOverlay(level)
+              buttonDisabled = false
+              buttonClass = "bg-gray-900 text-white hover:bg-black"
+            } else if (isActive) {
+              buttonText = "Current Plan"
+              buttonDisabled = true
+              buttonClass = "bg-gray-200 text-gray-500 cursor-not-allowed"
+            } else if (hasHigher) {
+              buttonText = "Already Upgraded"
+              buttonDisabled = true
+              buttonClass = "bg-gray-200 text-gray-500 cursor-not-allowed"
+            } else if (isOwnedOrLower && !isExactLevel) {
+              buttonText = "Previously Purchased"
+              buttonDisabled = true
+              buttonClass = "bg-gray-200 text-gray-500 cursor-not-allowed"
             }
-            const inWarning = isExactLevel && remainingMs > 0 && remainingMs <= vipWarningMs
 
             return (
               <div
                 key={level.level}
-                className={`bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden transition-all flex flex-col relative ${isOwnedOrLower ? "opacity-60 grayscale-[0.5]" : "hover:shadow-xl"
+                className={`bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden transition-all flex flex-col relative ${isDisabled ? "opacity-60 grayscale-[0.3]" : "hover:shadow-xl"
                   }`}
               >
-                <div className={`h-2 ${level.color === 'green' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                <div className={`p-5 flex-1 flex flex-col ${isOwnedOrLower ? "blur-[1px]" : ""}`}>
+                <div className={`h-2 ${level.color === 'green' ? 'bg-green-500' :
+                    level.color === 'yellow' ? 'bg-yellow-500' :
+                      level.color === 'purple' ? 'bg-purple-500' :
+                        level.color === 'gold' ? 'bg-yellow-600' : 'bg-gray-800'
+                  }`} />
+
+                <div className={`p-5 flex-1 flex flex-col ${isDisabled ? "blur-[0.5px]" : ""}`}>
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold">{level.name}</h3>
-                    <div className="flex">{Array.from({ length: level.stars }).map((_, i) => <span key={i}>⭐</span>)}</div>
+                    <div className="flex">
+                      {Array.from({ length: level.stars }).map((_, i) => (
+                        <span key={i} className="text-yellow-500">⭐</span>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="mb-6 space-y-2">
@@ -264,37 +372,52 @@ export default function PurchasePage() {
                   </div>
 
                   <ul className="text-sm text-gray-600 space-y-3 mb-8 flex-1">
-                    <li className="flex items-center">✅ {level.level <= 3 ? '10' : 'Unlimited'} Vehicles Max</li>
-                    <li className="flex items-center">✅ Priority Search Listing</li>
-                    <li className="flex items-center">✅ VIP Profile Badge</li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span> {level.level <= 3 ? '10' : 'Unlimited'} Vehicles Max
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span> Priority Search Listing
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span> VIP Profile Badge
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span> Exclusive Support
+                    </li>
                   </ul>
 
-                  {inWarning ? (
-                    <button
-                      onClick={() => openOverlay(level)}
-                      className={`w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gray-900 text-white shadow-md hover:bg-black active:scale-95`}
-                    >
-                      Renew VIP
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => !isOwnedOrLower && openOverlay(level)}
-                      disabled={isOwnedOrLower}
-                      className={`w-full py-3 rounded-xl font-bold transition-all ${isOwnedOrLower
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-900 text-white hover:bg-black active:scale-95'
-                        }`}
-                    >
-                      {isExactLevel ? 'Current Plan' : isOwnedOrLower ? 'Purchased' : 'Purchase Now'}
-                    </button>
-                  )}
+                  <button
+                    onClick={buttonAction}
+                    disabled={buttonDisabled}
+                    className={`w-full py-3 rounded-xl font-bold transition-all ${buttonClass} active:scale-95`}
+                  >
+                    {buttonText}
+                  </button>
                 </div>
 
-                {/* Visual indicator for current/passed plans */}
-                {isOwnedOrLower && (
+                {/* Status Overlay Tag */}
+                {isDisabled && !isActive && !isExpiring && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="bg-white/80 px-4 py-1 rounded-full text-xs font-bold text-gray-600 border border-gray-200 shadow-sm">
-                      {isExactLevel ? "ACTIVE" : "COMPLETED"}
+                    <span className="bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs font-bold text-gray-700 border border-gray-300 shadow-sm">
+                      {hasHigher ? "UPGRADED" : "COMPLETED"}
+                    </span>
+                  </div>
+                )}
+
+                {/* Active Tag */}
+                {isActive && (
+                  <div className="absolute top-3 right-3">
+                    <span className="bg-green-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg">
+                      ACTIVE
+                    </span>
+                  </div>
+                )}
+
+                {/* Expiring Soon Tag */}
+                {isExpiring && (
+                  <div className="absolute top-3 right-3">
+                    <span className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg animate-pulse">
+                      EXPIRING SOON
                     </span>
                   </div>
                 )}

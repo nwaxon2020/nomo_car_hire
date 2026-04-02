@@ -44,7 +44,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const { unreadCount } = useUnreadChats();
 
   // --- AUTO-CLOSE LOGIC ---
-  const CLOSE_TIMER = 80000; // 8 seconds
+  const CLOSE_TIMER = 15000; // 15 seconds
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {

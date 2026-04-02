@@ -7,19 +7,15 @@ interface StatsProps {
   isCEO: boolean;
   isExpanded: boolean;
   setIsExpanded: (val: boolean) => void;
-  MOCK_TICKET_REVENUE: number;
-  MOCK_TICKET_COUNT: number;
 }
 
-export default function AdminStatistics({ 
-  stats, 
-  isCEO, 
-  isExpanded, 
-  setIsExpanded, 
-  MOCK_TICKET_REVENUE, 
-  MOCK_TICKET_COUNT 
+export default function AdminStatistics({
+  stats,
+  isCEO,
+  isExpanded,
+  setIsExpanded,
 }: StatsProps) {
-  
+
   const vipLevels = [
     { lvl: 1, name: "Green VIP", color: "bg-emerald-500", text: "text-emerald-500" },
     { lvl: 2, name: "Yellow VIP", color: "bg-yellow-400", text: "text-yellow-400" },
@@ -38,26 +34,26 @@ export default function AdminStatistics({
 
       {/* Stat Grid */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-stretch">
-        <MiniStat 
-          label="Total Revenue" 
-          value={isCEO ? `₦${stats.totalRevenue.toLocaleString()}` : "CEO Access Only"} 
-          icon={<FiTrendingUp />} 
-          color="text-blue-400" 
+        <MiniStat
+          label="Total Revenue"
+          value={isCEO ? `₦${stats.totalRevenue.toLocaleString()}` : "CEO Access Only"}
+          icon={<FiTrendingUp />}
+          color="text-blue-400"
         />
-        
+
         <div className={`${isExpanded ? 'block' : 'hidden'} md:block relative`}>
-          <MiniStat 
-              label="Tickets" 
-              value={isCEO ? (
-                  <span className="flex items-center gap-2">
-                      ₦{MOCK_TICKET_REVENUE.toLocaleString()}
-                      <span className="absolute top-2 right-2 text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-semibold">
-                           {MOCK_TICKET_COUNT} Ticket
-                      </span>
-                  </span>
-              ) : `${MOCK_TICKET_COUNT}`} 
-              icon={<FiTag />} 
-              color="text-orange-400" 
+          <MiniStat
+            label="Tickets"
+            value={isCEO ? (
+              <span className="flex items-center gap-2">
+                ₦{stats.ticketRevenueOnly.toLocaleString()}
+                <span className="absolute top-2 right-2 text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-semibold">
+                  {stats.ticketCount} Ticket
+                </span>
+              </span>
+            ) : `${stats.ticketCount}`}
+            icon={<FiTag />}
+            color="text-orange-400"
           />
         </div>
 
@@ -68,11 +64,11 @@ export default function AdminStatistics({
         <div className={`${isExpanded ? 'block' : 'hidden'} md:block`}>
           <MiniStat label="Customers" value={stats.totalCustomers} icon={<FiUsers />} color="text-purple-400" />
         </div>
-        
+
         <div className={`${isExpanded ? 'block' : 'hidden'} md:block bg-white/5 p-2 rounded flex items-center justify-between border border-white/10 min-h-[58px]`}>
           <p className="w-full text-[8px] font-black text-gray-500 uppercase tracking-widest leading-tight">Site Rating ({stats.totalReviews})</p>
           <p className="w-full flex gap-4 items-center mt-1">
-            <span className='w-full text-emerald-400 font-semibold text-[10px] whitespace-nowrap'>Reviews ({stats.totalReviews})</span> 
+            <span className='w-full text-emerald-400 font-semibold text-[10px] whitespace-nowrap'>Reviews ({stats.totalReviews})</span>
             <span className="w-full text-lg font-black text-white flex items-center">{stats.siteRating.toFixed(1)} <FiStar className="text-yellow-400 text-xl fill-current shrink-0 ml-2" /></span>
           </p>
         </div>
@@ -100,7 +96,7 @@ export default function AdminStatistics({
 
       {/* Mobile Toggle Button */}
       <div className='md:hidden flex justify-end mt-2'>
-        <button 
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-1 text-[10px] font-black uppercase text-blue-500 border border-blue-500/30 px-2 py-1 rounded"
         >

@@ -39,8 +39,11 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
     onToggleWhatsapp,
     vipDetails
 }) => {
-    // Vehicle limit shown in stats (adding logic lives in VehicleSection)
+    // Vehicle limit shown in stats
     const maxVehicles = getVehicleLimit(vipLevel);
+
+    // FIX: Fallback check for the ID to prevent "NO-ID" errors
+    const effectiveUserId = driverData?.uid || driverData?.id || "";
 
     return (
         <div className="bg-slate-900 border border-emerald-500/20 shadow-2xl rounded md:rounded-xl px-3 py-5 md:p-6 mb-8 overflow-hidden relative">
@@ -166,10 +169,11 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
             <div className="mt-8 pt-8 border-t border-white/5 flex flex-col lg:flex-row justify-between items-center gap-6">
                 <div className="w-full lg:w-auto flex flex-col gap-2">
                     <ExpiryCountdown userData={driverData} />
+                    {/* UPDATED: Passing the effectiveUserId which checks both uid and id */}
                     <ShareButton
-                        userId={driverData?.id}
-                        title="Book a Professional Driver!"
-                        text="Need a reliable driver? Book with me on Nomopo! 🚗✨"
+                        userId={effectiveUserId}
+                        title="Book a Professional Driver on NOMO CARS!"
+                        text={`Need a reliable driver? Book ${driverData?.fullName || 'me'} on Nomo Cars! 🚗✨`}
                     />
                 </div>
 
@@ -188,7 +192,6 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
                         {vipLevel > 0 ? '⭐ Upgrade VIP' : '🌟 Become VIP'}
                     </button>
 
-                    {/* Restored Previous Game Button Design */}
                     <button
                         onClick={onPlayGame}
                         className="px-3 md:px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md md:rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg"

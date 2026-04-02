@@ -8,6 +8,48 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 
 import { ProfileHeader } from "@/components/userProfile/ProfileHeader";
+
+const getVipExpiryDateFromEntry = (entry: any): Date | null => {
+  if (!entry || !entry.expiryDate) return null;
+  if (entry.expiryDate.toDate) return entry.expiryDate.toDate();
+  if (entry.expiryDate.seconds) return new Date(entry.expiryDate.seconds * 1000);
+  try {
+    return new Date(entry.expiryDate);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeVipHistory = (vipHistory: any[] = []) => {
+  const now = new Date();
+  let changed = false;
+
+  const normalized = vipHistory.map((entry: any) => {
+    const expiry = getVipExpiryDateFromEntry(entry);
+    if (!entry.expired && expiry && expiry <= now) {
+      changed = true;
+      return { ...entry, expired: true };
+    }
+    return entry;
+  });
+
+  return { normalized, changed };
+};
+
+const getActiveVipHistoryEntries = (vipHistory: any[] = []) => {
+  const now = new Date();
+  return (vipHistory || []).filter((entry: any) => {
+    if (entry.expired) return false;
+    const expiry = getVipExpiryDateFromEntry(entry);
+    return expiry ? expiry > now : false;
+  });
+};
+
+const getActivePurchasedVipLevel = (vipHistory: any[] = []) => {
+  const activeEntries = getActiveVipHistoryEntries(vipHistory);
+  if (activeEntries.length === 0) return 0;
+  return Math.max(...activeEntries.map((e: any) => e.level || 0));
+};
 import { ContactHistory } from "@/components/userProfile/ContactHistory";
 import { TripHistory } from "@/components/userProfile/TripHistory";
 import { PromotionalCards } from "@/components/userProfile/PromotionalCards";
@@ -41,7 +83,26 @@ export default function UserProfilePageUi() {
                 const userRef = doc(db, "users", userId);
                 const snap = await getDoc(userRef);
                 if (snap.exists()) {
-                    const data = snap.data();
+                    let data = snap.data();
+
+                    const normalizedResult = normalizeVipHistory(data.vipHistory || []);
+                    const normalizedVipHistory = normalizedResult.normalized;
+                    const activeVipEntries = getActiveVipHistoryEntries(normalizedVipHistory);
+                    const activePurchasedVipLevel = getActivePurchasedVipLevel(normalizedVipHistory);
+                    const isVip = activeVipEntries.length > 0;
+
+                    const updates: any = {};
+                    if (normalizedResult.changed) updates.vipHistory = normalizedVipHistory;
+                    if ((data.purchasedVipLevel || 0) !== activePurchasedVipLevel) updates.purchasedVipLevel = activePurchasedVipLevel;
+                    if ((data.vipLevel || 0) !== (isVip ? Math.max(data.vipLevel || 0, activePurchasedVipLevel) : 0)) updates.vipLevel = isVip ? Math.max(data.vipLevel || 0, activePurchasedVipLevel) : 0;
+                    if (data.vip !== isVip) updates.vip = isVip;
+
+                    if (Object.keys(updates).length > 0) {
+                        updates.updatedAt = new Date();
+                        await updateDoc(userRef, updates);
+                        data = { ...data, ...updates };
+                    }
+
                     setUserData(data);
                     setNewName(data.fullName || "");
                 } else {

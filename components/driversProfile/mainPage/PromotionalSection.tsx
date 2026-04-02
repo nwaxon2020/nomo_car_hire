@@ -1,5 +1,5 @@
 // components/driverProfile/PromotionalSection.tsx
-import React from 'react';
+import React, { useState } from 'react'; // Added useState
 import ShareButton from '@/components/sharebutton';
 
 interface PromotionalSectionProps {
@@ -13,6 +13,21 @@ export const PromotionalSection: React.FC<PromotionalSectionProps> = ({
     vipLevel,
     onUpgradeVIP
 }) => {
+    // State to handle the loading spinner inside the button
+    const [isUpgrading, setIsUpgrading] = useState(false);
+
+    const handleUpgradeClick = async () => {
+        setIsUpgrading(true);
+        try {
+            await onUpgradeVIP();
+        } finally {
+            // Note: If onUpgradeVIP triggers a page navigation, 
+            // the component unmounts and this state doesn't matter.
+            // If it stays on page, we turn loading off.
+            setIsUpgrading(false);
+        }
+    };
+
     return (
         <>
             {/* Promotion Cards Section */}
@@ -66,10 +81,18 @@ export const PromotionalSection: React.FC<PromotionalSectionProps> = ({
                             VIP drivers appear first in search results and get more bookings! Upgrade your VIP level to get started
                         </p>
                         <button
-                            onClick={onUpgradeVIP}
-                            className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white py-2.5 rounded-xl font-medium hover:from-yellow-600 hover:to-amber-700 transition-all shadow-md"
+                            onClick={handleUpgradeClick}
+                            disabled={isUpgrading}
+                            className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white py-2.5 rounded-xl font-medium hover:from-yellow-600 hover:to-amber-700 transition-all shadow-md flex items-center justify-center gap-2"
                         >
-                            {vipLevel > 0 ? 'Upgrade VIP Level' : 'Become VIP'}
+                            {isUpgrading ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Processing...</span>
+                                </>
+                            ) : (
+                                vipLevel > 0 ? 'Upgrade VIP Level' : 'Become VIP'
+                            )}
                         </button>
                     </div>
                 </div>

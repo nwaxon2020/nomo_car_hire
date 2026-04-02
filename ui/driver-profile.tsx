@@ -51,7 +51,18 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, v
     }
   }
 
-  const isExpired = vipExpiryDate ? vipExpiryDate.toDate() < new Date() : false;
+  let vipExpiry: Date | null = null;
+  if (vipExpiryDate) {
+    if (vipExpiryDate.toDate) {
+      vipExpiry = vipExpiryDate.toDate();
+    } else if (vipExpiryDate.seconds) {
+      vipExpiry = new Date(vipExpiryDate.seconds * 1000);
+    } else {
+      vipExpiry = new Date(vipExpiryDate);
+    }
+  }
+
+  const isExpired = vipExpiry ? vipExpiry <= new Date() : false;
   const effectivePurchasedLevel = isExpired ? 0 : purchasedVipLevel;
 
   const vipLevel = Math.min(
@@ -112,6 +123,95 @@ const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, v
   };
 };
 
+const getActivePurchasedVipLevel = (vipHistory: any[]) => {
+  if (!vipHistory || !Array.isArray(vipHistory)) return 0;
+
+  const now = new Date();
+
+  const activeVips = vipHistory.filter((v: any) => {
+    if (v.expired) return false;
+    if (!v.expiryDate) return false;
+
+    const expDate = v.expiryDate.toDate ? v.expiryDate.toDate() : new Date(v.expiryDate.seconds * 1000);
+    return expDate > now;
+  });
+
+  if (activeVips.length === 0) return 0;
+
+  return Math.max(...activeVips.map((v: any) => v.level || 0));
+};
+
+const getVipExpiryDateFromEntry = (entry: any): Date | null => {
+  if (!entry || !entry.expiryDate) return null;
+  if (entry.expiryDate.toDate) return entry.expiryDate.toDate();
+  if (entry.expiryDate.seconds) return new Date(entry.expiryDate.seconds * 1000);
+  try {
+    return new Date(entry.expiryDate);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeVipHistory = (vipHistory: any[] = []) => {
+  const now = new Date();
+  let changed = false;
+
+  const normalized = vipHistory.map((entry: any) => {
+    const expiry = getVipExpiryDateFromEntry(entry);
+    if (!entry.expired && expiry && expiry <= now) {
+      changed = true;
+      return { ...entry, expired: true };
+    }
+    return entry;
+  });
+
+  return { normalized, changed };
+};
+
+const getActiveVipHistoryEntries = (vipHistory: any[] = []) => {
+  const now = new Date();
+
+  return (vipHistory || []).filter((entry: any) => {
+    if (entry.expired) return false;
+    const expiry = getVipExpiryDateFromEntry(entry);
+    return expiry ? expiry > now : false;
+  });
+};
+
+const ensureVipDataConsistency = async (driverId: string, data: any) => {
+  if (!driverId || !data) return;
+
+  const userRef = doc(db, "users", driverId);
+  const normalizedInfo = normalizeVipHistory(data.vipHistory || []);
+  const normalizedHistory = normalizedInfo.normalized;
+  const historyChanged = normalizedInfo.changed;
+
+  const activeVipEntries = getActiveVipHistoryEntries(normalizedHistory);
+  const actualPurchasedVipLevel = activeVipEntries.length > 0 ? Math.max(...activeVipEntries.map((v: any) => v.level || 0)) : 0;
+  const referralCount = data.referralCount || 0;
+  const vipDetails = calculateVIPDetails(referralCount, actualPurchasedVipLevel, data.vipExpiryDate);
+
+  const isCurrentlyVip = activeVipEntries.length > 0;
+
+  const updates: any = {};
+  if (historyChanged) updates.vipHistory = normalizedHistory;
+  if (data.purchasedVipLevel !== actualPurchasedVipLevel) updates.purchasedVipLevel = actualPurchasedVipLevel;
+  if (data.vipLevel !== vipDetails.vipLevel) updates.vipLevel = vipDetails.vipLevel;
+  if (data.prestigeLevel !== vipDetails.prestigeLevel) updates.prestigeLevel = vipDetails.prestigeLevel;
+  if (data.vip !== isCurrentlyVip) updates.vip = isCurrentlyVip;
+
+  if (Object.keys(updates).length > 0) {
+    try {
+      await updateDoc(userRef, {
+        ...updates,
+        updatedAt: Timestamp.now(),
+      });
+    } catch (err) {
+      console.error("Failed to enforce VIP consistency:", err);
+    }
+  }
+};
+
 const initializeVIPFields = async (driverId: string) => {
   try {
     const userRef = doc(db, "users", driverId);
@@ -127,41 +227,17 @@ const initializeVIPFields = async (driverId: string) => {
         needsUpdate = true;
       }
 
-      if (data.purchasedVipLevel === undefined) {
-        updates.purchasedVipLevel = 0;
-        needsUpdate = true;
-      }
-
-      const now = new Date();
-      if (data.vipExpiryDate && data.vipExpiryDate.toDate() < now) {
-        updates.purchasedVipLevel = 0;
-        updates.vipLevel = 0;
-        updates.vipExpiryDate = null;
-        updates.vipPurchaseDate = null;
-        needsUpdate = true;
-        updates.prestigeLevel = 0;
-      }
-
-      const referralCount = data.referralCount || 0;
-      const purchasedVipLevel = updates.purchasedVipLevel !== undefined ? updates.purchasedVipLevel : data.purchasedVipLevel || 0;
-      const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel, data.vipExpiryDate);
-
-      if (data.vipLevel === undefined || data.vipLevel !== vipDetails.vipLevel) {
-        updates.vipLevel = vipDetails.vipLevel;
-        needsUpdate = true;
-      }
-
-      if (data.prestigeLevel === undefined || data.prestigeLevel !== vipDetails.prestigeLevel) {
-        updates.prestigeLevel = vipDetails.prestigeLevel;
-        needsUpdate = true;
-      }
-
       if (needsUpdate) {
         await updateDoc(userRef, {
           ...updates,
-          updatedAt: Timestamp.now()
+          updatedAt: Timestamp.now(),
         });
       }
+
+      const latestSnap = await getDoc(userRef);
+      const latestData = latestSnap.exists() ? latestSnap.data() : data;
+
+      await ensureVipDataConsistency(driverId, latestData);
     }
   } catch (error) {
     console.error("Error initializing VIP fields:", error);
@@ -517,14 +593,17 @@ export default function DriverProfilePage() {
         const unsubUser = onSnapshot(userRef, async (userSnap) => {
           if (userSnap.exists()) {
             const data = userSnap.data();
+            await ensureVipDataConsistency(driverId, data);
             const profileImage = data.profileImage || data.photoURL || "";
             const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim() || "Professional Driver";
             const verified = data.verified || false;
             const customersCarried = data.customersCarried || [];
 
             const referralCount = data.referralCount || 0;
-            const purchasedVipLevel = data.purchasedVipLevel || 0;
-            let vipLevel = data.vipLevel || 0;
+            
+            const purchasedVipLevel = getActivePurchasedVipLevel(data.vipHistory);
+
+            let vipLevel = data.vipLevel !== undefined ? data.vipLevel : 0;
             let prestigeLevel = data.prestigeLevel || 0;
 
             const storedVipLevel = getStoredVipLevel(driverId);
@@ -542,14 +621,16 @@ export default function DriverProfilePage() {
                 });
               }
 
-              try {
-                await updateDoc(userRef, {
-                  vipLevel: vipLevel,
-                  prestigeLevel: prestigeLevel,
-                  updatedAt: Timestamp.now()
-                });
-              } catch (updateError) {
-                console.error("Error updating VIP levels:", updateError);
+              if (vipLevel > 0 || (vipLevel === 0 && data.vipLevel !== undefined)) {
+                try {
+                  await updateDoc(userRef, {
+                    vipLevel: vipLevel,
+                    prestigeLevel: prestigeLevel,
+                    updatedAt: Timestamp.now()
+                  });
+                } catch (updateError) {
+                  console.error("Error updating VIP levels:", updateError);
+                }
               }
             }
 
