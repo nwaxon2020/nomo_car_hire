@@ -37,6 +37,8 @@ export default function FinanceManagement() {
   const [vipWarningDays, setVipWarningDays] = useState<number>(0)
   const [vipPrices, setVipPrices] = useState<Record<number, number>>({})
   const [tickets, setTickets] = useState<any>(null)
+  const [newDriverDays, setNewDriverDays] = useState<number>(60)
+  const [newDriverWarningDays, setNewDriverWarningDays] = useState<number>(5)
 
   // ─── Load from Firestore ──────────────────────────────────────────────────
   useEffect(() => {
@@ -57,6 +59,12 @@ export default function FinanceManagement() {
           }
           if (d.lastUpdated) setLastUpdated(d.lastUpdated.toDate())
           if (d.updatedBy) setUpdatedBy(d.updatedBy)
+
+          // Load new driver config
+          if (d.newDriver) {
+            setNewDriverDays(d.newDriver.freeTrialDays || 60)
+            setNewDriverWarningDays(d.newDriver.warningDays || 5)
+          }
 
           // 2. Set serverData last to ensure comparison is clean
           setServerData(d)
@@ -86,15 +94,20 @@ export default function FinanceManagement() {
         daily: { price: Number(tickets.daily.price), durationDays: Number(tickets.daily.durationDays), warningHours: Number(tickets.daily.warningHours) },
         weekly: { price: Number(tickets.weekly.price), durationDays: Number(tickets.weekly.durationDays), warningHours: Number(tickets.weekly.warningHours) },
         monthly: { price: Number(tickets.monthly.price), durationDays: Number(tickets.monthly.durationDays), warningHours: Number(tickets.monthly.warningHours) },
-      }
+      },
+      newDriver: {
+        freeTrialDays: Number(newDriverDays),
+        warningDays: Number(newDriverWarningDays),
+      },
     };
 
     // Only compare relevant fields, ignore metadata like lastUpdated
     const isVipDifferent = JSON.stringify(currentData.vip) !== JSON.stringify(serverData.vip);
     const isTicketsDifferent = JSON.stringify(currentData.tickets) !== JSON.stringify(serverData.tickets);
+    const isNewDriverDifferent = JSON.stringify(currentData.newDriver) !== JSON.stringify(serverData.newDriver);
 
-    return isVipDifferent || isTicketsDifferent;
-  }, [vipValidityDays, vipWarningDays, vipPrices, tickets, serverData, loading]);
+    return isVipDifferent || isTicketsDifferent || isNewDriverDifferent;
+  }, [vipValidityDays, vipWarningDays, vipPrices, tickets, newDriverDays, newDriverWarningDays, serverData, loading]);
 
   const handleCancel = () => {
     if (serverData) {
@@ -102,6 +115,8 @@ export default function FinanceManagement() {
       setVipWarningDays(serverData.vip.warningDays)
       setVipPrices({ ...serverData.vip.prices })
       setTickets(JSON.parse(JSON.stringify(serverData.tickets)))
+      setNewDriverDays(serverData.newDriver?.freeTrialDays || 60)
+      setNewDriverWarningDays(serverData.newDriver?.warningDays || 5)
       toast.success("Changes reverted to saved state")
     }
   }
@@ -123,6 +138,10 @@ export default function FinanceManagement() {
           daily: { price: Number(tickets.daily.price), durationDays: Number(tickets.daily.durationDays), warningHours: Number(tickets.daily.warningHours) },
           weekly: { price: Number(tickets.weekly.price), durationDays: Number(tickets.weekly.durationDays), warningHours: Number(tickets.weekly.warningHours) },
           monthly: { price: Number(tickets.monthly.price), durationDays: Number(tickets.monthly.durationDays), warningHours: Number(tickets.monthly.warningHours) },
+        },
+        newDriver: {
+          freeTrialDays: Number(newDriverDays),
+          warningDays: Number(newDriverWarningDays),
         },
         lastUpdated: Timestamp.now(),
         updatedBy: adminUser?.email || adminUser?.uid || "Unknown",
@@ -275,6 +294,40 @@ export default function FinanceManagement() {
                 </div>
               )
             })}
+          </div>
+        </section>
+
+        <section className="bg-white/4 border border-white/10 rounded-2xl p-3 md:p-6 mb-8 backdrop-blur-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-xl">🆕</div>
+            <h2 className="text-lg font-black text-white">New Driver Free Trial</h2>
+          </div>
+
+          <p className="text-slate-300 text-sm mb-6">Configure the free ticket period for newly registered drivers and when to show purchase warnings.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">📅 Free Trial Days</label>
+              <input
+                type="number"
+                value={newDriverDays}
+                onChange={(e) => setNewDriverDays(Number(e.target.value))}
+                min={1}
+                className="w-full bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-400/60"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">New drivers get {newDriverDays} days free access</p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">⏰ Warning Days Before Expiry</label>
+              <input
+                type="number"
+                value={newDriverWarningDays}
+                onChange={(e) => setNewDriverWarningDays(Number(e.target.value))}
+                min={1}
+                className="w-full bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-400/60"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Show purchase option {newDriverWarningDays} days before trial ends</p>
+            </div>
           </div>
         </section>
       </div>

@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { db } from '@/lib/firebaseConfig';
 import { 
   collection, addDoc, query, orderBy, onSnapshot, 
-  serverTimestamp, doc, updateDoc, deleteDoc, setDoc, writeBatch 
+  serverTimestamp, doc, updateDoc, deleteDoc, writeBatch 
 } from 'firebase/firestore';
 import { 
-  FaPlus, FaTrash, FaEdit, FaSave, FaSpinner, 
+  FaPlus, FaTrash, FaEdit, FaSave, 
   FaExclamationTriangle, FaChevronDown, FaArrowUp, FaArrowDown
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,7 +19,6 @@ export default function FaqEditorUi() {
   const questionInputRef = useRef<HTMLDivElement>(null);
 
   // FAQ Data
-  const [faqSubtitle, setFaqSubtitle] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
 
@@ -31,15 +30,10 @@ export default function FaqEditorUi() {
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
   
   const [deleteTarget, setDeleteTarget] = useState<{id: string, type: string, name: string} | null>(null);
-  const [loading, setLoading] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   // Load data
   useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, "settings", "faq"), (snap) => {
-      if (snap.exists()) setFaqSubtitle(snap.data().subtitle || '');
-    });
-
     const unsubCategories = onSnapshot(
       query(collection(db, "faq_categories"), orderBy("order", "asc")),
       (snap) => setCategories(snap.docs.map(d => ({id: d.id, ...d.data()})))
@@ -50,17 +44,8 @@ export default function FaqEditorUi() {
       (snap) => setQuestions(snap.docs.map(d => ({id: d.id, ...d.data()})))
     );
 
-    return () => { unsubSettings(); unsubCategories(); unsubQuestions(); };
+    return () => { unsubCategories(); unsubQuestions(); };
   }, []);
-
-  const saveSubtitle = async () => {
-    setLoading(true);
-    try {
-      await setDoc(doc(db, "settings", "faq"), { subtitle: faqSubtitle, updatedAt: serverTimestamp() });
-      toast.success("FAQ subtitle saved");
-    } catch (e) { toast.error("Error saving"); }
-    finally { setLoading(false); }
-  };
 
   const addCategory = async () => {
     if (!newCategory) return toast.error("Enter category name");
@@ -211,17 +196,6 @@ export default function FaqEditorUi() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Subtitle Section */}
-        <section className="bg-white border border-slate-200 md:rounded-xl shadow-sm p-4 md:p-6 mb-10">
-          <h2 className="text-xl font-black uppercase mb-4 text-slate-900">FAQ Subtitle</h2>
-          <div className="flex flex-col md:flex-row gap-4">
-            <input value={faqSubtitle} onChange={(e) => setFaqSubtitle(e.target.value)} placeholder="Subtitle..." className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-orange-500 text-slate-800" />
-            <button onClick={saveSubtitle} disabled={loading} className="py-3 px-6 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700 transition-colors">
-              {loading ? <FaSpinner className="animate-spin" /> : <FaSave />} Save
-            </button>
-          </div>
-        </section>
 
         {/* Categories Section */}
         <section className="bg-white border border-slate-200 md:rounded-xl shadow-sm py-3 md:p-6 mb-10">

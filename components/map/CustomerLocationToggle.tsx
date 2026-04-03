@@ -35,6 +35,7 @@ import {
   FaExternalLinkAlt
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import GPSPermissionModal from './GPSPermissionModal';
 
 interface CustomerLocationToggleProps {
   userId: string;
@@ -59,6 +60,10 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [sendingLinks, setSendingLinks] = useState<string[]>([]);
+  
+  // GPS Permission Modal State
+  const [gpsModalOpen, setGpsModalOpen] = useState(false);
+  const [gpsErrorType, setGpsErrorType] = useState<"denied" | "unavailable" | "timeout" | "unknown" | "notSupported">("unknown");
 
   const lastCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const MIN_DISTANCE_METERS = 10;
@@ -276,7 +281,8 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
   const startLocationSharing = async () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocation not supported by your browser');
+      setGpsErrorType("notSupported");
+      setGpsModalOpen(true);
       return;
     }
 
@@ -349,7 +355,19 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             },
             (error) => {
               console.error('Location watch error:', error);
-              toast.error('Location tracking error');
+              
+              // Determine GPS error type
+              if (error.code === error.PERMISSION_DENIED) {
+                setGpsErrorType("denied");
+              } else if (error.code === error.POSITION_UNAVAILABLE) {
+                setGpsErrorType("unavailable");
+              } else if (error.code === error.TIMEOUT) {
+                setGpsErrorType("timeout");
+              } else {
+                setGpsErrorType("unknown");
+              }
+              
+              setGpsModalOpen(true);
               stopLocationSharing();
             },
             {
@@ -369,7 +387,19 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       },
       (error) => {
         console.error('Geolocation error:', error);
-        toast.error('Failed to get your location');
+        
+        // Determine GPS error type
+        if (error.code === error.PERMISSION_DENIED) {
+          setGpsErrorType("denied");
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          setGpsErrorType("unavailable");
+        } else if (error.code === error.TIMEOUT) {
+          setGpsErrorType("timeout");
+        } else {
+          setGpsErrorType("unknown");
+        }
+        
+        setGpsModalOpen(true);
         setLoading(false);
       }
     );
@@ -865,6 +895,14 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           • Your location is never shared with unauthorized users
         </p>
       </div>
+
+      {/* GPS Permission Modal */}
+      <GPSPermissionModal 
+        isOpen={gpsModalOpen}
+        onDismiss={() => setGpsModalOpen(false)}
+        onRetry={startLocationSharing}
+        errorType={gpsErrorType}
+      />
     </div>
   );
 }

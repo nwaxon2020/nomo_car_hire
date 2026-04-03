@@ -106,7 +106,7 @@ export default function Nav() {
     <nav className="text-center relative">
       <div className="flex justify-between items-center p-4 pr-1 sm:px-6 bg-gray-900 z-20 relative">
 
-        <Link href={"/"} className="p-1 flex gap-2 items-center bg-white rounded-sm">
+        <Link href={"/"} onClick={() => setMenuOpen(false)} className="p-1 flex gap-2 items-center bg-white rounded-sm">
           <h2 className="md:text-xl font-extrabold italic text-blue-700 drop-shadow-md">
             {cmsLogo?.brandName || "Nomo"} <span className="text-yellow-500">{cmsLogo?.brandSuffix || "Cars"}</span>
           </h2>
@@ -129,9 +129,9 @@ export default function Nav() {
             </button>
           )}
 
-          <Link href={"/"} className="hidden sm:flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
-            <FiGrid size={20} />
-            <span className="text-[11px] font-bold uppercase tracking-widest">Home</span>
+
+          <Link href="/" className="hidden md:flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
+            <FaHome size={20} />
           </Link>
 
           <Link href="/join-us" className="hidden md:flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">

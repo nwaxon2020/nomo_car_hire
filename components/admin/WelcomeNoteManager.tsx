@@ -6,8 +6,8 @@ import { toast } from "react-hot-toast";
 import { Save, Sparkles, AlertCircle } from "lucide-react";
 
 export default function WelcomeNoteSection() {
-    const [welcomeNote, setWelcomeNote] = useState({ title: "", message: "", link: "", actionLabel: "" });
-    const [savedNote, setSavedNote] = useState({ title: "", message: "", link: "", actionLabel: "" });
+    const [welcomeNote, setWelcomeNote] = useState({ title: "", message: "", link: "", actionLabel: "", message2: "", link2: "", actionLabel2: "" });
+    const [savedNote, setSavedNote] = useState({ title: "", message: "", link: "", actionLabel: "", message2: "", link2: "", actionLabel2: "" });
     const [isSavingWelcome, setIsSavingWelcome] = useState(false);
 
     // Check if current state matches the last saved state
@@ -23,6 +23,9 @@ export default function WelcomeNoteSection() {
                     message: snap.data().welcomeNote.message || "",
                     link: snap.data().welcomeNote.link || "",
                     actionLabel: snap.data().welcomeNote.actionLabel || "",
+                    message2: snap.data().welcomeNote.message2 || "",
+                    link2: snap.data().welcomeNote.link2 || "",
+                    actionLabel2: snap.data().welcomeNote.actionLabel2 || "",
                 };
                 setWelcomeNote(data);
                 setSavedNote(data); // Store initial copy for comparison
@@ -107,18 +110,44 @@ export default function WelcomeNoteSection() {
                         value={welcomeNote.message}
                         onChange={e => handleWelcomeChange({ message: e.target.value })}
                     />
+                    
+                    {/* First Action Button */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input
                             className="w-full p-4 bg-white border border-amber-100 rounded-2xl text-xs outline-amber-200"
-                            placeholder="Action Link"
+                            placeholder="First Action Link (e.g., /car-hire)"
                             value={welcomeNote.link}
                             onChange={e => handleWelcomeChange({ link: e.target.value })}
                         />
                         <input
                             className="w-full p-4 bg-white border border-amber-100 rounded-2xl text-xs font-bold uppercase outline-amber-200"
-                            placeholder="Button Text"
+                            placeholder="First Button Text (e.g., Book Our Services)"
                             value={welcomeNote.actionLabel}
                             onChange={e => handleWelcomeChange({ actionLabel: e.target.value })}
+                        />
+                    </div>
+
+                    {/* Second Message/Content */}
+                    <textarea
+                        className="w-full p-4 bg-white border border-amber-100 rounded-2xl h-20 text-sm outline-amber-200"
+                        placeholder="Second message content (optional)"
+                        value={welcomeNote.message2}
+                        onChange={e => handleWelcomeChange({ message2: e.target.value })}
+                    />
+
+                    {/* Second Action Button */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                            className="w-full p-4 bg-white border border-amber-100 rounded-2xl text-xs outline-amber-200"
+                            placeholder="Second Action Link (e.g., /join-us)"
+                            value={welcomeNote.link2}
+                            onChange={e => handleWelcomeChange({ link2: e.target.value })}
+                        />
+                        <input
+                            className="w-full p-4 bg-white border border-amber-100 rounded-2xl text-xs font-bold uppercase outline-amber-200"
+                            placeholder="Second Button Text (e.g., Become A Driver)"
+                            value={welcomeNote.actionLabel2}
+                            onChange={e => handleWelcomeChange({ actionLabel2: e.target.value })}
                         />
                     </div>
                 </div>

@@ -4,10 +4,18 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import LoadingRound from "@/components/re-useable-loading";
 import { FaTimes, FaCamera, FaMapMarkerAlt, FaUser } from "react-icons/fa";
+
+const NIGERIAN_STATES = [
+  "Lagos", "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", 
+  "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Federal Capital Territory", 
+  "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", 
+  "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", 
+  "Taraba", "Yobe", "Zamfara"
+]
 
 export default function DriverRegisterPageUi() {
   const router = useRouter();
@@ -20,8 +28,8 @@ export default function DriverRegisterPageUi() {
   const [idNumber, setIdNumber] = useState("");
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
   
-  const [country, setCountry] = useState("");
-  const [state, setState] = useState("");
+  const [country, setCountry] = useState("Nigeria");
+  const [state, setState] = useState("Lagos");
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
 
@@ -117,13 +125,17 @@ export default function DriverRegisterPageUi() {
         vehicleLog: [], 
         comments: [], 
         customersCarried: [], 
-        driverVip: false,
+        fullName: deleteField(), // Remove fullName since drivers use firstName + lastName
 
-        // --- NEW TICKET LOGIC ---
-        justJoined: true, // Becomes false after 60 days via your check logic
-        driverJoinedDate: serverTimestamp(), // Record exact join time
-        ticket: [initialTicket], // Array of ticket history
-        ticketStatus: "trial", // Handy for UI badges
+        // --- NEW DRIVER FREE TICKET LOGIC ---
+        newDriverConfig: {
+          isNew: true,
+          registeredAt: serverTimestamp(),
+        },
+        justJoined: true, 
+        driverJoinedDate: serverTimestamp(), 
+        ticket: [initialTicket], 
+        ticketStatus: "trial", 
       });
 
       setMessage("✅ Registration successful! Enjoy 2 months free.");
@@ -252,16 +264,26 @@ export default function DriverRegisterPageUi() {
                 <FaMapMarkerAlt /> Work Location
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input
-                  type="text" placeholder="Country" required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg outline-none"
-                  value={country} onChange={(e) => setCountry(e.target.value)}
-                />
-                <input
-                  type="text" placeholder="State/Province" required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg outline-none"
-                  value={state} onChange={(e) => setState(e.target.value)}
-                />
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  required
+                >
+                  <option value="Nigeria">Nigeria</option>
+                </select>
+                <select
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  required
+                >
+                  {NIGERIAN_STATES.map((stateName) => (
+                    <option key={stateName} value={stateName}>
+                      {stateName}
+                    </option>
+                  ))}
+                </select>
               </div>
               <input
                 type="text" placeholder="City" required

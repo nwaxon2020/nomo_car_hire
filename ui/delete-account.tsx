@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 export default function DeleteAccountPageUi() {
     const [loading, setLoading] = useState(false);
@@ -32,11 +33,13 @@ export default function DeleteAccountPageUi() {
         const user = auth.currentUser;
         if (!user) {
             setMessage("❌ You must be logged in to perform this action.");
+            toast.error("You must be logged in to perform this action.");
             return;
         }
 
         setLoading(true);
         setMessage("🔄 Verifying identity...");
+        const loadingToast = toast.loading("Verifying your identity...");
 
         try {
             // 1. RE-AUTHENTICATION
@@ -46,8 +49,10 @@ export default function DeleteAccountPageUi() {
                 await reauthenticateWithPopup(user, provider);
             } else {
                 if (!password) {
+                    toast.dismiss(loadingToast);
                     setLoading(false);
                     setMessage("❌ Please enter your password.");
+                    toast.error("Please enter your password to proceed.");
                     return;
                 }
                 const credential = EmailAuthProvider.credential(user.email!, password);
@@ -92,19 +97,31 @@ export default function DeleteAccountPageUi() {
             // 2. DELETE AUTH ACCOUNT
             await deleteUser(user);
 
+            toast.dismiss(loadingToast);
             setMessage("✅ Account successfully deleted. Redirecting...");
+            toast.success("Your account has been successfully deleted.");
             setTimeout(() => router.push("/"), 3000);
 
         } catch (error: any) {
             console.error(error);
+            toast.dismiss(loadingToast);
             setLoading(false);
             setStep(2);
             if (error.code === 'auth/wrong-password') {
                 setMessage("❌ Incorrect password. Please try again.");
+                toast.error("Wrong password. Please try again.");
             } else if (error.code === 'auth/requires-recent-login') {
                 setMessage("❌ For security, please log out and back in before deleting.");
+                toast.error("Please log out and back in before deleting your account.");
+            } else if (error.code === 'auth/invalid-credential') {
+                setMessage("❌ Authentication failed. Invalid credentials.");
+                toast.error("Authentication failed. Please check your password.");
+            } else if (error.code === 'auth/user-mismatch') {
+                setMessage("❌ User mismatch. Please log in again.");
+                toast.error("User verification failed. Please log in again.");
             } else {
                 setMessage(`❌ Action failed: ${error.message}`);
+                toast.error(`Error: ${error.message}`);
             }
         }
     };

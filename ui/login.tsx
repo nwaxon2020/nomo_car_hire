@@ -22,6 +22,10 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import LoadingRound from "@/components/re-useable-loading";
+import {
+  handleGoogleAuthUnified,
+  ensureNotificationFields,
+} from "@/lib/authHelpers";
 
 export default function LoginUi() {
   const router = useRouter();
@@ -108,10 +112,8 @@ export default function LoginUi() {
       notificationEnabled: true,
       notifications: [],
       hasUnreadNotifications: false,
-      lastNotification: null,
       fcmToken: "",
       city: "",
-      phone: "",
       rating: 0,
       totalTrips: 0,
       earnings: 0,
@@ -167,10 +169,8 @@ export default function LoginUi() {
         notificationEnabled: true,
         notifications: userData.notifications || [],
         hasUnreadNotifications: false,
-        lastNotification: null,
         fcmToken: "",
         city: userData.city || "",
-        phone: userData.phone || "",
         rating: userData.rating || 0,
         totalTrips: userData.totalTrips || 0,
         earnings: userData.earnings || 0,
@@ -242,27 +242,21 @@ export default function LoginUi() {
     setError("");
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const userRef = doc(db, "users", user.uid);
-      const snap = await getDoc(userRef);
-
-      if (!snap.exists()) {
-        const completeUserData = createUserData({
-          uid: user.uid,
-          fullName: user.displayName || "Google User",
-          email: user.email,
-          profileImage: user.photoURL || "/profile.png",
-          isEmailVerified: true,
-        }, "google", referrerId);
-
-        await setDoc(userRef, completeUserData);
-        if (referrerId) await awardReferralPoints(referrerId, user.uid);
+      
+      // Use unified Google auth handler
+      const authResult = await handleGoogleAuthUnified(result, referrerId, false);
+      
+      if (authResult.success) {
+        // Ensure notification fields exist
+        const userData = (await getDoc(doc(db, "users", result.user.uid))).data();
+        if (userData) {
+          await ensureNotificationFields(result.user.uid, userData);
+        }
+        await exchangeTokenAndRedirect(result);
       } else {
-        const userData = snap.data();
-        await ensureNotificationFields(user.uid, userData);
+        setError(authResult.message);
+        setGoogleLoading(false);
       }
-
-      await exchangeTokenAndRedirect(result);
     } catch (err: any) {
       setError("Google sign-in failed.");
       setGoogleLoading(false);

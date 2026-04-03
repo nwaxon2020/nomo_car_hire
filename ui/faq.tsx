@@ -23,17 +23,16 @@ const FaqPageUi = () => {
 
   // --- REAL-TIME DATA FETCHING ---
   useEffect(() => {
-    // 1. Listen for FAQ Settings (Subtitle)
-    const unsubSettings = onSnapshot(doc(db, "settings", "faq"), (snap) => {
-      if (snap.exists()) setFaqSubtitle(snap.data().subtitle || '');
-    });
-
-    // 2. Listen for General Contact Info (WhatsApp Number)
-    const unsubContact = onSnapshot(doc(db, "settings", "contact"), (snap) => {
-      if (snap.exists() && snap.data().phone) {
-        // Remove any '+', spaces or dashes for the WhatsApp URL
-        const rawPhone = snap.data().phone.replace(/\D/g, '');
-        setContactPhone(rawPhone);
+    // 1. Listen for FAQ Settings (Subtitle) and Contact Info
+    const unsubSettings = onSnapshot(doc(db, "site_configs", "general"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setFaqSubtitle(data.faqSubtitle || '');
+        if (data.generalContact?.phone) {
+          // Remove any '+', spaces or dashes for the WhatsApp URL
+          const rawPhone = data.generalContact.phone.replace(/\D/g, '');
+          setContactPhone(rawPhone);
+        }
       }
     });
 
@@ -55,7 +54,6 @@ const FaqPageUi = () => {
 
     return () => { 
       unsubSettings(); 
-      unsubContact(); 
       unsubCategories(); 
       unsubQuestions(); 
     };

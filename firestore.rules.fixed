@@ -7,7 +7,6 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == "oto7WgugASOkcA4oBl6OB6C39Ww1";
     }
 
-    // This looks at the staff member's document to see if the route is in their array
     function hasPermission(route) {
       let staffDoc = get(/databases/$(database)/documents/adminStaffs/$(request.auth.uid)).data;
       return isCEO() || (staffDoc != null && route in staffDoc.allowedRoutes);
@@ -23,39 +22,36 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow update: if request.auth != null && (
-        request.auth.uid == userId ||
-        isCEO() ||
-        // CHANGED: Using your DB string "/admin/manage-driver"
+        request.auth.uid == userId || 
+        isCEO() || 
         (hasPermission("/admin/manage-driver") && (
-          // Allow if: Driver is currently unverified OR Admin is setting them to verified (true).
-          // CEO is the only one who can bypass the "unverify" restriction.
           resource.data.verified == false || request.resource.data.verified == true || isCEO()
         ))
       );
-      // Allow users to delete their own accounts
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
-
+    
     // 2. BOOKING REQUESTS
     match /bookingRequests/{requestId} {
       allow read, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
       allow create, update: if request.auth != null;
     }
 
-    // 3. TRIPS
+    // 3. TRIPS 
     match /trips/{tripId} {
       allow read: if request.auth != null && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.driverId == request.auth.uid ||
+        resource.data.customerId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid || 
         isCEO()
       );
       allow create, update: if request.auth != null;
+      // FIX: Allow users to delete their own trips
       allow delete: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
     }
-
+    
     // 4. ADMIN STAFF & ROUTE CONFIG
     match /adminStaffs/{staffId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null; 
       allow write: if isCEO();
     }
 
@@ -65,15 +61,14 @@ service cloud.firestore {
     }
 
     // ============================================
-    // FIXED: NEW ADMIN FINANCE & CONFIG RULES!
-    // Everyone must be able to read pricing & countdown properties to calculate their VIP.
+    // FIXED: NEW ADMIN FINANCE & CONFIG RULES! 
     match /adminfinance/{docId} {
-      allow read: if true;
-      allow write: if isCEO() || hasPermission("/admin/finance");
+      allow read: if true; 
+      allow write: if isCEO() || hasPermission("/admin/finance"); 
     }
     match /adminConfig/{docId} {
-      allow read: if true;
-      allow write: if isCEO();
+      allow read: if true; 
+      allow write: if isCEO(); 
     }
     // ============================================
 
@@ -87,14 +82,14 @@ service cloud.firestore {
     // 6. VEHICLES & LOGS
     match /vehicles/{vehicleId} {
       allow read: if true;
-      allow write: if hasPermission("/admin/manage-driver"); // Adjusted to match your permissions
+      allow write: if hasPermission("/admin/manage-driver");
     }
-
+    
     match /vehicleLog/{logId} {
       allow read: if true;
-      // CHANGED: Allow update if they have manage-driver OR applicants permission
       allow update: if isCEO() || hasPermission("/admin/manage-driver") || hasPermission("/admin/applicants");
       allow create: if request.auth != null;
+      // FIX: Allow users to delete their own vehicle logs
       allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || isCEO());
     }
 
@@ -123,50 +118,13 @@ service cloud.firestore {
 
     // 10. SETTINGS
     match /settings/{docId} {
-      allow read: if true;
+      allow read: if true; 
       allow write: if isCEO();
     }
-
+    
     // GLOBAL SAFETY
     match /{document=**} {
       allow read, write: if isCEO();
-    }
-  }
-}
-    match /preChats/{chatId} {
-      // Users can read chats they're involved in
-      allow read: if request.auth != null &&
-                  (resource.data.senderId == request.auth.uid ||
-                   resource.data.receiverId == request.auth.uid);
-      
-      // Users can create chats as sender
-      allow create: if request.auth != null &&
-                    request.resource.data.senderId == request.auth.uid;
-      
-      // Users can update their own sent messages
-      allow update: if request.auth != null &&
-                    resource.data.senderId == request.auth.uid;
-      
-      // Only Cloud Functions can delete
-      allow delete: if false;
-    }
-    
-    // === VEHICLE LOG ===
-    match /vehicleLog/{vehicleId} {
-      // Vehicle owners can read their vehicles
-      allow read: if request.auth != null &&
-                  resource.data.driverId == request.auth.uid;
-      
-      // Drivers can create vehicle entries for themselves
-      allow create: if request.auth != null &&
-                    request.resource.data.driverId == request.auth.uid;
-      
-      // Drivers can update their own vehicles
-      allow update: if request.auth != null &&
-                    resource.data.driverId == request.auth.uid;
-      
-      // Only Cloud Functions can delete
-      allow delete: if false;
     }
   }
 }

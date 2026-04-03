@@ -28,6 +28,11 @@ export interface Comment {
     driverId: string;
 }
 
+export interface NewDriverConfig {
+    isNew: boolean;
+    registeredAt: Timestamp;
+}
+
 export interface VIPDetails {
     vipLevel: number;
     prestigeLevel: number;

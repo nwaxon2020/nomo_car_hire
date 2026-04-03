@@ -25,6 +25,13 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
 import LoadingRound from "@/components/re-useable-loading";
+import {
+  handleGoogleAuthUnified,
+  findReferrerByShortId,
+  createUserData as createUserDataHelper,
+  awardReferralPoints as awardReferralPointsHelper,
+  getDynamicWelcomeNote as getDynamicWelcomeNoteHelper,
+} from "@/lib/authHelpers";
 
 export default function SignUpUi() {
   const router = useRouter();
@@ -49,53 +56,15 @@ export default function SignUpUi() {
 
   useEffect(() => {
     if (referralShortId && referralShortId.length === 8) {
-      findReferrerByShortId(referralShortId);
+      loadReferrerData();
     }
   }, [referralShortId]);
 
-  const findReferrerByShortId = async (shortId: string) => {
-    try {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("referralShortId", "==", shortId), limit(1));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        const referrerDoc = querySnapshot.docs[0];
-        const data = referrerDoc.data();
-        setReferrerData(data);
-        setReferrerId(referrerDoc.id);
-      }
-    } catch (error) {
-      console.error("Error finding referrer:", error);
-    }
-  };
-
-  // --- RESTORED: FETCH FROM SETTINGS/NOTIFICATIONS ---
-  // --- INSIDE SignUpUi.tsx ---
-  const getDynamicWelcomeNote = async (userName: string) => {
-    try {
-      const settingsSnap = await getDoc(doc(db, "settings", "notifications"));
-      const firstName = userName.split(" ")[0];
-
-      if (settingsSnap.exists() && settingsSnap.data().welcomeNote) {
-        const savedNote = settingsSnap.data().welcomeNote;
-        return {
-          id: `welcome-${Date.now()}`,
-          type: "welcome",
-          title: (savedNote.title || "Welcome").replace("[NAME]", firstName),
-          message: (savedNote.message || "").replace("[NAME]", firstName),
-          actionUrl: savedNote.link || "/user/profile",
-          // ADD THIS LINE BELOW TO CAPTURE THE LABEL
-          actionLabel: savedNote.actionLabel || "View Details",
-          image: savedNote.imageUrl || null,
-          timestamp: new Date().toISOString(),
-          read: false,
-        };
-      }
-      return null;
-    } catch (e) {
-      console.error("Error fetching welcome settings:", e);
-      return null;
+  const loadReferrerData = async () => {
+    const { referrerId, referrerData } = await findReferrerByShortId(referralShortId!);
+    if (referrerId && referrerData) {
+      setReferrerId(referrerId);
+      setReferrerData(referrerData);
     }
   };
 
@@ -106,102 +75,6 @@ export default function SignUpUi() {
     if (msg.includes("auth/invalid-email")) return "Please enter a valid email address.";
     if (msg.includes("auth/weak-password")) return "Password should be at least 8 characters and include a number.";
     return "Something went wrong. Please try again.";
-  };
-
-  const awardReferralPoints = async (referrerFullId: string, newUserId: string) => {
-    try {
-      const referrerRef = doc(db, "users", referrerFullId);
-      const referrerSnap = await getDoc(referrerRef);
-      if (!referrerSnap.exists()) return;
-
-      const referrerData = referrerSnap.data();
-      const isDriver = referrerData.isDriver || false;
-      const currentPoints = (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
-
-      await updateDoc(referrerRef, {
-        referrals: arrayUnion({
-          userId: newUserId,
-          date: new Date().toISOString(),
-          points: POINTS_PER_REFERRAL,
-          status: "completed"
-        }),
-        referralPoints: increment(POINTS_PER_REFERRAL),
-        referralCount: increment(1),
-      });
-
-      if (currentPoints >= 20 && currentPoints % 20 === 0) {
-        if (isDriver) {
-          await updateDoc(referrerRef, {
-            driverVip: true,
-            notifications: arrayUnion({
-              id: Date.now().toString(),
-              type: "vip_earned",
-              title: "🌟 VIP Star Activated!",
-              message: "Your referrals earned you a VIP Star!",
-              timestamp: new Date().toISOString(),
-              read: false,
-              actionUrl: `/user/driver-profile/${referrerFullId}`
-            }),
-            hasUnreadNotifications: true
-          });
-        } else {
-          const newFreeRideCount = (referrerData.freeRides || 0) + 1;
-          await updateDoc(referrerRef, {
-            freeRides: newFreeRideCount,
-            notifications: arrayUnion({
-              id: Date.now().toString(),
-              type: "free_ride_earned",
-              title: "🎉 Free ₦5,000 Ride Earned!",
-              message: `You hit 20 points! You now have ${newFreeRideCount} free ride(s).`,
-              timestamp: new Date().toISOString(),
-              read: false,
-              actionUrl: "/user/bookings"
-            }),
-            hasUnreadNotifications: true
-          });
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error awarding points:", error);
-    }
-  };
-
-  const getReferralShortId = (userId: string) => userId.slice(-8);
-
-  const createUserData = (baseData: any, authType: string, referrerFullId: string | null, welcomeNote: any) => {
-    const userShortId = getReferralShortId(baseData.uid || '');
-
-    return {
-      ...baseData,
-      authType,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      hiredCars: [],
-      contactedDrivers: [],
-      referralShortId: userShortId,
-      referredBy: referrerFullId,
-      referralPoints: 0,
-      referrals: [],
-      referralCount: 0,
-      freeRides: 0,
-      totalPointsEarned: 0,
-      notificationEnabled: true,
-      // PUSH THE FETCHED NOTE DIRECTLY HERE
-      notifications: welcomeNote ? [welcomeNote] : [],
-      hasUnreadNotifications: welcomeNote ? true : false,
-      lastNotification: null,
-      fcmToken: "",
-      city: "",
-      phone: "",
-      phoneNumber: baseData.phoneNumber || "",
-      rating: 0,
-      totalTrips: 0,
-      earnings: 0,
-      isEmailVerified: baseData.isEmailVerified || false,
-      lastActive: serverTimestamp(),
-      verified: false,
-      preferences: { theme: "light", language: "en", currency: "NGN" }
-    };
   };
 
   const handleRegister = async (e: any) => {
@@ -222,22 +95,19 @@ export default function SignUpUi() {
       const photoURL = await getDownloadURL(storageRef);
 
       // FETCH DYNAMIC NOTE FIRST
-      const welcomeNote = await getDynamicWelcomeNote(fullName);
+      const welcomeNote = await getDynamicWelcomeNoteHelper(fullName);
 
       const baseData = {
         uid: userCred.user.uid,
         fullName,
         email,
         profileImage: photoURL,
-        isDriver: false,
-        vip: false,
-        isEmailVerified: false,
       };
 
-      const completeUserData = createUserData(baseData, "email", referrerId, welcomeNote);
+      const completeUserData = createUserDataHelper(baseData, "email", referrerId, welcomeNote);
       await setDoc(doc(db, "users", userCred.user.uid), completeUserData);
 
-      if (referrerId) await awardReferralPoints(referrerId, userCred.user.uid);
+      if (referrerId) await awardReferralPointsHelper(referrerId, userCred.user.uid);
 
       setMessage("✅ Account created! Check your email.");
       setLoading(false);
@@ -250,30 +120,23 @@ export default function SignUpUi() {
 
   const googleSignup = async () => {
     setGoogleLoading(true);
+    setMessage("");
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const userRef = doc(db, "users", user.uid);
-      const snap = await getDoc(userRef);
-
-      if (!snap.exists()) {
-        const welcomeNote = await getDynamicWelcomeNote(user.displayName || "User");
-        const baseData = {
-          uid: user.uid,
-          fullName: user.displayName || "Google User",
-          email: user.email,
-          profileImage: user.photoURL || "/profile.png",
-          isDriver: false,
-          vip: false,
-          isEmailVerified: true,
-        };
-        const completeUserData = createUserData(baseData, "google", referrerId, welcomeNote);
-        await setDoc(userRef, completeUserData);
-        if (referrerId) await awardReferralPoints(referrerId, user.uid);
+      
+      // Use unified Google auth handler
+      const authResult = await handleGoogleAuthUnified(result, referrerId, true);
+      
+      if (authResult.success) {
+        setMessage(`✅ ${authResult.userExists ? "Welcome back!" : "Account created successfully!"}`);
+        setGoogleLoading(false);
+        setTimeout(() => router.push("/"), 1500);
+      } else {
+        setMessage(`❌ ${authResult.message}`);
+        setGoogleLoading(false);
       }
-      setGoogleLoading(false);
-      router.push("/");
     } catch (err: any) {
+      setMessage("❌ Google sign-up failed. Please try again.");
       setGoogleLoading(false);
     }
   };

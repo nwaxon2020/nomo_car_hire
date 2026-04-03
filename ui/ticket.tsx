@@ -122,6 +122,46 @@ export default function TicketPage() {
     }
   })
 
+  // Check if driver is in new driver free trial period
+  const isNewDriver = () => {
+    if (!userData?.newDriverConfig?.isNew) return false
+    if (!userData?.newDriverConfig?.registeredAt) return false
+    
+    const registeredAt = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt)
+    const freeTrialDays = adminConfig?.newDriver?.freeTrialDays || 60
+    const trialEndDate = new Date(registeredAt)
+    trialEndDate.setDate(trialEndDate.getDate() + freeTrialDays)
+    
+    return new Date() < trialEndDate
+  }
+
+  // Get time left in new driver trial
+  const getNewDriverTimeLeft = () => {
+    if (!userData?.newDriverConfig?.isNew || !userData?.newDriverConfig?.registeredAt) return null
+    
+    const registeredAt = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt)
+    const freeTrialDays = adminConfig?.newDriver?.freeTrialDays || 60
+    const trialEndDate = new Date(registeredAt)
+    trialEndDate.setDate(trialEndDate.getDate() + freeTrialDays)
+    
+    const now = new Date()
+    const diffMs = trialEndDate.getTime() - now.getTime()
+    
+    if (diffMs <= 0) return null
+    
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  // Check if we should show unblur option (within warning period)
+  const shouldShowPurchaseOption = () => {
+    if (!isNewDriver()) return false
+    const freeTrialDays = adminConfig?.newDriver?.freeTrialDays || 60
+    const warningDays = adminConfig?.newDriver?.warningDays || 5
+    const daysLeft = getNewDriverTimeLeft() || 0
+    return daysLeft <= warningDays
+  }
+
   const openOverlay = (ticket: (typeof TICKET_CONFIG)[0]) => {
     setSelectedTicket(ticket)
     setShowOverlay(true)
@@ -371,6 +411,33 @@ export default function TicketPage() {
           </div>
         )}
 
+        {/* FREE TICKET BANNER FOR NEW DRIVERS */}
+        {isNewDriver() && (
+          <div className="mb-8 bg-gradient-to-r from-green-500/20 via-emerald-500/20 to-teal-500/10 border border-green-400/40 rounded-2xl p-5 md:p-6 overflow-hidden relative">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.1),transparent)] pointer-events-none" />
+            <div className="relative z-10 flex items-start gap-4 md:items-center md:justify-between flex-col md:flex-row">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg">
+                  🎁
+                </div>
+                <div>
+                  <p className="text-green-400 font-black text-base md:text-lg">FREE TICKETS!</p>
+                  <p className="text-slate-300 text-xs md:text-sm">
+                    {getNewDriverTimeLeft()} days remaining • Unlock premium access at any time
+                  </p>
+                </div>
+              </div>
+              <div className="w-full md:w-auto">
+                <div className="bg-white/10 border border-green-400/30 rounded-xl px-4 py-2 text-center">
+                  <p className="text-green-400 font-black text-sm">
+                    {getNewDriverTimeLeft()} days free
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Ticket Cards */}
         <div className="px-3 md:px-0 grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {dynamicTickets.map((ticket) => {
@@ -384,23 +451,39 @@ export default function TicketPage() {
             const isOwnedOrLower = currentTicketLevel >= ticket.level;
             const isExactLevel = currentTicketLevel === ticket.level;
 
-            const disabled = active || (isOwnedOrLower && !isExactLevel);
+            // NEW DRIVER LOGIC
+            const isNewDriverStatus = isNewDriver()
+            const canPurchaseNow = shouldShowPurchaseOption()
+            const shouldBlurCard = isNewDriverStatus && !canPurchaseNow
+            const disabled = active || (isOwnedOrLower && !isExactLevel) || shouldBlurCard
 
             return (
               <div
                 key={ticket.level}
                 className={`relative group bg-white rounded-3xl overflow-hidden flex flex-col transition-all duration-300
-                  ${ticket.featured && !isOwnedOrLower
+                  ${shouldBlurCard ? "blur-sm opacity-60 pointer-events-none" : ""}
+                  ${ticket.featured && !isOwnedOrLower && !shouldBlurCard
                     ? "shadow-2xl shadow-indigo-500/20 scale-[1.02] ring-2 ring-indigo-400/50"
                     : "shadow-xl hover:shadow-2xl hover:-translate-y-1"
                   }
                   ${active && !inWarning ? "ring-2 ring-emerald-400/60" : ""}
                   ${inWarning ? "ring-2 ring-amber-400/70" : ""}
-                  ${isOwnedOrLower ? "opacity-60 grayscale-[0.5]" : ""}
+                  ${isOwnedOrLower && !shouldBlurCard ? "opacity-60 grayscale-[0.5]" : ""}
                 `}
               >
+                {/* New Driver Lock Overlay */}
+                {shouldBlurCard && (
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-20 rounded-3xl">
+                    <div className="text-center text-white">
+                      <p className="text-3xl mb-2">🔒</p>
+                      <p className="text-sm font-bold">Free Trial</p>
+                      <p className="text-[11px] text-slate-200">{getNewDriverTimeLeft()} days remaining</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Featured badge */}
-                {ticket.featured && !active && (
+                {ticket.featured && !active && !shouldBlurCard && (
                   <div className="absolute top-4 right-4 z-10">
                     <span className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg">
                       ★ {ticket.badge}
@@ -408,7 +491,7 @@ export default function TicketPage() {
                   </div>
                 )}
 
-                {inWarning && (
+                {inWarning && !shouldBlurCard && (
                   <div className="absolute top-4 right-4 z-10">
                     <span className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg animate-pulse">
                       ⚠ Expiring Soon
@@ -416,7 +499,7 @@ export default function TicketPage() {
                   </div>
                 )}
 
-                {active && !inWarning && (
+                {active && !inWarning && !shouldBlurCard && (
                   <div className="absolute top-4 right-4 z-10">
                     <span className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg">
                       ✓ Active
@@ -466,7 +549,7 @@ export default function TicketPage() {
                         {perk}
                       </li>
                     ))}
-                    {active && expiryDisplay && (
+                    {active && expiryDisplay && !shouldBlurCard && (
                       <li className="flex items-center gap-2.5 text-sm text-emerald-600 font-semibold">
                         <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-black flex-shrink-0">
                           ⏱
@@ -476,8 +559,8 @@ export default function TicketPage() {
                     )}
                   </ul>
 
-                  {/* CTA — renew ticket when near expiry */}
-                  {inWarning ? (
+                  {/* CTA */}
+                  {inWarning && !shouldBlurCard ? (
                     <button
                       onClick={() => openOverlay(ticket)}
                       className={`mt-2 w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-gradient-to-r ${ticket.color} text-white shadow-md hover:opacity-90 transition-all active:scale-95`}
@@ -487,15 +570,15 @@ export default function TicketPage() {
                   ) : (
                     <button
                       onClick={() => !disabled && openOverlay(ticket)}
-                      disabled={disabled}
+                      disabled={disabled || shouldBlurCard}
                       className={`w-full py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-200 active:scale-95
-                        ${disabled
+                        ${disabled || shouldBlurCard
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : `bg-gradient-to-r ${ticket.color} text-white shadow-lg ${ticket.glow} hover:shadow-xl hover:opacity-90`
                         }
                       `}
                     >
-                      {active ? "Currently Active" : (isOwnedOrLower ? "Purchase Disabled" : "Buy Now")}
+                      {shouldBlurCard ? "Locked" : (active ? "Currently Active" : (isOwnedOrLower ? "Purchase Disabled" : "Buy Now"))}
                     </button>
                   )}
                 </div>

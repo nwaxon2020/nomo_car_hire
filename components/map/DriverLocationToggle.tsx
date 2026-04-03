@@ -10,6 +10,7 @@ import {
   FaUser, FaTimes, FaEdit, FaWhatsapp, FaCamera, FaGlobe, FaInfoCircle, FaChevronDown, FaExclamationCircle
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import GPSPermissionModal from './GPSPermissionModal';
 
 export default function DriverLocationToggle({
   driverId,
@@ -22,6 +23,10 @@ export default function DriverLocationToggle({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
+
+  // GPS Permission Modal State
+  const [gpsModalOpen, setGpsModalOpen] = useState(false);
+  const [gpsErrorType, setGpsErrorType] = useState<"denied" | "unavailable" | "timeout" | "unknown" | "notSupported">("unknown");
 
   // Profile States
   const [firstName, setFirstName] = useState('');
@@ -139,7 +144,11 @@ export default function DriverLocationToggle({
       });
       toast.success("Location Off");
     } else {
-      if (!navigator.geolocation) return toast.error("GPS not supported");
+      if (!navigator.geolocation) {
+        setGpsErrorType("notSupported");
+        setGpsModalOpen(true);
+        return;
+      }
       setIsLoading(true);
 
       const id = navigator.geolocation.watchPosition(
@@ -181,7 +190,19 @@ export default function DriverLocationToggle({
         },
         (err) => {
           setIsLoading(false);
-          toast.error("Enable GPS permissions");
+          
+          // Determine GPS error type
+          if (err.code === err.PERMISSION_DENIED) {
+            setGpsErrorType("denied");
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            setGpsErrorType("unavailable");
+          } else if (err.code === err.TIMEOUT) {
+            setGpsErrorType("timeout");
+          } else {
+            setGpsErrorType("unknown");
+          }
+          
+          setGpsModalOpen(true);
         },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
       );
@@ -367,6 +388,14 @@ export default function DriverLocationToggle({
           </div>
         </div>
       )}
+
+      {/* GPS Permission Modal */}
+      <GPSPermissionModal 
+        isOpen={gpsModalOpen}
+        onDismiss={() => setGpsModalOpen(false)}
+        onRetry={() => toggleLocation()}
+        errorType={gpsErrorType}
+      />
     </div>
   );
 }

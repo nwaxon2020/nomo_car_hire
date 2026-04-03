@@ -28,6 +28,7 @@ interface SiteConfig {
     email: string;
     address: string;
   };
+  faqSubtitle?: string;
   socials: SocialLink[];
 }
 
