@@ -600,7 +600,7 @@ export default function DriverProfilePage() {
             const customersCarried = data.customersCarried || [];
 
             const referralCount = data.referralCount || 0;
-            
+
             const purchasedVipLevel = getActivePurchasedVipLevel(data.vipHistory);
 
             let vipLevel = data.vipLevel !== undefined ? data.vipLevel : 0;
@@ -788,7 +788,7 @@ export default function DriverProfilePage() {
 
       {/* Word Guessing Game */}
       {game && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+        <div className="h-[100vh] fixed inset-0 z-60 bg-black/90 flex items-center justify-center">
           <WordGuessGame onClose={() => setGame(false)} />
         </div>
       )}
