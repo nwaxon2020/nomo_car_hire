@@ -17,7 +17,8 @@ import {
   X,
   MessageSquare,
   ChevronDown,
-  Bell
+  Bell,
+  Navigation
 } from "lucide-react";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -157,6 +158,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     { name: "Home", href: "/", icon: <Home size={20} /> },
     { name: "Dashboard", href: dashboardRoute, icon: <LayoutDashboard size={20} /> },
     { name: "Chat", href: "/user/chat", icon: <MessageSquare size={20} /> },
+    { name: "Mobility", href: "/user/mobility", icon: <Navigation size={20} /> },
     { name: "Hire a Car", href: "/user/car-hire", icon: <Car size={20} /> },
     !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <UserPlus size={20} /> },
     {

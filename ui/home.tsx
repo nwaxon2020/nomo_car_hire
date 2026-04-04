@@ -134,7 +134,7 @@ export default function HomePageUi() {
   };
 
   const handleBookRide = () => {
-    router.push("/user/car-hire");
+    router.push("/user/mobility");
   };
 
   const handleSearch = (e: React.FormEvent) => {

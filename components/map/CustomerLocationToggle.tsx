@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { 
-  doc, 
-  updateDoc, 
-  Timestamp, 
-  getDoc, 
+import {
+  doc,
+  updateDoc,
+  Timestamp,
+  getDoc,
   onSnapshot,
   arrayUnion,
   collection,
@@ -16,24 +16,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { getAuth } from 'firebase/auth';
-import { 
-  FaMapMarkerAlt, 
-  FaUserFriends,
-  FaShareAlt,
-  FaEye,
-  FaEyeSlash,
-  FaPlus,
-  FaTimes,
-  FaUser,
-  FaEnvelope,
-  FaMap,
-  FaCheckCircle,
-  FaShieldAlt,
-  FaWhatsapp,
-  FaPhone,
-  FaInfoCircle,
-  FaExternalLinkAlt
+import {
+  FaMapMarkerAlt, FaUserFriends, FaShareAlt, FaEye, FaEyeSlash, FaPlus, FaTimes, FaUser, FaMap, FaCheckCircle, FaShieldAlt, FaWhatsapp, FaPhone, FaInfoCircle, FaExternalLinkAlt, FaChevronDown, FaChevronUp, FaLock
 } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import GPSPermissionModal from './GPSPermissionModal';
 
@@ -48,6 +34,7 @@ interface LovedOne {
   name: string;
   formattedNumber: string;
   isAppUser: boolean;
+  isActive?: boolean;
 }
 
 export default function CustomerLocationToggle({ userId, tripId }: CustomerLocationToggleProps) {
@@ -60,7 +47,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [sendingLinks, setSendingLinks] = useState<string[]>([]);
-  
+  const [showValidationInfo, setShowValidationInfo] = useState(false);
+  const [showTracking, setShowTracking] = useState(false);
+
   // GPS Permission Modal State
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
   const [gpsErrorType, setGpsErrorType] = useState<"denied" | "unavailable" | "timeout" | "unknown" | "notSupported">("unknown");
@@ -98,7 +87,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           }
 
           // Load loved ones (both app users and WhatsApp contacts)
-          await loadLovedOnesDetails(data.lovedOnes || [], data.whatsappLovedOnes || []);
+          await loadLovedOnesDetails(data.lovedOnes || [], data.whatsappLovedOnes || [], data.emergencyContact || []);
         }
 
         unsubscribe = onSnapshot(userRef, (docSnap) => {
@@ -128,8 +117,16 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       }
     };
 
-    const loadLovedOnesDetails = async (appUserIds: string[], whatsappContactIds: string[]) => {
+    const loadLovedOnesDetails = async (appUserIds: string[], whatsappContactIds: string[], emergencycontacts?: any[]) => {
       const lovedOnesData: LovedOne[] = [];
+      const emergencyContactMap: { [key: string]: any } = {};
+
+      // Create a map of emergency contacts for quick lookup
+      if (emergencycontacts && Array.isArray(emergencycontacts)) {
+        emergencycontacts.forEach((ec: any) => {
+          emergencyContactMap[ec.id] = ec;
+        });
+      }
 
       // Load app users
       for (const lovedOneId of appUserIds) {
@@ -140,13 +137,14 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           if (lovedOneDoc.exists()) {
             const lovedOneData = lovedOneDoc.data();
             const phoneNumber = lovedOneData.phoneNumber || '';
-            
+
             lovedOnesData.push({
               id: lovedOneId,
               whatsappNumber: phoneNumber,
               name: lovedOneData.name || formatPhoneForDisplay(phoneNumber),
               formattedNumber: formatPhoneForDisplay(phoneNumber),
-              isAppUser: true
+              isAppUser: true,
+              isActive: emergencyContactMap[lovedOneId]?.isActive || false
             });
           }
         } catch (error) {
@@ -162,13 +160,14 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
           if (contactDoc.exists()) {
             const contactData = contactDoc.data();
-            
+
             lovedOnesData.push({
               id: contactId,
               whatsappNumber: contactData.whatsappNumber || '',
               name: contactData.displayNumber || 'WhatsApp Contact',
               formattedNumber: formatPhoneForDisplay(contactData.whatsappNumber || ''),
-              isAppUser: false
+              isAppUser: false,
+              isActive: emergencyContactMap[contactId]?.isActive || false
             });
           }
         } catch (error) {
@@ -190,9 +189,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   // Format phone for WhatsApp search
   const formatPhoneForSearch = (phone: string): string => {
     if (!phone) return '';
-    
+
     let cleaned = phone.replace(/\D/g, '');
-    
+
     if (cleaned.startsWith('0') && cleaned.length === 11) {
       return '234' + cleaned.substring(1);
     } else if (cleaned.length === 10) {
@@ -202,20 +201,20 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     } else if (cleaned.startsWith('+234') && cleaned.length === 14) {
       return cleaned.substring(1);
     }
-    
+
     return cleaned;
   };
 
   // Format phone for display
   const formatPhoneForDisplay = (phone: string): string => {
     if (!phone) return 'Unknown';
-    
+
     if (phone.startsWith('+234') && phone.length === 14) {
       return '0' + phone.slice(4);
     } else if (phone.startsWith('234') && phone.length === 13) {
       return '0' + phone.slice(3);
     }
-    
+
     return phone;
   };
 
@@ -228,11 +227,11 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const sendTrackingLink = async (lovedOne: LovedOne) => {
     try {
       setSendingLinks(prev => [...prev, lovedOne.id]);
-      
+
       // Generate unique token
       const token = generateToken();
       const trackingLink = `${window.location.origin}/track/${userId}/${token}`;
-      
+
       // Store token in Firestore (valid for 24 hours)
       const tokenRef = doc(db, 'trackingTokens', token);
       await setDoc(tokenRef, {
@@ -243,7 +242,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         expiresAt: Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
         isValid: true
       });
-      
+
       // Create WhatsApp message
       const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
       const message = `🚗 *Nomopoventures Live Tracking*\n\n` +
@@ -253,15 +252,12 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         `📍 Updates every 30 seconds\n` +
         `🗺️ See real-time movement on map\n\n` +
         `_Shared via Nomopoventures Safety Feature_`;
-      
+
       const formattedNumber = formatPhoneForSearch(lovedOne.whatsappNumber);
       const whatsappUrl = `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message)}`;
-      
+
       // Open WhatsApp
       window.open(whatsappUrl, '_blank');
-      
-      toast.success(`Tracking link sent to ${lovedOne.formattedNumber}`);
-      
     } catch (error) {
       console.error('Error sending tracking link:', error);
       toast.error('Failed to send tracking link');
@@ -319,12 +315,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
           toast.success('📍 Live location sharing started!');
 
-          // Auto-send tracking links to loved ones
-          if (lovedOnes.length > 0) {
-            toast.success('Sending tracking links to loved ones...');
-            sendLinksToAll();
-          }
-
           const id = navigator.geolocation.watchPosition(
             async (pos) => {
               const { latitude: lat, longitude: lng, accuracy } = pos.coords;
@@ -355,7 +345,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             },
             (error) => {
               console.error('Location watch error:', error);
-              
+
               // Determine GPS error type
               if (error.code === error.PERMISSION_DENIED) {
                 setGpsErrorType("denied");
@@ -366,7 +356,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
               } else {
                 setGpsErrorType("unknown");
               }
-              
+
               setGpsModalOpen(true);
               stopLocationSharing();
             },
@@ -387,7 +377,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       },
       (error) => {
         console.error('Geolocation error:', error);
-        
+
         // Determine GPS error type
         if (error.code === error.PERMISSION_DENIED) {
           setGpsErrorType("denied");
@@ -398,7 +388,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         } else {
           setGpsErrorType("unknown");
         }
-        
+
         setGpsModalOpen(true);
         setLoading(false);
       }
@@ -432,7 +422,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const addLovedOne = async (whatsappNumber: string) => {
     const cleanedNumber = whatsappNumber.replace(/\D/g, '');
     if (!(cleanedNumber.length === 10 || cleanedNumber.length === 11)) {
-      toast.error('Enter valid Nigerian number (10 or 11 digits)');
       return;
     }
 
@@ -456,7 +445,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       for (const phoneFormat of possibleFormats) {
         const q = query(usersRef, where('phoneNumber', '==', phoneFormat));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           isAppUser = true;
           lovedOneId = querySnapshot.docs[0].id;
@@ -469,7 +458,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         // Create WhatsApp contact entry
         lovedOneId = `whatsapp_${formattedNumber}`;
         const contactRef = doc(db, 'whatsappContacts', lovedOneId);
-        
+
         await setDoc(contactRef, {
           whatsappNumber: formattedNumber,
           displayNumber: formatPhoneForDisplay(whatsappNumber),
@@ -480,20 +469,33 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
       // Check if already added
       if (lovedOnes.some(lo => lo.id === lovedOneId)) {
-        toast.error('This contact is already added');
         return;
       }
 
       // Add to user's loved ones
       const userRef = doc(db, 'users', userId);
-      
+      const displayName = isAppUser ? (lovedOneData.name || formatPhoneForDisplay(whatsappNumber)) : formatPhoneForDisplay(whatsappNumber);
+
+      // Create emergency contact object
+      const emergencyContactObj = {
+        phoneNumber: formattedNumber,
+        displayPhoneNumber: formatPhoneForDisplay(whatsappNumber),
+        name: displayName,
+        id: lovedOneId,
+        isAppUser,
+        isActive: false,
+        addedAt: Timestamp.now()
+      };
+
       if (isAppUser) {
         await updateDoc(userRef, {
-          lovedOnes: arrayUnion(lovedOneId)
+          lovedOnes: arrayUnion(lovedOneId),
+          emergencyContact: arrayUnion(emergencyContactObj)
         });
       } else {
         await updateDoc(userRef, {
-          whatsappLovedOnes: arrayUnion(lovedOneId)
+          whatsappLovedOnes: arrayUnion(lovedOneId),
+          emergencyContact: arrayUnion(emergencyContactObj)
         });
       }
 
@@ -501,14 +503,14 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       setLovedOnes(prev => [...prev, {
         id: lovedOneId,
         whatsappNumber: formattedNumber,
-        name: isAppUser ? (lovedOneData.name || formatPhoneForDisplay(whatsappNumber)) : formatPhoneForDisplay(whatsappNumber),
+        name: displayName,
         formattedNumber: formatPhoneForDisplay(whatsappNumber),
         isAppUser
       }]);
 
       setNewLovedOneNumber('');
-      toast.success(`${formatPhoneForDisplay(whatsappNumber)} added to loved ones`);
-      
+      toast.success(`${formatPhoneForDisplay(whatsappNumber)} added to emergency contacts`);
+
     } catch (error) {
       console.error('Error adding loved one:', error);
       toast.error('Failed to add contact');
@@ -524,15 +526,54 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
       if (!userDoc.exists()) return;
 
-      if (lovedOneId.startsWith('whatsapp_')) {
-        const updated = (userDoc.data().whatsappLovedOnes || []).filter((id: string) => id !== lovedOneId);
-        await updateDoc(userRef, { whatsappLovedOnes: updated });
-      } else {
-        const updated = (userDoc.data().lovedOnes || []).filter((id: string) => id !== lovedOneId);
-        await updateDoc(userRef, { lovedOnes: updated });
+      const userData = userDoc.data();
+
+      // Check if deleted contact was active
+      const wasActive = (userData.emergencyContact || []).some(
+        (contact: any) => contact.id === lovedOneId && contact.isActive
+      );
+
+      // Remove from emergencyContact array by filtering
+      let updatedEmergencyContacts = (userData.emergencyContact || []).filter(
+        (contact: any) => contact.id !== lovedOneId
+      );
+
+      // If deleted contact was active and there are other contacts, auto-select the next most recent
+      if (wasActive && updatedEmergencyContacts.length > 0) {
+        // Sort by addedAt timestamp (most recent first)
+        updatedEmergencyContacts = updatedEmergencyContacts.sort(
+          (a: any, b: any) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0)
+        );
+
+        // Set the most recent one as active
+        updatedEmergencyContacts[0].isActive = true;
+
+        toast.success(`Auto-selected ${updatedEmergencyContacts[0].name} as emergency contact`);
       }
 
-      setLovedOnes(prev => prev.filter(lo => lo.id !== lovedOneId));
+      if (lovedOneId.startsWith('whatsapp_')) {
+        const updated = (userData.whatsappLovedOnes || []).filter((id: string) => id !== lovedOneId);
+        await updateDoc(userRef, {
+          whatsappLovedOnes: updated,
+          emergencyContact: updatedEmergencyContacts
+        });
+      } else {
+        const updated = (userData.lovedOnes || []).filter((id: string) => id !== lovedOneId);
+        await updateDoc(userRef, {
+          lovedOnes: updated,
+          emergencyContact: updatedEmergencyContacts
+        });
+      }
+
+      setLovedOnes(prev => {
+        const filtered = prev.filter(lo => lo.id !== lovedOneId);
+        // Update isActive status for remaining contacts
+        return filtered.map(lo => ({
+          ...lo,
+          isActive: updatedEmergencyContacts.some((ec: any) => ec.id === lo.id && ec.isActive)
+        }));
+      });
+
       toast.success('Contact removed');
     } catch (error) {
       console.error('Error removing loved one:', error);
@@ -540,15 +581,60 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     }
   };
 
+  const setActiveContact = async (activeContactId: string) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) return;
+
+      const userData = userDoc.data();
+
+      // Update emergencyContact array to mark selected as active
+      const updatedEmergencyContacts = (userData.emergencyContact || []).map((contact: any) => ({
+        ...contact,
+        isActive: contact.id === activeContactId
+      }));
+
+      await updateDoc(userRef, {
+        emergencyContact: updatedEmergencyContacts
+      });
+
+      // Update local state
+      setLovedOnes(prev => prev.map(lo => ({
+        ...lo,
+        isActive: lo.id === activeContactId
+      })));
+
+      toast.success('Emergency contact updated');
+    } catch (error) {
+      console.error('Error setting active contact:', error);
+      toast.error('Failed to update emergency contact');
+    }
+  };
+
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
     try {
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        // Fallback to OSM if key is missing
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+        const data = await res.json();
+        return data.display_name || 'Location active';
+      }
+
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
       );
       const data = await res.json();
-      return data.display_name || 'On the way';
-    } catch {
+
+      if (data.results && data.results.length > 0) {
+        return data.results[0].formatted_address;
+      }
       return 'Location updated';
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return 'Location active';
     }
   };
 
@@ -566,338 +652,189 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const formatTimeSince = (date: Date | null): string => {
-    if (!date) return 'Never';
-    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
-    if (diff < 10) return 'Just now';
-    if (diff < 60) return `${diff} seconds ago`;
-    if (diff < 120) return '1 minute ago';
-    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
-    return `${Math.floor(diff / 3600)} hours ago`;
-  };
-
   if (loading) {
     return (
-      <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600">Loading location settings...</span>
+      <div className="p-4 bg-white border border-gray-100 rounded-lg shadow-sm">
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-xs text-gray-500 font-medium uppercase tracking-wider">Syncing...</span>
         </div>
       </div>
     );
   }
 
+
   return (
-    <div className="py-6 px-2 md:p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-full ${isSharing ? 'bg-green-100 text-green-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
-            <FaMapMarkerAlt className="text-xl" />
+    <div className="w-full bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Header Status */}
+      <div className="p-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-lg ${isSharing ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-200 text-gray-500'}`}>
+            <FaShieldAlt size={12} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Live Location Sharing</h2>
-            <p className="text-gray-600">
-              Share your real-time location with loved ones
-            </p>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Security Hub</h3>
+            <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tight">Real-time Safety Sync</p>
           </div>
         </div>
-        
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded-full ${isSharing ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
-          <span className={`text-sm font-medium ${isSharing ? 'text-green-600' : 'text-gray-500'}`}>
-            {isSharing ? 'LIVE' : 'OFF'}
-          </span>
+
+          <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${isSharing ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+            <div className={`w-1 h-1 rounded-full ${isSharing ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+            {isSharing ? 'Live' : 'Off'}
+          </div>
         </div>
       </div>
 
-      {/* Current Status */}
-      {isSharing && currentLocation && (
-        <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
-          <div className="flex items-center gap-2 mb-3">
-            <FaCheckCircle className="text-green-600" />
-            <h4 className="font-bold text-green-800">Currently Sharing Location</h4>
-          </div>
-          
-          <div className="space-y-3">
-            {currentLocation.address && (
-              <div className="bg-white p-3 rounded-lg border border-green-100">
-                <p className="text-gray-800 font-medium">📍 {currentLocation.address}</p>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white p-3 rounded-lg border border-green-100">
-                <p className="text-xs text-gray-500">Coordinates</p>
-                <p className="text-sm font-medium text-gray-800">
-                  {currentLocation.lat?.toFixed(6)}, {currentLocation.lng?.toFixed(6)}
-                </p>
-              </div>
-              
-              <div className="bg-white p-3 rounded-lg border border-green-100">
-                <p className="text-xs text-gray-500">Last Update</p>
-                <p className="text-sm font-medium text-gray-800">
-                  {formatTimeSince(lastUpdate)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Toggle Button */}
-      <div className="mb-6">
+      <div className="p-3 space-y-3">
+        {/* Main Simple Button */}
         <button
           onClick={isSharing ? stopLocationSharing : startLocationSharing}
           disabled={loading}
-          className={`w-full py-3 px-4 rounded-lg font-bold text-sm md:text-base transition-all duration-300 flex items-center justify-center gap-2 ${
-            isSharing 
-              ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg'
-              : 'bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl'
-          } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all flex items-center justify-center gap-2 ${isSharing
+            ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'
+            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-900/20 active:scale-[0.98]'
+            }`}
         >
           {loading ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              Processing...
-            </>
+            <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
           ) : isSharing ? (
             <>
-              <FaEyeSlash className="text-xl" />
-              Stop Sharing
+              <FaEyeSlash size={9} />
+              Turn Off Location
             </>
           ) : (
             <>
-              <FaEye className="text-xl" />
-              Start Sharing
+              <FaEye size={9} />
+              Turn On Location
             </>
           )}
         </button>
-        
-        <p className="mt-2 text-center text-sm text-gray-600">
-          {isSharing 
-            ? '✅ Your location is updating in real-time'
-            : 'Turn on to share your live location with loved ones'}
-        </p>
-      </div>
 
-      {/* Add Loved One Section - UPDATED FOR WHATSAPP */}
-      <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <FaWhatsapp className="text-green-600" />
-          Add WhatsApp Contacts
-        </h3>
-        
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              WhatsApp Number
-            </label>
-            <div className="flex flex-col md:flex-row gap-2">
-              <input
-                type="tel"
-                placeholder="e.g., 08012345678"
-                value={newLovedOneNumber}
-                onChange={(e) => setNewLovedOneNumber(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                onKeyPress={(e) => e.key === 'Enter' && addLovedOne(newLovedOneNumber)}
-              />
-              <button
-                onClick={() => addLovedOne(newLovedOneNumber)}
-                disabled={addingLovedOne || !newLovedOneNumber.trim()}
-                className="flex justify-center items-center px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {addingLovedOne ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  </>
-                ) : (
-                  <>
-                    <FaPlus />
-                    Add Number
-                  </>
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Enter Nigerian WhatsApp number (10 or 11 digits)
-            </p>
-          </div>
-          
-          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-sm text-green-700 flex items-start gap-2">
-              <FaInfoCircle className="text-green-600 mt-0.5" />
-              <span>
-                <strong>How it works:</strong> Add WhatsApp numbers of family/friends. 
-                When you start sharing, they'll receive a link to track your live location in real-time!
-              </span>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Send Tracking Links Button */}
-      {isSharing && lovedOnes.length > 0 && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-bold text-gray-800 flex items-center gap-2">
-              <FaShareAlt className="text-green-600" />
-              Send Tracking Links
-            </h4>
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-              {lovedOnes.length} contact{lovedOnes.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          
-          <p className="text-sm text-gray-600 mb-3">
-            Send live tracking links to all your loved ones. They'll be able to see your real-time movement.
-          </p>
-          
-          <button
-            onClick={sendLinksToAll}
-            disabled={sendingLinks.length > 0}
-            className="w-full py-2 bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+        {/* Current Address Snippet */}
+        {isSharing && currentLocation && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-2 bg-blue-50/50 rounded-lg border border-blue-100"
           >
-            {sendingLinks.length > 0 ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Sending Links...
-              </>
-            ) : (
-              <>
-                <FaWhatsapp className="text-lg" />
-                Send Tracking Links via WhatsApp
-              </>
-            )}
-          </button>
-        </div>
-      )}
+            <p className="text-[8px] text-blue-800 font-black uppercase tracking-widest mb-0.5 flex items-center gap-1">
+              <FaMapMarkerAlt size={7} /> Current Broadcast
+            </p>
+            <p className="text-[9px] text-gray-600 font-medium leading-tight line-clamp-1">
+              {currentLocation.address || 'Broadcasting coordinates...'}
+            </p>
+          </motion.div>
+        )}
 
-      {/* Loved Ones List - UPDATED */}
-      {lovedOnes.length > 0 && (
-        <div className="mb-6">
-          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <FaUserFriends className="text-blue-600" />
-            Sharing With ({lovedOnes.length})
-          </h3>
-          
-          <div className="space-y-2">
-            {lovedOnes.map((lovedOne) => (
-              <div 
-                key={lovedOne.id} 
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-full ${
-                    lovedOne.isAppUser ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
-                  }`}>
-                    {lovedOne.isAppUser ? (
-                      <FaUser />
-                    ) : (
-                      <FaWhatsapp />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-800">{lovedOne.name}</p>
-                    <div className="flex items-center gap-1">
-                      <FaPhone className="text-xs text-gray-500" />
-                      <span className="text-sm text-gray-600">{lovedOne.formattedNumber}</span>
-                      {!lovedOne.isAppUser && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-2">
-                          WhatsApp Only
-                        </span>
-                      )}
+
+
+        {/* Emergency Contacts Management */}
+        <div className="pt-1">
+          <div className="flex gap-1.5 mb-2">
+            <input
+              type="tel"
+              placeholder="080..."
+              value={newLovedOneNumber}
+              onChange={(e) => setNewLovedOneNumber(e.target.value)}
+              className="flex-1 px-2.5 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs placeholder:text-gray-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+            />
+            <button
+              onClick={() => addLovedOne(newLovedOneNumber)}
+              disabled={addingLovedOne || !newLovedOneNumber}
+              className="px-3 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center shrink-0"
+            >
+              {addingLovedOne ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Add'}
+            </button>
+          </div>
+
+          {lovedOnes.length > 0 && (
+            <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+              {lovedOnes.map((lovedOne) => (
+                <div key={lovedOne.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${lovedOne.isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'} group`}>
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <div className="w-5 h-5 rounded flex items-center justify-center bg-blue-100 text-blue-600">
+                      <FaUser size={8} />
+                    </div>
+                    <div className="leading-none flex-1 min-w-0">
+                      <p className="text-[9px] font-black text-gray-800 tracking-tight">{lovedOne.name}</p>
+                      <p className="text-[7px] text-gray-400 font-bold uppercase">{lovedOne.formattedNumber}</p>
                     </div>
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {isSharing && (
+                  <div className="flex items-center gap-1.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
                     <button
-                      onClick={() => sendTrackingLink(lovedOne)}
-                      disabled={sendingLinks.includes(lovedOne.id)}
-                      className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                      title="Send tracking link"
+                      onClick={() => setActiveContact(lovedOne.id)}
+                      className={`px-2 py-1 rounded transition-all text-[8px] font-black uppercase tracking-widest ${lovedOne.isActive ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-green-100 hover:text-green-600'}`}
+                      title={lovedOne.isActive ? 'Active Emergency Contact' : 'Set as Emergency Contact'}
                     >
-                      {sendingLinks.includes(lovedOne.id) ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      ) : (
-                        <FaExternalLinkAlt className="text-sm" />
-                      )}
+                      {lovedOne.isActive ? '✓ Active' : 'Select'}
                     </button>
-                  )}
-                  <button
-                    onClick={() => removeLovedOne(lovedOne.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                    title="Remove"
-                  >
-                    <FaTimes />
-                  </button>
+                    {isSharing && (
+                      <button
+                        onClick={() => sendTrackingLink(lovedOne)}
+                        className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors hidden md:block"
+                        title="Send Link"
+                      >
+                        <FaShareAlt size={8} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => removeLovedOne(lovedOne.id)}
+                      className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors hidden md:block"
+                    >
+                      <FaTimes size={8} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          
-          {isSharing && (
-            <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm text-green-700 flex items-center gap-2">
-                <FaMap className="text-green-600" />
-                These contacts can track your live location in real-time
-              </p>
+              ))}
             </div>
           )}
         </div>
-      )}
 
-      {/* How It Works - UPDATED */}
-      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
-          <FaMap />
-          How Real-time Tracking Works
-        </h4>
-        
-        <div className="space-y-2 text-sm text-blue-700">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-            <span>Your location updates every few seconds as you move</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <FaWhatsapp className="text-green-500" />
-            <span>Loved ones receive a WhatsApp link to track you live</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <FaMapMarkerAlt className="text-blue-500" />
-            <span>They see your exact location moving on a map in real-time</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <FaExternalLinkAlt className="text-purple-500" />
-            <span>No app needed - works directly in their browser</span>
-          </div>
-        </div>
-        
-        <div className="mt-3 p-3 bg-white rounded border border-blue-300">
-          <p className="text-xs text-gray-700">
-            <strong>Live tracking:</strong> When you start sharing, loved ones receive a WhatsApp link that opens a live tracking page showing your movement in real-time!
-          </p>
+        {/* Safety Tips */}
+        <div className="pt-2 border-t border-gray-50">
+          <button
+            onClick={() => setShowTracking(!showTracking)}
+            className="w-full py-1.5 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-gray-500 hover:text-blue-600 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <FaShieldAlt className="text-amber-500" size={8} />
+              Location Safety Tips
+            </span>
+            {showTracking ? <FaChevronUp size={8} /> : <FaChevronDown size={8} />}
+          </button>
+
+          <AnimatePresence>
+            {showTracking && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="py-2 space-y-2">
+                  {[
+                    { icon: <FaMapMarkerAlt size={10} />, text: "Updates your broadcast every 30 seconds" },
+                    { icon: <FaWhatsapp size={10} />, text: "Automated tracking links for loved ones" },
+                    { icon: <FaLock size={10} />, text: "Self-destructing links (valid for 24 hours)" },
+                    { icon: <FaUserFriends size={10} />, text: "Only your selected group can track you" }
+                  ].map((tip, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <div className="w-3.5 h-3.5 bg-gray-100 text-gray-400 rounded flex items-center justify-center shrink-0 mt-0.5">
+                        {tip.icon}
+                      </div>
+                      <p className="text-xs text-gray-500 font-bold leading-tight">{tip.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Safety Note */}
-      <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-        <div className="flex items-center gap-2 mb-2">
-          <FaShieldAlt className="text-yellow-600" />
-          <h4 className="font-bold text-yellow-800">Safety & Privacy</h4>
-        </div>
-        <p className="text-sm text-yellow-700">
-          • Only people you add can see your location<br />
-          • You can stop sharing at any time<br />
-          • Tracking links expire after 24 hours<br />
-          • Location data is encrypted and secure<br />
-          • Your location is never shared with unauthorized users
-        </p>
-      </div>
-
-      {/* GPS Permission Modal */}
-      <GPSPermissionModal 
+      <GPSPermissionModal
         isOpen={gpsModalOpen}
         onDismiss={() => setGpsModalOpen(false)}
         onRetry={startLocationSharing}
