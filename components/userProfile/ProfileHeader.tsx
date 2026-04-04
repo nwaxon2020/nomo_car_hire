@@ -375,7 +375,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={() => setGame(false)}
-                        className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+                        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-1"
                     >
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}

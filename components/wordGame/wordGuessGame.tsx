@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FaTimes, FaLightbulb, FaTrophy, FaHeart, FaPlusCircle, FaInfoCircle, FaStar } from "react-icons/fa";
+import { FaTimes, FaLightbulb, FaTrophy, FaHeart, FaPlusCircle, FaInfoCircle, FaStar, FaBook } from "react-icons/fa";
 import { WORDS, WordEntry } from "./wordData";
+import { GAME_RULES } from "./rules";
 
 export default function WordGuessGame({ onClose }: { onClose?: () => void }) {
   const [currentWordObj, setCurrentWordObj] = useState<WordEntry | null>(null);
@@ -16,6 +17,7 @@ export default function WordGuessGame({ onClose }: { onClose?: () => void }) {
   const [showError, setShowError] = useState(false);
   const [pointsEarned, setPointsEarned] = useState(0);
   const [showPointsAnimation, setShowPointsAnimation] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   // timing
   const HINT_REFILL_TIME_MS = 15 * 60 * 1000;
@@ -282,7 +284,10 @@ export default function WordGuessGame({ onClose }: { onClose?: () => void }) {
         <h2 className="text-center md:text-xl font-black tracking-tighter bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent uppercase italic">
           Transport Trivia
         </h2>
-        <button onClick={onClose} className="text-blue-400 hover:text-red-400 transition-colors p-1"><FaTimes size={18} /></button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowRules(true)} className="text-blue-400 hover:text-cyan-400 transition-colors p-1" title="View Rules"><FaBook size={18} /></button>
+          <button onClick={onClose} className="text-blue-400 hover:text-red-400 transition-colors p-1"><FaTimes size={18} /></button>
+        </div>
       </div>
 
       <div className="flex justify-center mb-4">
@@ -395,6 +400,48 @@ export default function WordGuessGame({ onClose }: { onClose?: () => void }) {
           <button onClick={() => resetGame()} className="text-blue-400 hover:text-blue-300 text-[8px] uppercase font-black tracking-widest py-1">Skip Word</button>
         )}
       </div>
+
+      {showRules && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-gradient-to-b from-[#0f1f3c] to-[#0a1628] max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-blue-500/30 shadow-2xl">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-blue-900/90 to-cyan-900/50 border-b border-blue-500/30 p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <FaBook className="text-cyan-400 text-lg" />
+                <h3 className="text-white font-black md:text-lg uppercase tracking-wider">{GAME_RULES.title}</h3>
+              </div>
+              <button onClick={() => setShowRules(false)} className="text-cyan-400 hover:text-red-400 transition-colors p-1"><FaTimes size={20} /></button>
+            </div>
+
+            {/* Rules Content */}
+            <div className="p-4 space-y-4">
+              {GAME_RULES.rules.map((rule, index) => (
+                <div key={index} className="bg-blue-950/40 border border-blue-500/20 rounded-xl p-4 hover:border-blue-400/40 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-7 h-7 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-full flex items-center justify-center">
+                      <span className="text-[#0a1628] font-black text-sm">{rule.number}</span>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-cyan-300 font-black uppercase tracking-wide text-sm mb-1">{rule.title}</h4>
+                      <p className="text-blue-100 text-sm leading-relaxed">{rule.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 border-t border-blue-500/30 bg-blue-950/30 p-4 flex gap-2">
+              <button
+                onClick={() => setShowRules(false)}
+                className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-black py-2 rounded-lg uppercase text-sm hover:from-cyan-400 hover:to-blue-400 transition-all"
+              >
+                Got it!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

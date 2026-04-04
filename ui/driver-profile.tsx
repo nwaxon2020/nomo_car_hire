@@ -788,7 +788,7 @@ export default function DriverProfilePage() {
 
       {/* Word Guessing Game */}
       {game && (
-        <div className="h-[100vh] fixed inset-0 z-60 bg-black/90 flex items-center justify-center">
+        <div className="px-1 md:px-0 h-[100vh] fixed inset-0 z-60 bg-black/90 flex items-center justify-center">
           <WordGuessGame onClose={() => setGame(false)} />
         </div>
       )}
