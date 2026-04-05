@@ -26,7 +26,7 @@ export default function CTASection({ user, stats, data }: any) {
             onClick={() => router.push(user ? "/user/mobility" : "/signup")}
             className="bg-blue-500 text-gray-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-300 transition-all flex items-center justify-center gap-3"
           >
-            {user ? "Explore Our Services" : (content.primaryButtonText || "Sign Up Free")}
+            {user ? "Explore Our Services" : "Sign Up Free"}
             <FaArrowRight />
           </button>
           
