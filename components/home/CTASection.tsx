@@ -24,7 +24,7 @@ export default function CTASection({ user, stats, data }: any) {
         <div className="flex flex-col sm:flex-row gap-6 justify-center">
           <button
             onClick={() => router.push(user ? "/user/mobility" : "/signup")}
-            className="bg-yellow-400 text-gray-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all flex items-center justify-center gap-3"
+            className="bg-blue-500 text-gray-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-300 transition-all flex items-center justify-center gap-3"
           >
             {user ? "Explore Our Services" : (content.primaryButtonText || "Sign Up Free")}
             <FaArrowRight />
