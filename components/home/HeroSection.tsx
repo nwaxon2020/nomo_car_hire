@@ -80,23 +80,21 @@ export default function HeroSection({
 
             {!user && (
               <div className="w-full col-span-3 mt-2 flex gap-4 max-w-lg">
-                
-                <Link
-                  href="/login" 
-                  className="flex-1 bg-white text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
-                >
-                  Login
-                  <FaArrowRight />
-                </Link>
-            
                 <Link
                   href="/signup"
-                  className="flex-1 bg-yellow-400 text-gray-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+                  className="w-full border-2 border-white/90 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/30 transition-all duration-300 flex items-center justify-center gap-3"
                 >
                   Sign Up
                   <FaArrowRight />
                 </Link>
-            
+                
+                <Link
+                  href="/login" 
+                  className="w-full flex-1 bg-white text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+                >
+                  Login
+                  <FaArrowRight />
+                </Link>
               </div>
             )}
           </div>
