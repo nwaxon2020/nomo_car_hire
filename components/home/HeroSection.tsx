@@ -1,6 +1,6 @@
 "use client";
 
-import { FaKey, FaArrowRight, FaCar, FaMapMarkerAlt } from "react-icons/fa";
+import { FaKey, FaArrowRight, FaArrowLeft, FaCar, FaMapMarkerAlt } from "react-icons/fa";
 import Link from "next/link";
 
 export default function HeroSection({
@@ -82,15 +82,15 @@ export default function HeroSection({
               <div className="w-full col-span-3 mt-2 flex gap-4 max-w-lg">
                 <Link
                   href="/signup"
-                  className="w-full border-2 border-white/90 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/30 transition-all duration-300 flex items-center justify-center gap-3"
+                  className="w-full border-2 border-yellow-400/90 text-yellow-400 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300/30 transition-all duration-300 flex items-center justify-center gap-3"
                 >
+                  <FaArrowLeft />
                   Sign Up
-                  <FaArrowRight />
                 </Link>
                 
                 <Link
                   href="/login" 
-                  className="w-full flex-1 bg-white text-blue-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+                  className="w-full bg-white text-blue-800 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
                 >
                   Login
                   <FaArrowRight />
