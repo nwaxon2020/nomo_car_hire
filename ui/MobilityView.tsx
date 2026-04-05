@@ -6,7 +6,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
-  collection, query, where, getDocs, doc, limit, orderBy, onSnapshot, setDoc, updateDoc, Timestamp
+  collection, query, where, getDocs, doc, limit, orderBy, onSnapshot, setDoc, Timestamp
 } from "firebase/firestore";
 import {
   FaCar, FaHandshake, FaUsers, FaGlobe, FaShieldAlt, FaPhoneAlt, FaChevronRight, FaClock, FaExclamationTriangle, FaChevronDown, FaChevronUp, FaLock, FaWhatsapp, FaMapMarkerAlt,
@@ -411,7 +411,7 @@ export default function MobilityView() {
         </AnimatePresence>
       </section>
 
-      <main className="max-w-7xl mx-auto px-4 pt-14 md:pt-8">
+      <main className="mx-auto px-4 pt-14 md:pt-8">
         {/* Header Title */}
         <div className="mb-4 text-center md:text-left">
           <h2 className="text-xl md:text-2xl font-black text-gray-900 leading-tight">
@@ -429,7 +429,7 @@ export default function MobilityView() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-x-0 -inset-y-2 z-30 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center p-4 border-2 border-dashed border-gray-200"
+                className="z-30 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center p-4 md:py-10 border-2 border-dashed border-gray-200"
               >
                 <motion.div
                   initial={{ scale: 0.95, y: 10 }}

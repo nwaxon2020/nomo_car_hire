@@ -159,6 +159,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     { name: "Dashboard", href: dashboardRoute, icon: <LayoutDashboard size={20} /> },
     { name: "Chat", href: "/user/chat", icon: <MessageSquare size={20} /> },
     { name: "Mobility", href: "/user/mobility", icon: <Navigation size={20} /> },
+    { name: "Bookings", href: "/user/bookings", icon: <Car size={20} /> },
     { name: "Hire a Car", href: "/user/car-hire", icon: <Car size={20} /> },
     !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <UserPlus size={20} /> },
     {
@@ -187,7 +188,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   return (
     <>
       <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
-      <div className="flex h-screen bg-gray-100 overflow-hidden">
+      <div className="flex min-h-screen md:h-screen bg-gray-100 md:overflow-hidden">
 
         {/* Mobile Toggle Button Container */}
         <div className="md:hidden absolute top-6 right-4 z-[60] flex items-center gap-2">
@@ -297,7 +298,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         <FcmTokenHandler />
 
         {/* MAIN CONTENT AREA */}
-        <main className="flex-1 h-screen overflow-y-auto bg-[#F8F9FA]">
+        <main className="flex-1 min-h-screen md:h-screen md:overflow-y-auto bg-[#F8F9FA]">
           <div className="md:p-1 md:pb-0 max-w-7xl mx-auto">
             {msg && (
               <div className="bg-green-500 text-white p-4 rounded-2xl mb-6 text-center shadow-lg font-bold animate-in fade-in slide-in-from-top-4">

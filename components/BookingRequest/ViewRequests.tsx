@@ -95,6 +95,7 @@ export default function ViewRequests({
   const [showContactModal, setShowContactModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<BookingRequestType | null>(null);
+  const [viewingRequest, setViewingRequest] = useState<BookingRequestType | null>(null);
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [isDriver, setIsDriver] = useState(false);
   const [driverState, setDriverState] = useState<string>("");
@@ -250,14 +251,30 @@ export default function ViewRequests({
   };
 
   useEffect(() => {
+    if (!userId) return;
+
     setLoading(true);
     setError("");
 
     try {
       const requestsRef = collection(db, "bookingRequests");
-      let q = filter === "urgent"
-        ? query(requestsRef, where("status", "==", "active"), where("urgent", "==", true))
-        : query(requestsRef, where("status", "==", "active"));
+      let q;
+      
+      // Enforce the new Firestore rules: Customers MUST explicitly query only by their userId
+      if (!isDriver) {
+        if (filter === "urgent") {
+          q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"), where("urgent", "==", true));
+        } else {
+          q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"));
+        }
+      } else {
+        // Drivers are authorized by Security Rules to view all active requests
+        if (filter === "urgent") {
+          q = query(requestsRef, where("status", "==", "active"), where("urgent", "==", true));
+        } else {
+          q = query(requestsRef, where("status", "==", "active"));
+        }
+      }
 
       const unsubscribe = onSnapshot(q,
         (snapshot) => {
@@ -272,6 +289,11 @@ export default function ViewRequests({
           });
 
           const sortedRequests = requestsList.sort((a, b) => {
+            const vipA = (a as any).vipLevel || 0;
+            const vipB = (b as any).vipLevel || 0;
+            if (vipB !== vipA) {
+              return vipB - vipA;
+            }
             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
             const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
             return dateB.getTime() - dateA.getTime();
@@ -280,27 +302,13 @@ export default function ViewRequests({
           let filtered = sortedRequests;
 
           if (filter === "urgent") {
-            filtered = sortedRequests.filter(req => req.urgent);
+            filtered = filtered.filter(req => req.urgent);
           }
 
           if (filter === "nearby" && isDriver) {
-            filtered = sortedRequests.filter(request =>
+            filtered = filtered.filter(request =>
               checkLocationMatch(request, driverState, driverCity)
             );
-
-            if (filtered.length === 0 && sortedRequests.length > 0) {
-              const locationInfo = driverCity ? `${driverCity}, ${driverState}` : driverState || "your location";
-              toast(`No requests found in ${locationInfo}. Showing all requests instead.`, {
-                icon: '📍',
-                duration: 4000
-              });
-              filtered = sortedRequests;
-            }
-          } else if (filter === "nearby" && !isDriver) {
-            toast.error("Nearby feature is for drivers only", {
-              icon: "📍",
-              duration: 3000
-            });
           }
 
           setRequests(filtered);
@@ -319,7 +327,7 @@ export default function ViewRequests({
       setError(`Error: ${error.message}`);
       setLoading(false);
     }
-  }, [filter, driverState, driverCity, isDriver]);
+  }, [filter, driverState, driverCity, isDriver, userId]);
 
   const getStats = () => {
     const active = requests.filter(r => r.status === "active").length;
@@ -434,7 +442,7 @@ export default function ViewRequests({
       const existingOffer = request.offers[existingOfferIndex];
       toast.error(
         <div>
-          You already made an offer on this request<br/>
+          You already made an offer on this request<br />
           <button
             onClick={() => {
               handleDeleteOffer(request.id, existingOfferIndex);
@@ -752,50 +760,33 @@ export default function ViewRequests({
     );
   }
 
-  if (requests.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Car className="w-8 h-8 text-gray-400" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">No requests found</h3>
-        <p className="text-gray-500 mb-4">
-          {filter !== "all"
-            ? `No ${filter} requests available`
-            : "Be the first to post a request!"}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full space-y-6">
-
-
+    <div className="space-y-6">
+      {/* Header & Stats */}
       <div className="w-full">
         <MaxRequestsWarning />
       </div>
 
       {/* Header - Responsive Fix */}
-      <div className="w-full bg-white rounded-xl shadow-sm md:p-4 p-3">
+      <div className="w-full bg-white shadow-sm p-3 md:px-6 mb-8">
         <div className="flex flex-col justify-center md:justify-between items-center md:flex-row gap-4 text-center md:text-left">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Booking Requests</h1>
-            <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-600">
-              <span className="flex items-center gap-1">
+            <h1 className="font-bold text-gray-900">Booking Requests</h1>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+              <span className="text-xs flex items-center gap-1">
                 <Car className="w-4 h-4" />
                 {stats.active} active
               </span>
-              <span className="flex items-center gap-1">
+              <span className="text-xs flex items-center gap-1">
                 <AlertCircle className="w-4 h-4 text-orange-500" />
                 {stats.urgent} urgent
               </span>
-              <span className="flex items-center gap-1">
+              <span className="text-xs flex items-center gap-1">
                 <Calendar className="w-4 h-4" />
                 {stats.todayRequests} today
               </span>
               {filter === "nearby" && isDriver && (driverState || driverCity) && (
-                <span className="flex items-center gap-1 text-green-600">
+                <span className="text-xs flex items-center gap-1 text-green-600">
                   <Navigation className="w-4 h-4" />
                   {driverCity ? `${driverCity}, ${driverState}` : driverState}
                 </span>
@@ -807,572 +798,678 @@ export default function ViewRequests({
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setFilter("all")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                filter === "all"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm ${filter === "all"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
             >
               All
             </button>
             <button
               onClick={() => setFilter("urgent")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm sm:text-base ${
-                filter === "urgent"
-                  ? "bg-orange-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm  ${filter === "urgent"
+                ? "bg-orange-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
             >
               <AlertCircle className="w-4 h-4" />
               <span className="hidden sm:inline">Urgent</span>
               <span className="sm:hidden">Urg</span>
             </button>
-            <button
-              onClick={() => setFilter("nearby")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm sm:text-base ${
-                filter === "nearby"
+            {isDriver && (
+              <button
+                onClick={() => setFilter("nearby")}
+                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm ${filter === "nearby"
                   ? "bg-green-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              <MapPin className="w-4 h-4" />
-              <span className="hidden sm:inline">Nearby</span>
-              <span className="sm:hidden">Near</span>
-            </button>
+                  }`}
+              >
+                <MapPin className="w-4 h-4" />
+                <span className="hidden sm:inline">Nearby</span>
+                <span className="sm:hidden">Near</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Requests List */}
-      <div className="space-y-4">
-        {requests.map((request) => {
-          const userHasMadeOffer = hasUserMadeOffer(request);
-          const userOffer = getUserOffer(request);
-          
-          // Parse trip type and determine if it's same city
-          const [tripCategory, tripPurpose] = request.tripType?.split(':') || ['city', ''];
-          const isSameCity = tripCategory === 'city' || request.isSameCity === true;
-          const destination = request.destination || request.location;
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {requests.length === 0 ? (
+          <div className="col-span-1 md:col-span-2 text-center py-12 bg-gray-900 rounded-xl shadow-sm border border-gray-700">
+            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Car className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No requests found</h3>
+            <p className="text-gray-500 mb-4">
+              {filter !== "all"
+                ? `No ${filter} requests available`
+                : "No requests to display"}
+            </p>
+            {filter !== "all" && (
+              <button
+                onClick={() => setFilter("all")}
+                className="text-blue-500 font-medium hover:underline"
+              >
+                View all requests
+              </button>
+            )}
+          </div>
+        ) : (
+          requests.map((request) => {
+            const userHasMadeOffer = hasUserMadeOffer(request);
+            const userOffer = getUserOffer(request);
 
-          return (
-            <div key={request.id} className="mx-auto bg-gray-900 rounded-xl shadow-sm border hover:shadow-md transition-shadow overflow-hidden">
-              {/* Card Content */}
-              <div className="p-4 sm:p-5">
-                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                  <div className="flex-1 w-full">
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-3 mb-3">
-                      <div className="bg-blue-100 p-2 rounded-lg self-start">
-                        <Car className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-                      </div>
-                      <div className="flex-1 w-full">
-                        <div className="flex flex-col pb-2 sm:flex-row sm:items-center gap-2 mb-1">
-                          <h3 className="text-lg sm:text-xl font-bold text-gray-300 border-b sm:border-0">{request.carType}</h3>
-                          <div className="pt-1 flex flex-wrap gap-2">
-                            {request.urgent && (
-                              <span className="px-2 sm:px-3 py-1 bg-orange-100 text-orange-700 text-xs sm:text-sm font-medium rounded-full flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                <span className="inline">Urgent</span>
-                              </span>
-                            )}
-                            {request.negotiable && (
-                              <span className="px-2 sm:px-3 pt-1 bg-green-100 text-green-700 text-xs sm:text-sm font-medium rounded-full">
-                                <span className="inline">Negotiable</span>
-                              </span>
-                            )}
-                            {/* Trip Type Badge */}
-                            <span className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full ${
-                              isSameCity 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {isSameCity ? 'City Ride' : 'Intercity'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between md:justify-around md:items-center gap-2 text-gray-50 text-sm">
-                          <span className="font-medium truncate">{request.userName}</span>
-                          <span className="hidden sm:inline">•</span>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                            <div className="truncate">
-                              {isSameCity ? (
-                                <span className="text-gray-300">📍 {request.location}</span>
-                              ) : (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-gray-300">{request.location}</span>
-                                  <span className="text-gray-400">→</span>
-                                  <span className="text-blue-300">{destination}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          {(request.state || request.city) && (
-                            <span className="text-xs bg-gray-100 px-2 py-1 rounded truncate text-gray-800">
-                              {request.city && <span>{request.city}</span>}
-                              {request.state && <span>{request.city ? ', ' : ''}{request.state}</span>}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+            // Parse trip type and determine if it's same city
+            const [tripCategory, tripPurpose] = request.tripType?.split(':') || ['city', ''];
+            const isSameCity = tripCategory === 'city' || request.isSameCity === true;
+            const destination = request.destination || request.location;
 
-                    {/* Quick Info - Responsive Grid */}
-                    <div className="text-gray-50 flex flex-col md:flex-row justify-between md:justify-around gap-3 mt-4">
-                      <div className="flex items-center gap-2 text-gray-50">
-                        <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-                        <div className="flex justify-between w-full">
-                          <p className="text-xs sm:text-sm">Dates: </p>
-                          <p className="font-medium text-sm sm:text-base truncate ml-1">
-                            {formatDate(request.startDate)} - {formatDate(request.endDate)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-50">
-                        <Users className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                        <div className="flex justify-between w-full">
-                          <p className="text-xs sm:text-sm">Passengers: </p>
-                          <p className="font-medium text-sm sm:text-center ml-1">{request.passengers}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center gap-4 md:8 border-b md:border-0 pb-1">
-                        <div className="w-full">
-                          <p className="text-xs sm:text-sm text-gray-50">Trip: </p>
-                          <p className="font-medium text-sm sm:text-center ml-1">{request.tripType}</p>
-                        </div>
-                        <div className="w-full">
-                          <p className="text-xs sm:text-sm text-gray-50">Budget</p>
-                          <p className="text-lg sm:text-xl font-bold text-[goldenrod]">
-                            ₦{parseInt(request.budget || "0").toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+            return (
+              <div
+                key={request.id}
+                onClick={() => {
+                  setViewingRequest(request);
+                }}
+                className="w-full relative overflow-hidden bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl shadow-lg border border-purple-500/30 hover:border-purple-400 hover:shadow-purple-500/30 transition-all cursor-pointer p-3 sm:p-4 group"
+              >
+                {/* Premium Background Accent */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/20 to-transparent rounded-bl-full pointer-events-none transition-transform group-hover:scale-110" />
+
+                <div className="relative z-10 flex flex-col gap-2">
+                  {/* Location */}
+                  <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5 truncate">
+                    <MapPin className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="truncate">
+                      {isSameCity ? `Within ${request.location}` : `${request.location} → ${destination}`}
+                    </span>
                   </div>
 
-                  {/* Action Buttons - Stack on Mobile */}
-                  <div className="flex flex-col items-stretch sm:items-end gap-2">
-                    {userId === request.userId && (
-                      <div className="flex flex-col xs:flex-row gap-2">
-                        <button
-                          onClick={() => handleEditRequest(request)}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm"
-                        >
-                          <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          <span className="hidden xs:inline">Edit</span>
-                          <span className="xs:hidden">Edit Request</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRequest(request.id)}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm"
-                        >
-                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          <span className="hidden xs:inline">Delete</span>
-                          <span className="xs:hidden">Delete Request</span>
-                        </button>
-                      </div>
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-1.5 mt-0.5">
+                    {request.urgent && (
+                      <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-[9px] sm:text-[10px] font-bold rounded flex items-center gap-1 leading-none border border-orange-500/30">
+                        URGENT
+                      </span>
                     )}
+                    {request.negotiable && (
+                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-[9px] sm:text-[10px] font-bold rounded leading-none border border-blue-500/30">
+                        NEGOTIABLE
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 bg-white/10 text-gray-200 text-[9px] sm:text-[10px] font-bold rounded uppercase leading-none border border-white/20">
+                      {request.tripType?.split(':')[0] || 'Ride'}
+                    </span>
                   </div>
-                </div>
 
-                {/* Trip Purpose Display */}
-                {tripPurpose && (
-                  <div className="mt-3 p-2 bg-gray-800/50 rounded-lg border border-gray-700">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">Trip Purpose:</span>
-                      <span className="text-sm font-medium text-gray-300 capitalize">
-                        {tripPurpose.replace(/([A-Z])/g, ' $1').trim()}
+                  {/* Vehicle Icon & Car Type */}
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="bg-white/10 p-1.5 rounded-md border border-white/20 text-purple-300">
+                      <Car className="w-3.5 h-3.5" />
+                    </div>
+                    <h3 className="text-sm font-bold text-white truncate">
+                      {request.carType}
+                    </h3>
+                  </div>
+
+                  {/* Price / Budget */}
+                  <div className="text-yellow-400 text-lg sm:text-xl font-black mt-1 drop-shadow-md">
+                    ₦{parseInt(request.budget || "0").toLocaleString()}
+                  </div>
+
+                  {/* xs Date, Offers, Views */}
+                  <div className="flex items-center justify-between text-[10px] text-gray-300 mt-1 border-t border-purple-500/30 pt-2 pb-1">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Calendar className="w-3 h-3 text-purple-400" /> {formatDate(request.startDate)}
+                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex items-center gap-1 font-medium text-gray-400">
+                        <Eye className="w-3 h-3" /> {request.views || 0}
+                      </span>
+                      <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded ${request.offers?.length ? 'bg-purple-500/30 text-white font-bold' : 'bg-black/20 text-gray-400'}`}>
+                        <MessageCircle className="w-3 h-3" /> {request.offers?.length || 0}
                       </span>
                     </div>
                   </div>
-                )}
-
-                {/* Description */}
-                {request.description && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-gray-700 text-sm sm:text-base">{request.description}</p>
-                  </div>
-                )}
-
-                {/* User's Offer Status (for drivers) */}
-                {isDriver && userId !== request.userId && userHasMadeOffer && userOffer && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div className="w-full">
-                        <p className="font-medium text-blue-900">Your Offer</p>
-                        
-                        <p className="flex gap-4 items-center text-xs sm:text-sm text-blue-700">
-                          <span>• ₦{parseInt(userOffer.price).toLocaleString()}</span> 
-                          <span>• Status: <span className="font-medium capitalize">{userOffer.status}</span></span>
-                        </p>
-                        <p className="flex gap-4 items-center text-xs sm:text-sm text-blue-700">
-                          <span>• Car: {userOffer.carMake || "Not specified"}</span> 
-                          <span>• AC: {userOffer.hasAC ? 'Yes' : 'No'}</span>
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteOffer(request.id, request.offers.findIndex(o => o.driverId === userId))}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs sm:text-sm whitespace-nowrap"
-                      >
-                        <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                        Remove Offer
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer Actions */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-6 pt-4 border-t">
-                  <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-50">
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
-                      {request.views || 0} views
-                    </span>
-
-                    <button
-                      onClick={() => handleMessageIconClick(request)}
-                      className="flex items-center gap-1 hover:text-blue-600 transition-colors"
-                    >
-                      <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                      {request.offers?.length || 0} offers
-                      {userHasMadeOffer && (
-                        <span className="hidden sm:inline"> • Your offer included</span>
-                      )}
-                    </button>
-
-                    <span className="text-xs text-gray-400">
-                      Posted {(() => {
-                        const date = request.createdAt?.toDate?.() || new Date(request.createdAt);
-                        const now = new Date();
-                        const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-
-                        if (diffHours < 1) return "just now";
-                        if (diffHours < 24) return `${diffHours}h ago`;
-                        return date.toLocaleDateString();
-                      })()}
-                    </span>
-                  </div>
-
-                  {/* Action Button - Right Side */}
-                  {isDriver && userId !== request.userId ? (
-                    userHasMadeOffer ? (
-                      <div className="flex gap-2 w-full sm:w-auto">
-                        <button
-                          onClick={() => {
-                            const existingOfferIndex = request.offers.findIndex(o => o.driverId === userId);
-                            if (existingOfferIndex !== -1) {
-                              const existingOffer = request.offers[existingOfferIndex];
-                              setSelectedRequest(request);
-                              setContactForm({
-                                carMake: existingOffer.carMake || "",
-                                hasAC: existingOffer.hasAC,
-                                price: existingOffer.price,
-                                message: existingOffer.message,
-                                agreeTerms: true
-                              });
-                              setShowContactModal(true);
-                            }
-                          }}
-                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
-                        >
-                          <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          Edit Offer
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleContactUser(request)}
-                        className="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2 font-medium text-sm sm:text-base"
-                      >
-                        <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                        Make Offer
-                      </button>
-                    )
-                  ) : userId === request.userId ? (
-                    <div className="text-sm text-gray-400">Your request</div>
-                  ) : null}
                 </div>
               </div>
+            );
+          }))}
+      </div>
 
-              {/* Offers Section - Expandable */}
-              {expandedRequestId === request.id && (
-                <div className="mx-auto border-t px-2 sm:px-5 py-4 bg-gray-50">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-medium text-gray-900 flex items-center gap-2 text-sm sm:text-base">
-                      <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                      Offers Received ({request.offers?.length || 0})
-                    </h4>
-                    <button
-                      onClick={() => setExpandedRequestId(null)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+      {/* Viewing Details Modal */}
+      {viewingRequest && (
+        <div className="fixed inset-0 bg-black/60 flex flex-col items-center justify-center p-3 sm:p-4 z-50 backdrop-blur-sm">
+          <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col relative border border-gray-700 animate-fadeIn">
+            <div className="p-4 flex justify-between items-center border-b border-gray-800 shrink-0 bg-gray-900 sticky top-0 z-10 w-full">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Car className="w-5 h-5 text-blue-500" />
+                Request Details
+              </h3>
+              <button
+                onClick={() => {
+                  setViewingRequest(null);
+                  setExpandedRequestId(null);
+                }}
+                className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto w-full">
+              {(() => {
+                const request = viewingRequest;
+                const userHasMadeOffer = hasUserMadeOffer(request);
+                const userOffer = getUserOffer(request);
+                const [tripCategory, tripPurpose] = request.tripType?.split(':') || ['city', ''];
+                const isSameCity = tripCategory === 'city' || request.isSameCity === true;
+                const destination = request.destination || request.location;
 
-                  {(!request.offers || request.offers.length === 0) ? (
-                    <div className="text-center py-6">
-                      <MessageCircle className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">No offers yet</p>
-                      <p className="text-xs sm:text-sm text-gray-400 mt-1">Drivers will appear here when they make offers</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                      {request.offers.map((offer, index) => {
-                        const isUsersOffer = offer.driverId === userId;
-                        const isRequestOwner = request.userId === userId;
-
-                        return (
-                          <div key={index} className={`bg-white border border-gray-300 rounded-lg p-3 sm:p-4 hover:border-blue-300 transition-colors ${isUsersOffer ? 'border-blue-300 bg-blue-50' : ''}`}>
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start mb-3 gap-3">
-                              <div className="w-full flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h5 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                    {offer.driverName}
-                                    {isUsersOffer && (
-                                      <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded whitespace-nowrap">
-                                        Your Offer
-                                      </span>
-                                    )}
-                                  </h5>
-                                </div>
-                                <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1 mt-1">
-                                  <Phone className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  <span className="truncate">{offer.driverPhone}</span>
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-lg sm:text-xl font-bold text-green-600">
-                                  ₦{parseInt(offer.price).toLocaleString()}
-                                </div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className={`px-2 py-1 text-xs rounded-full ${
-                                    offer.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                    offer.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                                    'bg-red-100 text-red-800'
-                                  }`}>
-                                    {offer.status}
+                return (
+                  <div className="w-full">
+                    {/* Inner Card Content Base from original */}
+                    <div className="p-4 sm:p-5">
+                      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                        <div className="flex-1 w-full">
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-3 mb-3">
+                            <div className="bg-emerald-500/10 p-2 sm:p-2.5 rounded-xl self-start border border-emerald-500/20">
+                              <Car className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
+                            </div>
+                            <div className="flex-1 w-full">
+                              <div className="flex flex-col pb-2 sm:flex-row sm:items-center gap-2 mb-1">
+                                <h3 className="text-lg sm:text-xl font-bold text-gray-100 border-b border-gray-800 sm:border-0">{request.carType}</h3>
+                                <div className="pt-1 flex flex-wrap gap-2">
+                                  {request.urgent && (
+                                    <span className="px-2.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs font-semibold rounded-md flex items-center gap-1">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Urgent
+                                    </span>
+                                  )}
+                                  {request.negotiable && (
+                                    <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-md">
+                                      Negotiable
+                                    </span>
+                                  )}
+                                  {/* Trip Type Badge */}
+                                  <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-md border ${isSameCity
+                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                    : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                    }`}>
+                                    {isSameCity ? 'City Ride' : 'Intercity'}
                                   </span>
-
-                                  {(isUsersOffer || isRequestOwner) && (
-                                    <button
-                                      onClick={() => handleDeleteOffer(request.id, index)}
-                                      className="text-red-400 hover:text-red-600 transition-colors"
-                                      title={isUsersOffer ? "Remove your offer" : "Remove this offer"}
-                                    >
-                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                    </button>
-                                  )}
                                 </div>
                               </div>
-                            </div>
-
-                            {/* Driver's Car Make Information */}
-                            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-3">
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-gray-500">Driver's Car:</span>
-                                <span className="ml-2 font-medium text-gray-700 truncate block">
-                                  {offer.carMake || "Not specified"}
-                                </span>
-                              </div>
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-gray-500">AC Available:</span>
-                                <span className={`ml-2 ${offer.hasAC ? 'text-green-600' : 'text-red-600'}`}>
-                                  {offer.hasAC ? 'Yes ✓' : 'No ✗'}
-                                </span>
-                              </div>
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-gray-500">Car Requested:</span>
-                                <span className="ml-2 font-medium truncate block">{request.carType}</span>
-                              </div>
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-gray-500">Trip Type:</span>
-                                <span className="ml-2 font-medium truncate block">{request.tripType}</span>
-                              </div>
-                            </div>
-
-                            {offer.message && (
-                              <div className={`break-words mb-3 p-2 rounded text-xs sm:text-sm ${isUsersOffer ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                                <p className="text-gray-700">{offer.message}</p>
-                              </div>
-                            )}
-
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                              <span className="text-xs text-gray-500">
-                                Offered {offer.createdAt?.toDate?.().toLocaleDateString() || 'recently'}
-                              </span>
-                              {/* Show WhatsApp and Chat buttons for request owner OR driver who made the offer */}
-                              {(isRequestOwner || isUsersOffer) && (
-                                <div className="flex flex-wrap gap-2">
-                                  {isRequestOwner && (
-                                    <>
-                                      <button
-                                        onClick={() => handleWhatsAppContact(offer.driverPhone, offer.driverName, offer.price)}
-                                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-xs sm:text-sm"
-                                      >
-                                        <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                        WhatsApp
-                                      </button>
-                                      <button
-                                        onClick={() => handleChatDriver(offer.driverId, offer.driverName, request)}
-                                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs sm:text-sm"
-                                      >
-                                        <Send className="w-3 h-3 sm:w-4 sm:h-4" />
-                                        Chat
-                                      </button>
-                                    </>
-                                  )}
-                                  {isUsersOffer && (
-                                    <button
-                                      onClick={() => handleChatDriver(request.userId, request.userName, request)}
-                                      className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs sm:text-sm"
-                                    >
-                                      <Send className="w-3 h-3 sm:w-4 sm:h-4" />
-                                      Chat Requester
-                                    </button>
-                                  )}
+                              <div className="flex justify-between md:items-center md:justify-start gap-3 text-gray-50 text-sm">
+                                <span className="font-medium text-gray-300 truncate">{request.userName}</span>
+                                <span className="hidden sm:inline text-gray-700">•</span>
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+                                  <div className="truncate">
+                                    {isSameCity ? (
+                                      <span className="text-gray-300">{request.location}</span>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-gray-300">{request.location}</span>
+                                        <span className="text-gray-500 text-[10px]">TO</span>
+                                        <span className="text-emerald-400 font-medium">{destination}</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
+                              </div>
                             </div>
                           </div>
-                        );
-                      })}
+
+                          {/* 2-Column Grid for Information */}
+                          <div className="grid grid-cols-2 gap-3 mt-5 p-4 bg-gray-800/40 rounded-xl border border-gray-700/50 backdrop-blur-sm">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date</span>
+                              <span className="text-sm font-semibold text-gray-200">
+                                {formatDate(request.startDate)} {request.endDate > request.startDate && `- ${formatDate(request.endDate)}`}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Passengers</span>
+                              <span className="text-sm font-semibold text-gray-200">{request.passengers}</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Car className="w-3.5 h-3.5" /> Trip Type</span>
+                              <span className="text-sm font-semibold text-gray-200 capitalize">{request.tripType?.split(':')[0]}</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-gray-500">Budget Limit</span>
+                              <span className="text-base font-black text-emerald-400">
+                                ₦{parseInt(request.budget || "0").toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons - Stack on Mobile */}
+                        <div className="flex flex-col items-stretch sm:items-end gap-2">
+                          {userId === request.userId && (
+                            <div className="flex flex-col xs:flex-row gap-2">
+                              <button
+                                onClick={() => handleEditRequest(request)}
+                                className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm"
+                              >
+                                <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="hidden xs:inline">Edit</span>
+                                <span className="xs:hidden">Edit Request</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRequest(request.id)}
+                                className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm"
+                              >
+                                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="hidden xs:inline">Delete</span>
+                                <span className="xs:hidden">Delete Request</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Trip Purpose Display */}
+                      {tripPurpose && (
+                        <div className="mt-3 p-2 bg-gray-800/50 rounded-lg border border-gray-700">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">Trip Purpose:</span>
+                            <span className="text-sm font-medium text-gray-300 capitalize">
+                              {tripPurpose.replace(/([A-Z])/g, ' $1').trim()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Description */}
+                      {request.description && (
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                          <p className="text-gray-700 text-sm sm:text-base">{request.description}</p>
+                        </div>
+                      )}
+
+                      {/* User's Offer Status (for drivers) */}
+                      {isDriver && userId !== request.userId && userHasMadeOffer && userOffer && (
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div className="w-full">
+                              <p className="font-medium text-blue-900">Your Offer</p>
+
+                              <p className="flex gap-4 items-center text-xs sm:text-sm text-blue-700">
+                                <span>• ₦{parseInt(userOffer.price).toLocaleString()}</span>
+                                <span>• Status: <span className="font-medium capitalize">{userOffer.status}</span></span>
+                              </p>
+                              <p className="flex gap-4 items-center text-xs sm:text-sm text-blue-700">
+                                <span>• Car: {userOffer.carMake || "Not specified"}</span>
+                                <span>• AC: {userOffer.hasAC ? 'Yes' : 'No'}</span>
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteOffer(request.id, request.offers.findIndex(o => o.driverId === userId))}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs sm:text-sm whitespace-nowrap"
+                            >
+                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                              Remove Offer
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Footer Actions */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-6 pt-4 border-t border-gray-700">
+                        <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-50">
+                          <span className="flex items-center gap-1">
+                            <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                            {request.views || 0} views
+                          </span>
+
+                          <button
+                            onClick={() => handleMessageIconClick(request)}
+                            className="flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-blue-500"
+                          >
+                            <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                            {request.offers?.length || 0} offers
+                            {userHasMadeOffer && (
+                              <span className="hidden sm:inline text-gray-300"> • Your offer included</span>
+                            )}
+                          </button>
+
+                          <span className="text-xs text-gray-400">
+                            Posted {(() => {
+                              const date = request.createdAt?.toDate?.() || new Date(request.createdAt);
+                              const now = new Date();
+                              const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+                              if (diffHours < 1) return "just now";
+                              if (diffHours < 24) return `${diffHours}h ago`;
+                              return date.toLocaleDateString();
+                            })()}
+                          </span>
+                        </div>
+
+                        {/* Action Button - Right Side */}
+                        {isDriver && userId !== request.userId ? (
+                          userHasMadeOffer ? (
+                            <div className="flex gap-2 w-full sm:w-auto">
+                              <button
+                                onClick={() => {
+                                  const existingOfferIndex = request.offers.findIndex(o => o.driverId === userId);
+                                  if (existingOfferIndex !== -1) {
+                                    const existingOffer = request.offers[existingOfferIndex];
+                                    setSelectedRequest(request);
+                                    setContactForm({
+                                      carMake: existingOffer.carMake || "",
+                                      hasAC: existingOffer.hasAC,
+                                      price: existingOffer.price,
+                                      message: existingOffer.message,
+                                      agreeTerms: true
+                                    });
+                                    setShowContactModal(true);
+                                  }
+                                }}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                              >
+                                <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                Edit Offer
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleContactUser(request)}
+                              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 font-bold text-sm sm:text-base z-20"
+                            >
+                              <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                              Make Offer
+                            </button>
+                          )
+                        ) : userId === request.userId ? (
+                          <div className="text-sm text-gray-400">Your request</div>
+                        ) : null}
+                      </div>
+
+                      {/* Offers Section - Expandable */}
+                      {expandedRequestId === request.id && (
+                        <div className="mx-auto mt-4 border border-gray-700 rounded-xl px-2 sm:px-5 py-4 bg-gray-800">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="font-medium text-white flex items-center gap-2 text-sm sm:text-base">
+                              <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                              Offers Received ({request.offers?.length || 0})
+                            </h4>
+                            <button
+                              onClick={() => setExpandedRequestId(null)}
+                              className="text-gray-400 hover:text-white"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+
+                          {(!request.offers || request.offers.length === 0) ? (
+                            <div className="text-center py-6">
+                              <MessageCircle className="w-10 h-10 sm:w-12 sm:h-12 text-gray-600 mx-auto mb-3" />
+                              <p className="text-gray-400">No offers yet</p>
+                              <p className="text-xs sm:text-sm text-gray-500 mt-1">Drivers will appear here when they make offers</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                              {request.offers.map((offer, index) => {
+                                const isUsersOffer = offer.driverId === userId;
+                                const isRequestOwner = request.userId === userId;
+
+                                return (
+                                  <div key={index} className={`bg-gray-700 border rounded-lg p-3 sm:p-4 hover:border-gray-500 transition-colors ${isUsersOffer ? 'border-blue-500 bg-blue-900/30' : 'border-gray-600'}`}>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start mb-3 gap-3">
+                                      <div className="w-full flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <h5 className="font-semibold text-white text-sm sm:text-base truncate">
+                                            {offer.driverName}
+                                            {isUsersOffer && (
+                                              <span className="ml-2 text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded whitespace-nowrap">
+                                                Your Offer
+                                              </span>
+                                            )}
+                                          </h5>
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-gray-300 flex items-center gap-1 mt-1">
+                                          <Phone className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                                          <span className="truncate">{offer.driverPhone}</span>
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-lg sm:text-xl font-bold text-green-400">
+                                          ₦{parseInt(offer.price).toLocaleString()}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className={`px-2 py-1 text-xs rounded-full ${offer.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                                            offer.status === 'accepted' ? 'bg-green-500/20 text-green-300' :
+                                              'bg-red-500/20 text-red-300'
+                                            }`}>
+                                            {offer.status}
+                                          </span>
+
+                                          {(isUsersOffer || isRequestOwner) && (
+                                            <button
+                                              onClick={() => handleDeleteOffer(request.id, index)}
+                                              className="text-red-400 hover:text-red-300 transition-colors"
+                                              title={isUsersOffer ? "Remove your offer" : "Remove this offer"}
+                                            >
+                                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Driver's Car Make Information */}
+                                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-3">
+                                      <div className="text-xs sm:text-sm">
+                                        <span className="text-gray-400">Driver's Car:</span>
+                                        <span className="ml-2 font-medium text-gray-200 truncate block">
+                                          {offer.carMake || "Not specified"}
+                                        </span>
+                                      </div>
+                                      <div className="text-xs sm:text-sm">
+                                        <span className="text-gray-400">AC Available:</span>
+                                        <span className={`ml-2 ${offer.hasAC ? 'text-green-400' : 'text-red-400'}`}>
+                                          {offer.hasAC ? 'Yes ✓' : 'No ✗'}
+                                        </span>
+                                      </div>
+                                      <div className="text-xs sm:text-sm">
+                                        <span className="text-gray-400">Car Requested:</span>
+                                        <span className="ml-2 font-medium text-gray-200 truncate block">{request.carType}</span>
+                                      </div>
+                                      <div className="text-xs sm:text-sm">
+                                        <span className="text-gray-400">Trip Type:</span>
+                                        <span className="ml-2 font-medium text-gray-200 truncate block">{request.tripType}</span>
+                                      </div>
+                                    </div>
+
+                                    {offer.message && (
+                                      <div className={`break-words mb-3 p-2 rounded text-xs sm:text-sm ${isUsersOffer ? 'bg-blue-900/40 text-blue-100' : 'bg-gray-800 text-gray-300'}`}>
+                                        <p>{offer.message}</p>
+                                      </div>
+                                    )}
+
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                      <span className="text-xs text-gray-400">
+                                        Offered {offer.createdAt?.toDate?.().toLocaleDateString() || 'recently'}
+                                      </span>
+                                      {/* Show WhatsApp and Chat buttons for request owner OR driver who made the offer */}
+                                      {(isRequestOwner || isUsersOffer) && (
+                                        <div className="flex flex-wrap gap-2">
+                                          {isRequestOwner && (
+                                            <>
+                                              <button
+                                                onClick={() => handleWhatsAppContact(offer.driverPhone, offer.driverName, offer.price)}
+                                                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 text-xs sm:text-sm"
+                                              >
+                                                <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                WhatsApp
+                                              </button>
+                                              <button
+                                                onClick={() => handleChatDriver(offer.driverId, offer.driverName, request)}
+                                                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-xs sm:text-sm"
+                                              >
+                                                <Send className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                Chat
+                                              </button>
+                                            </>
+                                          )}
+                                          {isUsersOffer && (
+                                            <button
+                                              onClick={() => handleChatDriver(request.userId, request.userName, request)}
+                                              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-xs sm:text-sm"
+                                            >
+                                              <Send className="w-3 h-3 sm:w-4 sm:h-4" />
+                                              Chat Requester
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* Driver Contact Modal Customer Form */}
       {showContactModal && selectedRequest && userData && (
-        <div className="overflow-y-auto fixed inset-0 bg-black/50 flex items-start justify-center p-4 z-50">
-          <div className="h-[75vh] bg-white rounded-xl shadow-xl w-full overflow-y-auto flex flex-col">
-            <div className="p-4 sm:p-6 flex-shrink-0">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 sm:p-4 z-[60] backdrop-blur-sm">
+          <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col border border-gray-700 animate-fadeIn">
+            <div className="p-4 sm:p-5 flex-shrink-0 border-b border-gray-800 bg-gray-900 rounded-t-xl sticky top-0 z-10 w-full">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Make an Offer</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-1 truncate">
-                    You're offering for: <span className="font-medium">{selectedRequest.carType}</span>
+                  <h3 className="text-lg sm:text-lg font-bold text-white flex items-center gap-2"><Car className="w-5 h-5 text-emerald-500" /> Make an Offer</h3>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-1 truncate">
+                    You're offering for: <span className="font-medium text-gray-200">{selectedRequest.carType}</span>
                   </p>
                 </div>
                 <button
                   onClick={() => setShowContactModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-colors"
                 >
-                  <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
             </div>
 
-            <div className="overflow-y-auto flex-1 px-4 sm:px-6">
-              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
-                <p className="font-medium text-blue-900 text-sm sm:text-base">Your Details</p>
-                <div className="mt-2 space-y-1 text-xs sm:text-sm">
-                  <p><span className="text-gray-600">Name:</span> {userData.fullName || userName}</p>
-                  <p><span className="text-gray-600">Phone:</span> {userData.phoneNumber || "Not provided"}</p>
-                  <p><span className="text-gray-600">Location:</span> {userData.city ? `${userData.city}, ${userData.state}` : userData.state || "Unknown"}</p>
-                  <p className="text-xs text-gray-500">This info will be shared with the requester</p>
+            <div className="overflow-y-auto flex-1 p-4 sm:p-5 w-full">
+              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-800/60 border border-gray-700 rounded-lg">
+                <p className="font-medium text-emerald-400 text-sm">Your Details</p>
+                <div className="mt-2 space-y-1 text-xs sm:text-sm text-gray-300">
+                  <p><span className="text-gray-500">Name:</span> {userData.fullName || userName}</p>
+                  <p><span className="text-gray-500">Phone:</span> {userData.phoneNumber || "Not provided"}</p>
+                  <p><span className="text-gray-500">Location:</span> {userData.city ? `${userData.city}, ${userData.state}` : userData.state || "Unknown"}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-1">This info will be safely shared with the requester</p>
                 </div>
               </div>
 
-              <div className="space-y-4 pb-6">
+              <div className="space-y-4 pb-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-400 mb-1.5">
                     Your Car Make/Model *
                   </label>
                   <input
                     type="text"
                     value={contactForm.carMake}
-                    onChange={(e) => setContactForm({...contactForm, carMake: e.target.value})}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
-                    placeholder="e.g., Toyota Camry, Honda Accord, etc."
+                    onChange={(e) => setContactForm({ ...contactForm, carMake: e.target.value })}
+                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm placeholder-gray-500"
+                    placeholder="e.g., Toyota Camry, Honda Accord"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-400 mb-1.5">
                     Your Offer Price (₦) *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₦</span>
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">₦</span>
                     <input
                       type="number"
                       value={contactForm.price}
-                      onChange={(e) => setContactForm({...contactForm, price: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
-                      placeholder="Enter your price"
+                      onChange={(e) => setContactForm({ ...contactForm, price: e.target.value })}
+                      className="w-full pl-8 pr-3 py-2 sm:py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm placeholder-gray-500 font-medium tracking-wide"
+                      placeholder="Enter price"
                       required
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Request budget: ₦{parseInt(selectedRequest.budget || "0").toLocaleString()}
+                  <p className="text-[10px] sm:text-xs text-emerald-500 mt-1.5 font-medium">
+                    Requested budget block: ₦{parseInt(selectedRequest.budget || "0").toLocaleString()}
                   </p>
                 </div>
 
-                <div className="flex items-start">
+                <div className="flex items-start mt-2">
                   <input
                     type="checkbox"
                     id="hasAC"
                     checked={contactForm.hasAC}
-                    onChange={(e) => setContactForm({...contactForm, hasAC: e.target.checked})}
-                    className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 rounded border-gray-300 mt-1"
+                    onChange={(e) => setContactForm({ ...contactForm, hasAC: e.target.checked })}
+                    className="h-4 w-4 bg-gray-800 text-emerald-500 rounded border-gray-600 mt-0.5 focus:ring-emerald-500"
                   />
-                  <label htmlFor="hasAC" className="ml-3 text-gray-700">
-                    <span className="font-medium text-sm sm:text-base">Air Conditioning Available</span>
-                    <p className="text-xs sm:text-sm text-gray-500">Your vehicle has working AC</p>
+                  <label htmlFor="hasAC" className="ml-2.5 text-gray-300">
+                    <span className="font-medium text-sm">Air Conditioning</span>
+                    <p className="text-[10px] sm:text-xs text-gray-500">I have a heavily functional AC system.</p>
                   </label>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="pt-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-400 mb-1.5">
                     Message (Optional)
                   </label>
                   <textarea
                     value={contactForm.message}
-                    onChange={(e) => setContactForm({...contactForm, message: e.target.value})}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
-                    rows={3}
-                    placeholder="Add a message to the requester..."
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm placeholder-gray-500"
+                    rows={2}
+                    placeholder="Short message to hook the requester..."
                   />
                 </div>
 
-                <div className="flex items-start">
+                <div className="flex items-start bg-gray-800/40 p-3 rounded-lg border border-gray-700/50 mt-2">
                   <input
                     type="checkbox"
                     id="agreeTerms"
                     checked={contactForm.agreeTerms}
-                    onChange={(e) => setContactForm({...contactForm, agreeTerms: e.target.checked})}
-                    className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 rounded border-gray-300 mt-1"
+                    onChange={(e) => setContactForm({ ...contactForm, agreeTerms: e.target.checked })}
+                    className="h-4 w-4 bg-gray-800 text-emerald-500 rounded border-gray-600 mt-0.5 focus:ring-emerald-500"
                     required
                   />
-                  <label htmlFor="agreeTerms" className="ml-3 text-gray-700">
-                    <span className="font-medium text-sm sm:text-base">I agree to the terms</span>
-                    <p className="text-xs sm:text-sm text-gray-500">
-                      I confirm that my information is accurate and I'm ready to fulfill this request
+                  <label htmlFor="agreeTerms" className="ml-2.5 text-gray-300">
+                    <span className="font-medium text-xs sm:text-sm">I agree to terms</span>
+                    <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">
+                      I guarantee that I am immediately available for this trip.
                     </p>
                   </label>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 sm:p-6 border-t bg-gray-50 flex-shrink-0">
-              <div className="flex flex-col sm:flex-row gap-3">
+            <div className="p-4 border-t border-gray-800 bg-gray-900 rounded-b-xl flex-shrink-0 w-full">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={() => setShowContactModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium text-sm sm:text-base"
+                  className="flex-1 px-4 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors text-sm font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmitOffer}
                   disabled={!contactForm.agreeTerms || !contactForm.price || !contactForm.carMake}
-                  className="flex-1 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm sm:text-base"
+                  className="flex-1 px-4 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 disabled:border disabled:border-gray-600 disabled:cursor-not-allowed transition-colors text-sm font-bold shadow-md shadow-emerald-500/20"
                 >
-                  Submit Offer
+                  Confirm Offer
                 </button>
               </div>
             </div>
@@ -1403,7 +1500,7 @@ export default function ViewRequests({
                   <input
                     type="text"
                     value={editForm.carType}
-                    onChange={(e) => setEditForm({...editForm, carType: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, carType: e.target.value })}
                     className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                     placeholder="e.g., Toyota Camry, SUV, etc."
                     required
@@ -1418,7 +1515,7 @@ export default function ViewRequests({
                     <input
                       type="number"
                       value={editForm.budget}
-                      onChange={(e) => setEditForm({...editForm, budget: e.target.value})}
+                      onChange={(e) => setEditForm({ ...editForm, budget: e.target.value })}
                       className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                       required
                     />
@@ -1430,7 +1527,7 @@ export default function ViewRequests({
                     <input
                       type="number"
                       value={editForm.passengers}
-                      onChange={(e) => setEditForm({...editForm, passengers: e.target.value})}
+                      onChange={(e) => setEditForm({ ...editForm, passengers: e.target.value })}
                       className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                       required
                     />
@@ -1444,7 +1541,7 @@ export default function ViewRequests({
                     </label>
                     <select
                       value={editForm.location}
-                      onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                      onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
                       className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                     >
                       <option value="">Select State</option>
@@ -1460,7 +1557,7 @@ export default function ViewRequests({
                     <input
                       type="text"
                       value={editForm.location}
-                      onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                      onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
                       className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                       placeholder="Enter your city"
                       required
@@ -1480,7 +1577,7 @@ export default function ViewRequests({
                         id="editSameCityYes"
                         name="editSameCity"
                         checked={editForm.isSameCity}
-                        onChange={() => setEditForm({...editForm, isSameCity: true})}
+                        onChange={() => setEditForm({ ...editForm, isSameCity: true })}
                         className="h-5 w-5 text-green-500"
                       />
                       <label htmlFor="editSameCityYes" className="ml-2 text-sm text-gray-700 cursor-pointer">
@@ -1493,7 +1590,7 @@ export default function ViewRequests({
                         id="editSameCityNo"
                         name="editSameCity"
                         checked={!editForm.isSameCity}
-                        onChange={() => setEditForm({...editForm, isSameCity: false})}
+                        onChange={() => setEditForm({ ...editForm, isSameCity: false })}
                         className="h-5 w-5 text-blue-500"
                       />
                       <label htmlFor="editSameCityNo" className="ml-2 text-sm text-gray-700 cursor-pointer">
@@ -1501,7 +1598,7 @@ export default function ViewRequests({
                       </label>
                     </div>
                   </div>
-                  
+
                   {/* Destination Input for Editing */}
                   {!editForm.isSameCity && (
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 animate-fadeIn">
@@ -1511,7 +1608,7 @@ export default function ViewRequests({
                       <input
                         type="text"
                         value={editForm.destination}
-                        onChange={(e) => setEditForm({...editForm, destination: e.target.value})}
+                        onChange={(e) => setEditForm({ ...editForm, destination: e.target.value })}
                         required={!editForm.isSameCity}
                         placeholder="e.g., Abuja, Ibadan, Port Harcourt"
                         className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
@@ -1531,7 +1628,7 @@ export default function ViewRequests({
                     <input
                       type="date"
                       value={editForm.startDate}
-                      onChange={(e) => setEditForm({...editForm, startDate: e.target.value})}
+                      onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
                       className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                       required
                     />
@@ -1543,7 +1640,7 @@ export default function ViewRequests({
                     <input
                       type="date"
                       value={editForm.endDate}
-                      onChange={(e) => setEditForm({...editForm, endDate: e.target.value})}
+                      onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
                       className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                       required
                     />
@@ -1556,7 +1653,7 @@ export default function ViewRequests({
                   </label>
                   <select
                     value={editForm.tripType}
-                    onChange={(e) => setEditForm({...editForm, tripType: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, tripType: e.target.value })}
                     className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                     required
                   >
@@ -1576,7 +1673,7 @@ export default function ViewRequests({
                   </label>
                   <textarea
                     value={editForm.description}
-                    onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                     className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                     rows={3}
                     placeholder="Add any additional details..."
@@ -1589,7 +1686,7 @@ export default function ViewRequests({
                       type="checkbox"
                       id="editNegotiable"
                       checked={editForm.negotiable}
-                      onChange={(e) => setEditForm({...editForm, negotiable: e.target.checked})}
+                      onChange={(e) => setEditForm({ ...editForm, negotiable: e.target.checked })}
                       className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 rounded border-gray-300"
                     />
                     <label htmlFor="editNegotiable" className="ml-3 text-gray-700">
@@ -1602,7 +1699,7 @@ export default function ViewRequests({
                       type="checkbox"
                       id="editUrgent"
                       checked={editForm.urgent}
-                      onChange={(e) => setEditForm({...editForm, urgent: e.target.checked})}
+                      onChange={(e) => setEditForm({ ...editForm, urgent: e.target.checked })}
                       className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600 rounded border-gray-300"
                     />
                     <label htmlFor="editUrgent" className="ml-3 text-gray-700">
