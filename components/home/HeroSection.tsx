@@ -82,7 +82,7 @@ export default function HeroSection({
               <div className="w-full col-span-3 mt-2 flex gap-3 max-w-lg">
                 <Link
                   href="/signup"
-                  className="w-full border-2 border-yellow-400/90 text-yellow-400 px-8 py-3 rounded-xl font-bold text-lg hover:bg-yellow-300/30 transition-all duration-300 flex items-center justify-center gap-3"
+                  className="flex-1 w-full border-2 border-yellow-400/90 text-yellow-400 px-8 py-3 rounded-xl font-bold text-lg hover:bg-yellow-300/30 transition-all duration-300 flex items-center justify-center gap-3"
                 >
                   <FaArrowLeft />
                   Sign Up
@@ -90,7 +90,7 @@ export default function HeroSection({
                 
                 <Link
                   href="/login" 
-                  className="flex-1 w-full bg-white text-blue-800 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
+                  className="flex-2 w-full bg-white text-blue-800 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
                 >
                   Login
                   <FaArrowRight />
