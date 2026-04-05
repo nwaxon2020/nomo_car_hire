@@ -23,18 +23,18 @@ export default function CTASection({ user, stats, data }: any) {
         
         <div className="flex flex-col sm:flex-row gap-6 justify-center">
           <button
-            onClick={() => router.push(user ? "/dashboard" : "/signup")}
+            onClick={() => router.push(user ? "/user/mobility" : "/signup")}
             className="bg-yellow-400 text-gray-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all flex items-center justify-center gap-3"
           >
-            {user ? "Go to Dashboard" : (content.primaryButtonText || "Sign Up Free")}
+            {user ? "Explore Our Services" : (content.primaryButtonText || "Sign Up Free")}
             <FaArrowRight />
           </button>
           
           <Link 
-            href={content.secondaryButtonLink || "/about"} 
+            href={"/about"} 
             className="bg-white/10 border border-white/20 px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/20 transition-all"
           >
-            {content.secondaryButtonText || "Learn More"}
+            {"Learn More"}
           </Link>
         </div>
         
