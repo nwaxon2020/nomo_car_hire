@@ -126,7 +126,7 @@ export default function CarHireUi({
         driverCount = Math.min(driverCount, 99);
         setDriverNotificationCount(driverCount);
       } else {
-        // Customer: count total offers received
+        // Customer: count total UNREAD offers received
         const myReqQuery = query(
           requestsRef,
           where("userId", "==", localUserId),
@@ -135,7 +135,11 @@ export default function CarHireUi({
         const list = await getDocs(myReqQuery);
 
         list.forEach((docSnap) => {
-          customerCount += docSnap.data()?.offers?.length || 0;
+          const data = docSnap.data();
+          if (data.offers && Array.isArray(data.offers)) {
+            const unreadInThisRequest = data.offers.filter((o: any) => o.read === false).length;
+            customerCount += unreadInThisRequest;
+          }
         });
 
         customerCount = Math.min(customerCount, 99);
@@ -160,12 +164,24 @@ export default function CarHireUi({
     }
   }, [isDriver, customerNotificationCount, driverNotificationCount, onBadgeUpdate]);
 
-  /* --------------------------------------------
-   🔥 Run fetch when tab changes or on load
-  -------------------------------------------- */
+  const [initialTabSet, setInitialTabSet] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [fetchData, activeTab]);
+
+  useEffect(() => {
+    if (!loading && !initialTabSet) {
+      if (isDriver) {
+        setActiveTab("browse");
+      } else if (userRequestCount > 0) {
+        setActiveTab("browse");
+      } else {
+        setActiveTab("create");
+      }
+      setInitialTabSet(true);
+    }
+  }, [loading, isDriver, userRequestCount, initialTabSet]);
 
   /* --------------------------------------------
    🔥 UI

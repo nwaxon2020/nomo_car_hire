@@ -21,30 +21,27 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
     const [formData, setFormData] = useState({
         carType: "",
         dates: ["", ""],
-        budget: "",
+        budget: "", // Kept as string to handle formatted input
         location: userCity || "",
-        destination: "", // Add destination field
+        destination: "",
         passengers: "1-4",
         tripType: "Quick Drop",
         description: "",
         negotiable: true,
         urgent: false,
-        isSameCity: true, // Add same city radio button
+        isSameCity: true,
     });
 
-    // Fetch actual request count on component mount
     useEffect(() => {
-        const fetchUserRequestCount = async () => {
+        const fetchUserDataAndRequests = async () => {
             if (userId) {
                 try {
-                    // Fetch user's VIP Level
                     const userDoc = await getDoc(doc(db, "users", userId));
                     if (userDoc.exists()) {
                         const data = userDoc.data();
                         setVipLevel(data.vipLevel || 0);
                     }
 
-                    // Fetch actual request count
                     const requestsRef = collection(db, "bookingRequests");
                     const q = query(
                         requestsRef,
@@ -59,7 +56,7 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
             }
         };
 
-        fetchUserRequestCount();
+        fetchUserDataAndRequests();
     }, [userId]);
 
     const carTypes = [
@@ -85,12 +82,20 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
     const passengerOptions = ["1-4", "5-7", "8-10", "10+"];
 
     const handleChange = (field: string, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        if (field === "budget") {
+            // Remove all non-digits
+            const rawValue = value.replace(/\D/g, "");
+            // Format with commas
+            const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            setFormData(prev => ({ ...prev, [field]: formattedValue }));
+        } else {
+            setFormData(prev => ({ ...prev, [field]: value }));
+        }
     };
 
     const getMaxBookings = (level: number) => {
-        if (level >= 5) return 8;
-        if (level === 4) return 5;
+        if (level >= 5) return 10;
+        if (level === 4) return 6;
         if (level === 3) return 4;
         if (level === 2) return 3;
         if (level === 1) return 2;
@@ -102,9 +107,8 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Check request limit before submitting
         if (actualRequestCount >= maxLimit) {
-            alert(`You have reached the maximum of ${maxLimit} active request(s) for VIP Level ${vipLevel}. Please delete an existing request or upgrade your VIP level.`);
+            alert(`Limit Reached: VIP Level ${vipLevel} allows ${maxLimit} active requests.`);
             return;
         }
 
@@ -116,24 +120,21 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
                 userId: auth.currentUser.uid,
                 userName: auth.currentUser.displayName || "User",
                 userEmail: auth.currentUser.email,
-                userPhone: "",
                 userCity: userCity || "",
                 carType: formData.carType,
                 startDate: formData.dates[0],
                 endDate: formData.dates[1],
-                budget: formData.budget,
+                // Clean the budget string back to a number before saving
+                budget: Number(formData.budget.replace(/,/g, "")),
                 location: formData.location,
-                destination: formData.isSameCity ? formData.location : formData.destination, // Include destination if different
+                destination: formData.isSameCity ? formData.location : formData.destination,
                 passengers: formData.passengers,
                 tripType: formData.tripType,
                 description: formData.description,
                 negotiable: formData.negotiable,
                 urgent: formData.urgent,
-                isSameCity: formData.isSameCity, // Add to request data
+                isSameCity: formData.isSameCity,
                 status: "active",
-                offers: [],
-                views: 0,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
@@ -142,27 +143,11 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
 
             setSuccess(true);
             setLoading(false);
-
-            // Update the request count
             setActualRequestCount(prev => prev + 1);
-
-            // Reset form
-            setFormData({
-                carType: "",
-                dates: ["", ""],
-                budget: "",
-                location: userCity || "",
-                destination: "",
-                passengers: "1-4",
-                tripType: "Quick Drop",
-                description: "",
-                negotiable: true,
-                urgent: false,
-                isSameCity: true,
-            });
-            setTimeout(() => setSuccess(false), 3000);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => setSuccess(false), 5000);
         } catch (error) {
-            console.error("Error creating booking request:", error);
+            console.error("Error:", error);
             setLoading(false);
         }
     };
@@ -171,19 +156,20 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
 
     if (success) {
         return (
-            <div className="max-w-5xl mx-auto text-center py-10 px-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl shadow-lg border border-green-200 animate-fadeIn">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-green-600 text-3xl animate-bounce">🎉</span>
+            <div className="max-w-5xl mx-auto text-center mt-12 mb-10 py-12 px-6 bg-gray-900 rounded-xl shadow-2xl border border-green-500/30 animate-fadeIn">
+                <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <span className="text-4xl animate-bounce">✅</span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Request Posted!</h3>
-                <p className="text-gray-600 mb-4">
-                    Your request is now live. Drivers will start contacting you via WhatsApp.
+                <h3 className="text-3xl font-bold text-white mb-3">Request Posted Successfully!</h3>
+                <p className="text-gray-400 mb-6 text-lg">
+                    Drivers in <span className="text-blue-400 font-bold">{formData.location}</span> have been notified.
                 </p>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <p className="text-sm text-green-700">
-                        💡 <strong>Tip:</strong> Keep your WhatsApp active. Drivers may offer better prices than advertised!
-                    </p>
-                </div>
+                <button
+                    onClick={() => setSuccess(false)}
+                    className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition-all"
+                >
+                    Create Another
+                </button>
             </div>
         );
     }
@@ -191,50 +177,47 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
     return (
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto m-2 space-y-6 bg-gray-900 p-3 py-5 md:p-6 rounded shadow-2xl border border-gray-700 animate-fadeIn">
 
-            {/* Request Limit Warning */}
-            {actualRequestCount >= maxLimit && (
-                <div className="mb-4 p-4 bg-gradient-to-r from-red-900/30 to-orange-900/20 border border-red-700 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-red-800/30 p-2 rounded-lg">
-                            <span className="text-red-400 text-xl">⚠️</span>
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-semibold text-red-300 mb-1">Maximum Requests Reached</h4>
-                            <p className="text-sm text-red-200">
-                                You have {actualRequestCount} active requests (maximum is {maxLimit}).
-                                <br />
-                                <span className="text-red-300 font-medium">Delete one of your existing requests to create a new one.</span>
-                            </p>
-                        </div>
+            {/* VIP Info Bar */}
+            <div className="p-4 bg-gray-800/80 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-xs uppercase tracking-widest text-gray-400 font-bold">Your Status</p>
+                        <h4 className="text-white font-black text-lg">
+                            VIP Level {vipLevel} <span className="text-blue-400 ml-2">({actualRequestCount}/{maxLimit} Used)</span>
+                        </h4>
                     </div>
+                    {vipLevel < 5 && (
+                        <button
+                            type="button"
+                            onClick={() => router.push('/purchase')}
+                            className="px-4 py-2 bg-amber-500 text-black text-xs font-black rounded-lg hover:bg-amber-400 transition-all"
+                        >
+                            UPGRADE
+                        </button>
+                    )}
                 </div>
-            )}
 
-            <h2 className="md:text-xl font-bold text-white mb-6">📢 Post a Car Request</h2>
-
-            {/* Active Request Counter */}
-            <div className="flex items-center justify-between mb-4 p-3 bg-gray-800/50 rounded-lg">
-                <span className="text-gray-300 text-sm">Active Requests: {actualRequestCount} / {maxLimit}</span>
-                <div className="flex items-center gap-2">
-                    <div className="h-2 w-32 bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                            className={`h-full ${actualRequestCount >= maxLimit ? 'bg-red-500' : 'bg-green-500'}`}
-                            style={{ width: `${Math.min((actualRequestCount / maxLimit) * 100, 100)}%` }}
-                        ></div>
-                    </div>
-                </div>
+                {/* Exhausted Limit Warning - Lightened Orange, Semi-bold, No Margin */}
+                {actualRequestCount >= maxLimit && (
+                    <p className="text-[10px] text-orange-400 font-semibold leading-tight">
+                        Limit exhausted. Upgrade or delete active requests to create new ones.
+                    </p>
+                )}
             </div>
+
+            <h2 className="md:text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-blue-500">🚗</span> Post a Car Request
+            </h2>
 
             {/* Car Type */}
             <div>
-                <label className="block text-sm font-medium text-gray-200 mb-2">Car Type *</label>
+                <label className="block text-sm font-medium text-gray-400 mb-2">What kind of car do you need?</label>
                 <select
                     value={formData.carType}
                     onChange={(e) => handleChange("carType", e.target.value)}
                     required
                     disabled={isSubmitDisabled}
-                    className={`w-full p-3 border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                        }`}
+                    className="w-full p-4 border rounded-xl bg-gray-800 text-white border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 >
                     <option value="">Select car type...</option>
                     {carTypes.map((type, idx) => (
@@ -247,7 +230,7 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {["Start Date", "End Date"].map((label, i) => (
                     <div key={i}>
-                        <label className="block text-sm font-medium text-gray-200 mb-2">{label} *</label>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">{label}</label>
                         <input
                             type="date"
                             value={formData.dates[i]}
@@ -258,9 +241,7 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
                             }}
                             required
                             disabled={isSubmitDisabled}
-                            min={new Date().toISOString().split("T")[0]}
-                            className={`w-full p-3 border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                                }`}
+                            className="w-full p-4 border rounded-xl bg-gray-800 text-white border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                     </div>
                 ))}
@@ -269,190 +250,91 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
             {/* Budget & Location */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-2">Budget (₦) *</label>
-                    <div className="relative">
-                        <span className="absolute left-3 top-3 text-gray-400">₦</span>
-                        <input
-                            type="number"
-                            value={formData.budget}
-                            onChange={(e) => handleChange("budget", e.target.value)}
-                            required
-                            disabled={isSubmitDisabled}
-                            min="1000"
-                            placeholder="e.g., 150,000"
-                            className={`w-full pl-10 p-3 border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                                }`}
-                        />
-                    </div>
-                    <div className="flex items-center mt-2">
-                        <input
-                            type="checkbox"
-                            id="negotiable"
-                            checked={formData.negotiable}
-                            onChange={(e) => handleChange("negotiable", e.target.checked)}
-                            disabled={isSubmitDisabled}
-                            className={`h-4 w-4 ${isSubmitDisabled ? 'opacity-50 cursor-not-allowed' : 'text-blue-500'}`}
-                        />
-                        <label htmlFor="negotiable" className={`ml-2 text-sm ${isSubmitDisabled ? 'text-gray-500' : 'text-gray-300'}`}>
-                            Price is negotiable
-                        </label>
-                    </div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Budget (₦)</label>
+                    <input
+                        type="text"
+                        value={formData.budget}
+                        onChange={(e) => handleChange("budget", e.target.value)}
+                        required
+                        disabled={isSubmitDisabled}
+                        placeholder="Amount in Naira"
+                        className="w-full p-4 border rounded-xl bg-gray-800 text-white border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-2">My Location/City *</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Current Location</label>
                     <input
                         type="text"
                         value={formData.location}
                         onChange={(e) => handleChange("location", e.target.value)}
                         required
                         disabled={isSubmitDisabled}
-                        placeholder="e.g., Lagos, Victoria Island"
-                        className={`w-full p-3 border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                            }`}
+                        placeholder="City and Area"
+                        className="w-full p-4 border rounded-xl bg-gray-800 text-white border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                 </div>
             </div>
 
-            {/* Same City Radio Buttons */}
-            <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                <label className="block text-sm font-medium text-gray-200 mb-3">Is this trip within the same city/town?</label>
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex items-center">
+            {/* Same City Logic */}
+            <div className="p-4 bg-gray-800/40 rounded-xl border border-gray-700">
+                <p className="text-sm text-gray-300 mb-4">Is the destination in the same city?</p>
+                <div className="flex gap-6 mb-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-white">
                         <input
                             type="radio"
-                            id="sameCityYes"
-                            name="sameCity"
                             checked={formData.isSameCity}
                             onChange={() => handleChange("isSameCity", true)}
-                            disabled={isSubmitDisabled}
-                            className={`h-5 w-5 ${isSubmitDisabled ? 'opacity-50 cursor-not-allowed' : 'text-green-500'}`}
+                            className="w-5 h-5 accent-blue-500"
                         />
-                        <label
-                            htmlFor="sameCityYes"
-                            className={`ml-2 text-sm ${isSubmitDisabled ? 'text-gray-500' : 'text-gray-300'} cursor-pointer`}
-                        >
-                            Yes, within {formData.location || "this city/town"}
-                        </label>
-                    </div>
-                    <div className="flex items-center">
+                        <div className="flex flex-col">
+                            <span>Yes</span>
+                            <span className="text-[10px] text-gray-500">Within {formData.location || "this city"}</span>
+                        </div>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-white">
                         <input
                             type="radio"
-                            id="sameCityNo"
-                            name="sameCity"
                             checked={!formData.isSameCity}
                             onChange={() => handleChange("isSameCity", false)}
-                            disabled={isSubmitDisabled}
-                            className={`h-5 w-5 ${isSubmitDisabled ? 'opacity-50 cursor-not-allowed' : 'text-blue-500'}`}
+                            className="w-5 h-5 accent-blue-500"
                         />
-                        <label
-                            htmlFor="sameCityNo"
-                            className={`ml-2 text-sm ${isSubmitDisabled ? 'text-gray-500' : 'text-gray-300'} cursor-pointer`}
-                        >
-                            No, going to different city
-                        </label>
-                    </div>
+                        <div className="flex flex-col">
+                            <span>No</span>
+                            <span className="text-[10px] text-gray-500">Going to different city</span>
+                        </div>
+                    </label>
                 </div>
-
-                {/* Destination Input (shown only when "No" is selected) */}
                 {!formData.isSameCity && (
                     <div className="mt-4 animate-fadeIn">
-                        <label className="block text-sm font-medium text-gray-200 mb-2">
-                            Destination City *
-                        </label>
                         <input
                             type="text"
+                            placeholder="Destination City/State"
                             value={formData.destination}
                             onChange={(e) => handleChange("destination", e.target.value)}
                             required={!formData.isSameCity}
-                            disabled={isSubmitDisabled}
-                            placeholder="e.g., Abuja, Ibadan, Port Harcourt"
-                            className={`w-full p-3 border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-blue-600 border-2'
-                                }`}
+                            className="w-full p-4 border rounded-xl bg-gray-800 text-white border-blue-500/50 outline-none"
                         />
-                        <p className="text-xs text-blue-300 mt-1">
-                            Enter the city you're traveling to
-                        </p>
                     </div>
                 )}
             </div>
 
-            {/* Passengers & Trip Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-2">Number of Passengers</label>
-                    <select
-                        value={formData.passengers}
-                        onChange={(e) => handleChange("passengers", e.target.value)}
-                        disabled={isSubmitDisabled}
-                        className={`w-full p-3 border rounded-lg bg-gray-800 text-white ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                            }`}
-                    >
-                        {passengerOptions.map(opt => (
-                            <option key={opt} value={opt}>{opt} people</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-2">Trip Type</label>
-                    <select
-                        value={formData.tripType}
-                        onChange={(e) => handleChange("tripType", e.target.value)}
-                        disabled={isSubmitDisabled}
-                        className={`w-full p-3 border rounded-lg bg-gray-800 text-white ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                            }`}
-                    >
-                        {tripTypes.map(type => (
-                            <option key={type.value} value={type.value}>{type.label}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-
-            {/* Description */}
-            <div>
-                <label className="block text-sm font-medium text-gray-200 mb-2">Additional Details</label>
-                <textarea
-                    value={formData.description}
-                    onChange={(e) => handleChange("description", e.target.value)}
-                    rows={3}
-                    disabled={isSubmitDisabled}
-                    placeholder="Any special requirements? (AC, luggage, pet-friendly, etc.)"
-                    className={`w-full p-3 border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 ${isSubmitDisabled ? 'border-gray-700 cursor-not-allowed opacity-70' : 'border-gray-600'
-                        }`}
-                />
-            </div>
-
-            {/* Urgent */}
-            <div className={`flex items-center justify-between p-4 rounded-lg ${isSubmitDisabled
-                ? 'bg-gray-800/30 border border-gray-700'
-                : 'bg-green-900/20 border border-green-700'
-                }`}>
+            {/* URGENT TOGGLE */}
+            <div className="flex items-center justify-between p-4 bg-red-950/20 border border-red-900/30 rounded-xl">
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isSubmitDisabled ? 'bg-gray-700' : 'bg-red-800'
-                        }`}>
-                        <span className={isSubmitDisabled ? 'text-gray-500' : 'text-red-500'}>⚡</span>
-                    </div>
+                    <span className="text-2xl">⚡</span>
                     <div>
-                        <p className={`font-medium ${isSubmitDisabled ? 'text-gray-400' : 'text-green-200'}`}>
-                            Urgent Request
-                        </p>
-                        <p className={`text-sm ${isSubmitDisabled ? 'text-gray-500' : 'text-green-300'}`}>
-                            Get priority from drivers
-                        </p>
+                        <p className="text-white font-bold text-sm">Urgent Request</p>
+                        <p className="text-xs text-gray-400">Makes your request stand out to drivers</p>
                     </div>
                 </div>
-                <label className={`inline-flex items-center cursor-pointer ${isSubmitDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label className="relative inline-flex items-center cursor-pointer">
                     <input
                         type="checkbox"
+                        className="sr-only peer"
                         checked={formData.urgent}
                         onChange={(e) => handleChange("urgent", e.target.checked)}
-                        disabled={isSubmitDisabled}
-                        className="sr-only peer"
                     />
-                    <div className={`relative w-11 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-500 after:rounded-full after:h-5 after:w-5 after:transition-all ${isSubmitDisabled
-                        ? 'bg-gray-700 cursor-not-allowed peer-checked:bg-gray-600'
-                        : 'bg-gray-700 peer-focus:outline-none peer-checked:bg-green-500'
-                        }`}></div>
+                    <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-red-600"></div>
                 </label>
             </div>
 
@@ -460,28 +342,13 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
             <button
                 type="submit"
                 disabled={isSubmitDisabled}
-                className={`w-full py-3 font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg ${isSubmitDisabled
-                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-gray-700/20'
-                    : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-purple-500/50'
+                className={`w-full py-4 font-black rounded-xl transition-all shadow-xl ${isSubmitDisabled
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:scale-[1.01] active:scale-[0.98]'
                     }`}
             >
-                {loading ? (
-                    <>⏳ Posting Request...</>
-                ) : actualRequestCount >= 3 ? (
-                    <>❌ Maximum Requests Reached (3/3)</>
-                ) : (
-                    <>📢 Post My Request (Free)</>
-                )}
+                {loading ? "PROCESSING..." : actualRequestCount >= maxLimit ? "LIMIT REACHED" : "POST REQUEST"}
             </button>
-
-            {/* Info */}
-            <p className="text-center text-gray-400 text-sm mt-2">
-                {actualRequestCount >= 3 ? (
-                    <span className="text-red-300">⚠️ Delete an existing request to create a new one</span>
-                ) : (
-                    <>✅ No fees • ✅ Get multiple offers • ✅ Contact drivers directly</>
-                )}
-            </p>
         </form>
     );
 }

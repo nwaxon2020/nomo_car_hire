@@ -242,10 +242,10 @@ export default function LoginUi() {
     setError("");
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      
+
       // Use unified Google auth handler
       const authResult = await handleGoogleAuthUnified(result, referrerId, false);
-      
+
       if (authResult.success) {
         // Ensure notification fields exist
         const userData = (await getDoc(doc(db, "users", result.user.uid))).data();

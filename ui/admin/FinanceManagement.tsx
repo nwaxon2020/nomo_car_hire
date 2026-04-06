@@ -39,6 +39,7 @@ export default function FinanceManagement() {
   const [tickets, setTickets] = useState<any>(null)
   const [newDriverDays, setNewDriverDays] = useState<number>(60)
   const [newDriverWarningDays, setNewDriverWarningDays] = useState<number>(5)
+  const [startTicketCollect, setStartTicketCollect] = useState<boolean>(false)
 
   // ─── Load from Firestore ──────────────────────────────────────────────────
   useEffect(() => {
@@ -64,6 +65,9 @@ export default function FinanceManagement() {
           if (d.newDriver) {
             setNewDriverDays(d.newDriver.freeTrialDays || 60)
             setNewDriverWarningDays(d.newDriver.warningDays || 5)
+          }
+          if (d.startTicketCollect !== undefined) {
+            setStartTicketCollect(d.startTicketCollect)
           }
 
           // 2. Set serverData last to ensure comparison is clean
@@ -105,9 +109,10 @@ export default function FinanceManagement() {
     const isVipDifferent = JSON.stringify(currentData.vip) !== JSON.stringify(serverData.vip);
     const isTicketsDifferent = JSON.stringify(currentData.tickets) !== JSON.stringify(serverData.tickets);
     const isNewDriverDifferent = JSON.stringify(currentData.newDriver) !== JSON.stringify(serverData.newDriver);
+    const isTicketCollectDifferent = startTicketCollect !== serverData.startTicketCollect;
 
-    return isVipDifferent || isTicketsDifferent || isNewDriverDifferent;
-  }, [vipValidityDays, vipWarningDays, vipPrices, tickets, newDriverDays, newDriverWarningDays, serverData, loading]);
+    return isVipDifferent || isTicketsDifferent || isNewDriverDifferent || isTicketCollectDifferent;
+  }, [vipValidityDays, vipWarningDays, vipPrices, tickets, newDriverDays, newDriverWarningDays, startTicketCollect, serverData, loading]);
 
   const handleCancel = () => {
     if (serverData) {
@@ -116,7 +121,9 @@ export default function FinanceManagement() {
       setVipPrices({ ...serverData.vip.prices })
       setTickets(JSON.parse(JSON.stringify(serverData.tickets)))
       setNewDriverDays(serverData.newDriver?.freeTrialDays || 60)
+      setNewDriverWarningDays(serverData.newDriver?.freeTrialDays || 60)
       setNewDriverWarningDays(serverData.newDriver?.warningDays || 5)
+      setStartTicketCollect(serverData.startTicketCollect || false)
       toast.success("Changes reverted to saved state")
     }
   }
@@ -143,6 +150,7 @@ export default function FinanceManagement() {
           freeTrialDays: Number(newDriverDays),
           warningDays: Number(newDriverWarningDays),
         },
+        startTicketCollect: startTicketCollect,
         lastUpdated: Timestamp.now(),
         updatedBy: adminUser?.email || adminUser?.uid || "Unknown",
       }
@@ -327,6 +335,45 @@ export default function FinanceManagement() {
                 className="w-full bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-400/60"
               />
               <p className="text-[10px] text-slate-500 mt-2">Show purchase option {newDriverWarningDays} days before trial ends</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white/4 border border-white/10 rounded-2xl p-3 md:p-6 mb-8 backdrop-blur-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-xl">🛡️</div>
+            <h2 className="text-lg font-black text-white">Ticket Collection Settings</h2>
+          </div>
+          <p className="text-slate-300 text-sm mb-6">Decide if drivers must have a valid ticket to view customer requests.</p>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Start collecting tickets?</label>
+            <div className="flex flex-col sm:flex-row gap-6">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="radio"
+                    name="startTicketCollect"
+                    checked={startTicketCollect === true}
+                    onChange={() => setStartTicketCollect(true)}
+                    className="peer appearance-none w-6 h-6 border-2 border-white/20 rounded-full checked:border-amber-500 transition-all cursor-pointer"
+                  />
+                  <div className="absolute w-3 h-3 bg-amber-500 rounded-full scale-0 peer-checked:scale-100 transition-transform" />
+                </div>
+                <span className="text-white font-bold group-hover:text-amber-400 transition-colors">Yes (Enforce Tickets)</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="radio"
+                    name="startTicketCollect"
+                    checked={startTicketCollect === false}
+                    onChange={() => setStartTicketCollect(false)}
+                    className="peer appearance-none w-6 h-6 border-2 border-white/20 rounded-full checked:border-amber-500 transition-all cursor-pointer"
+                  />
+                  <div className="absolute w-3 h-3 bg-amber-500 rounded-full scale-0 peer-checked:scale-100 transition-transform" />
+                </div>
+                <span className="text-white font-bold group-hover:text-amber-400 transition-colors">No (Free Access)</span>
+              </label>
             </div>
           </div>
         </section>

@@ -187,6 +187,7 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
                 </div>
             ) : (
                 <div
+                    id='vehicle-section'
                     ref={scrollRef}
                     className="flex flex-col md:flex-row gap-6 overflow-y-auto md:overflow-x-auto max-h-[65rem] md:max-h-none pb-6 no-scrollbar snap-y md:snap-x snap-mandatory scroll-smooth"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}

@@ -5,7 +5,6 @@ import { onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { X, Star, Trash2, CheckCircle, BellOff, Check, Info, ArrowRight } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-// --- CONFIGURATION ---
 const AUTO_DELETE_MONTHS = 6;
 
 export default function NotificationPanel({ onClose, onUnreadUpdate }: any) {
@@ -143,8 +142,6 @@ export default function NotificationPanel({ onClose, onUnreadUpdate }: any) {
 
             {/* List Area */}
             <div className="flex-1 overflow-y-auto bg-slate-50/50 custom-scrollbar">
-
-                {/* Auto-delete Info Note */}
                 <div className="mb-2 flex items-center gap-2 p-3 bg-blue-50/50 border-b border-blue-100">
                     <Info size={14} className="text-blue-500" />
                     <p className="text-[9px] font-bold text-blue-600 uppercase tracking-tight">
@@ -152,7 +149,7 @@ export default function NotificationPanel({ onClose, onUnreadUpdate }: any) {
                     </p>
                 </div>
 
-                <div className="p-4 space-y-4">
+                <div className="p-4 pb-20 space-y-4">
                     {displayed.length === 0 && (
                         <div className="h-64 flex flex-col items-center justify-center text-slate-300">
                             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
@@ -180,7 +177,7 @@ export default function NotificationPanel({ onClose, onUnreadUpdate }: any) {
                                         </button>
                                     </div>
 
-                                    <p className="text-[13px] text-slate-500 font-medium mb-4 leading-relaxed">
+                                    <p className="text-[13px] text-slate-500 font-medium mb-2 leading-relaxed">
                                         {n.message}
                                     </p>
 
@@ -190,16 +187,32 @@ export default function NotificationPanel({ onClose, onUnreadUpdate }: any) {
                                         </div>
                                     )}
 
-                                    {/* Full Width Action Button */}
+                                    {/* Action Button 1 */}
                                     {n.actionUrl && n.actionUrl !== "/" && (
                                         <a
                                             href={n.actionUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center justify-between w-full p-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-[0.98] mb-4 group/btn"
+                                            className="flex items-center justify-between w-full p-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-[0.98] mb-2 group/btn"
                                         >
                                             {n.actionLabel || "View Details"}
                                             <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                        </a>
+                                    )}
+
+                                    {/* SECONDARY MESSAGE (Added) */}
+                                    {n.message2 && (
+                                        <p className="text-[13px] text-slate-400 font-medium mb-4 leading-relaxed border-t border-slate-100 pt-2 italic">
+                                            {n.message2}
+                                        </p>
+                                    )}
+
+                                    {/* Action Button 2 (Added) */}
+                                    {n.actionUrl2 && (
+                                        <a
+                                            href={n.actionUrl2}
+                                            className="flex items-center justify-between w-full p-4 bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg active:scale-[0.98] mb-4 group/btn2"
+                                        >
+                                            {n.actionLabel2 || "Register as Driver"}
+                                            <ArrowRight size={16} className="group-hover/btn2:translate-x-1 transition-transform" />
                                         </a>
                                     )}
 
@@ -233,7 +246,7 @@ export default function NotificationPanel({ onClose, onUnreadUpdate }: any) {
                             <Trash2 size={40} className="text-red-500" />
                         </div>
                         <h3 className="text-2xl font-black text-slate-900 uppercase mb-3 tracking-tighter">Purge Inbox?</h3>
-                        <p className="text-[14px] text-slate-400 font-medium mb-10 px-2 leading-relaxed">This will permanently delete all notifications from your account.</p>
+                        <p className="text-[14px] text-slate-400 font-medium mb-10 px-2 leading-relaxed">This will permanently delete all notifications.</p>
                         <div className="flex flex-col gap-3">
                             <button onClick={clearAll} className="w-full py-5 bg-red-600 text-white font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-xl shadow-red-200 hover:bg-red-700 active:scale-95 transition-all">YES, CLEAR EVERYTHING</button>
                             <button onClick={() => setConfirmClear(false)} className="w-full py-4 text-slate-400 font-black rounded-2xl text-[11px] uppercase hover:bg-slate-50 transition-all">Cancel</button>

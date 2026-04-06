@@ -40,13 +40,9 @@ export default function NotificationBadge({
         "bottom-left": "bottom-0 left-0 transform -translate-x-1/2 translate-y-1/2",
     };
 
-    const bgColor = type === "driver" 
-        ? "bg-red-500 border-red-600" 
-        : "bg-green-500 border-green-600";
+    const bgColor = "bg-red-500 border-red-600";
     
-    const iconColor = type === "driver" 
-        ? "text-red-200" 
-        : "text-green-200";
+    const iconColor = "text-red-200";
 
     return (
         <div className={`relative inline-flex ${className}`}>

@@ -14,11 +14,14 @@ import {
   Timestamp,
   getDoc,
   increment,
-  setDoc
+  setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import toast from 'react-hot-toast';
-import { X, Check, Phone, Car, Calendar, Users, MapPin, MessageCircle, AlertCircle, Trash2, Edit2, Send, Eye, Navigation } from 'lucide-react';
+import { X, Check, Phone, Car, Calendar, Users, MapPin, MessageCircle, AlertCircle, Trash2, Edit2, Send, Eye, Navigation, Crown } from 'lucide-react';
 import ChatWindow from "../PreChat/chat-window";
+import CustomerRequests from "./CustomerRequests";
+import DriverRequests from "./DriverRequests";
 
 interface ViewRequestsProps {
   userId?: string;
@@ -51,6 +54,8 @@ interface BookingRequestType {
   expiresAt: string;
   isSameCity?: boolean;
   destination?: string;
+  hasNewBid?: boolean;
+  userHasMadeOffer?: boolean;
 }
 
 interface OfferType {
@@ -67,6 +72,9 @@ interface OfferType {
   message: string;
   status: "pending" | "accepted" | "rejected";
   createdAt: any;
+  read?: boolean;
+  vehicleId?: string;
+  vehicleDetails?: any;
 }
 
 interface UserType {
@@ -77,6 +85,287 @@ interface UserType {
   state?: string;
   city?: string;
   [key: string]: any;
+}
+
+// Standalone Offer Card Component
+function OfferCard({
+  request,
+  userId,
+  userName,
+  isDriverView = false,
+  onClose,
+  onDeleteOffer,
+  onMarkAsRead,
+  onMarkAllRead,
+  onWhatsAppContact,
+  onChatDriver,
+  onViewVehiclePreview
+}: {
+  request: BookingRequestType;
+  userId?: string;
+  userName?: string;
+  isDriverView?: boolean;
+  onClose: () => void;
+  onDeleteOffer: (requestId: string, offerIndex: number) => void;
+  onMarkAsRead: (requestId: string, offerIndex: number) => void;
+  onMarkAllRead: (requestId: string) => void;
+  onWhatsAppContact: (phoneNumber: string, driverName: string, price: string) => void;
+  onChatDriver: (otherUserId: string, otherUserName: string, request?: BookingRequestType) => void;
+  onViewVehiclePreview: (vehicle: any) => void;
+}) {
+  const isRequestOwner = request.userId === userId;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ offerIndex: number, driverName: string } | null>(null);
+
+  // Filter offers based on user type
+  let displayOffers = request.offers || [];
+  if (isDriverView && userId) {
+    // Drivers only see their own offers
+    displayOffers = displayOffers.filter(offer => offer.driverId === userId);
+  }
+
+  return (
+    <div className="h-[100vh] fixed inset-0 bg-black/70 flex items-center justify-center p-2 md:p-4 z-[100] backdrop-blur-md">
+      <div className="bg-gray-900 rounded md:rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-gray-700 animate-fadeIn">
+        {/* Header */}
+        <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-900/95 rounded-t-2xl sticky top-0 z-10">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-blue-400" />
+              {isDriverView ? "Your Offer" : `Offers for ${request.carType}`}
+            </h3>
+            <p className="text-xs text-gray-400 mt-1">
+              {request.location} • {request.startDate}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-2 p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-400 hover:text-white" />
+          </button>
+        </div>
+
+        {/* Offers List */}
+        <div className="flex-1 overflow-y-auto p-5">
+          {displayOffers.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageCircle className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400 text-lg">
+                {isDriverView ? "You haven't made an offer on this request yet" : "No offers yet"}
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                {isDriverView ? "Click 'Make Offer' to submit your bid" : "Check back later for driver offers"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Mark All Read Button - Only for customers */}
+              {!isDriverView && (request.offers || []).some((o: any) => o.read === false && isRequestOwner) && (
+                <div className="flex justify-end mb-2">
+                  <button
+                    onClick={() => onMarkAllRead(request.id)}
+                    className="text-xs bg-green-500/20 text-green-400 px-3 py-1.5 rounded-full hover:bg-green-500/30 transition-all font-bold uppercase tracking-wider"
+                  >
+                    Mark All Read
+                  </button>
+                </div>
+              )}
+
+              {displayOffers.map((offer, index) => {
+                const isUsersOffer = offer.driverId === userId;
+                const isUnread = offer.read === false && isRequestOwner && !isDriverView;
+                const originalIndex = request.offers?.findIndex(o => o.driverId === offer.driverId) || index;
+
+                return (
+                  <div
+                    key={index}
+                    className={`bg-gray-800/80 border rounded-xl p-5 transition-all ${isUsersOffer ? 'border-blue-500 bg-blue-900/20' :
+                      isUnread ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.2)]' :
+                        'border-gray-700 hover:border-gray-600'
+                      }`}
+                  >
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-white text-lg">
+                            {offer.driverName}
+                          </h4>
+                          {isUsersOffer && (
+                            <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full">
+                              Your Offer
+                            </span>
+                          )}
+                          {isUnread && (
+                            <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full animate-pulse border border-green-500/30">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 text-sm text-gray-400">
+                          <Phone className="w-3.5 h-3.5" />
+                          <span>{offer.driverPhone}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-black text-green-400">
+                          ₦{parseInt(offer.price).toLocaleString()}
+                        </div>
+                        <div className="flex items-center justify-end gap-2 mt-1">
+                          <span className={`px-2 py-1 text-xs rounded-full ${offer.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                            offer.status === 'accepted' ? 'bg-green-500/20 text-green-300' :
+                              'bg-red-500/20 text-red-300'
+                            }`}>
+                            {offer.status}
+                          </span>
+                          {(isUsersOffer || isRequestOwner) && !isDriverView && (
+                            <button
+                              onClick={() => setShowDeleteConfirm({ offerIndex: originalIndex, driverName: offer.driverName })}
+                              className="text-red-400 hover:text-red-300 transition-colors p-1"
+                              title={isUsersOffer ? "Remove your offer" : "Remove this offer"}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {isUsersOffer && isDriverView && (
+                            <button
+                              onClick={() => setShowDeleteConfirm({ offerIndex: originalIndex, driverName: offer.driverName })}
+                              className="text-red-400 hover:text-red-300 transition-colors p-1"
+                              title="Remove your offer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gray-900/50 rounded-lg">
+                      <div>
+                        <span className="text-xs text-gray-500">Car</span>
+                        <p className="text-sm font-medium text-gray-200">{offer.carMake || "Not specified"}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500">Air Conditioning</span>
+                        <p className={`text-sm font-medium ${offer.hasAC ? 'text-green-400' : 'text-red-400'}`}>
+                          {offer.hasAC ? 'Yes ✓' : 'No ✗'}
+                        </p>
+                      </div>
+                      {offer.vehicleDetails && (
+                        <div className="col-span-2">
+                          <button
+                            onClick={() => onViewVehiclePreview(offer.vehicleDetails)}
+                            className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center gap-1"
+                          >
+                            <Car className="w-4 h-4" /> View Car Details & Images
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {offer.message && (
+                      <div className={`mb-4 p-3 rounded-lg text-sm ${isUsersOffer ? 'bg-blue-900/30 text-blue-100' : 'bg-gray-900/50 text-gray-300'
+                        }`}>
+                        <p className="italic">"{offer.message}"</p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-3 border-t border-gray-700">
+                      <span className="text-xs text-gray-500">
+                        Offered {offer.createdAt?.toDate?.().toLocaleDateString() || 'recently'}
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {isUnread && !isDriverView && (
+                          <button
+                            onClick={() => onMarkAsRead(request.id, originalIndex)}
+                            className="px-3 py-1.5 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-xs font-medium transition-all flex items-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Mark Read
+                          </button>
+                        )}
+                        {isRequestOwner && !isDriverView && (
+                          <>
+                            <button
+                              onClick={() => onWhatsAppContact(offer.driverPhone, offer.driverName, offer.price)}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-500 text-sm"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              WhatsApp
+                            </button>
+                            <button
+                              onClick={() => {
+                                onChatDriver(offer.driverId, offer.driverName, request);
+                                if (isUnread) onMarkAsRead(request.id, originalIndex);
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-sm"
+                            >
+                              <Send className="w-4 h-4" />
+                              Chat
+                            </button>
+                          </>
+                        )}
+                        {isUsersOffer && (
+                          <button
+                            onClick={() => onChatDriver(request.userId, request.userName, request)}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-sm"
+                          >
+                            <Send className="w-4 h-4" />
+                            Chat Requester
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-800 bg-gray-900/95 rounded-b-2xl">
+          <p className="text-center text-xs text-gray-500">
+            {isDriverView
+              ? `Your offer status`
+              : `Total Offers: ${request.offers?.length || 0}`}
+          </p>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[200] backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scaleIn">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Remove Offer?</h3>
+              <p className="text-gray-600 mb-6 font-medium">
+                Are you sure you want to remove your offer for <strong>{showDeleteConfirm.driverName}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onDeleteOffer(request.id, showDeleteConfirm.offerIndex);
+                    setShowDeleteConfirm(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-600/20"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ViewRequests({
@@ -96,12 +385,31 @@ export default function ViewRequests({
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<BookingRequestType | null>(null);
   const [viewingRequest, setViewingRequest] = useState<BookingRequestType | null>(null);
-  const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [isDriver, setIsDriver] = useState(false);
   const [driverState, setDriverState] = useState<string>("");
   const [driverCity, setDriverCity] = useState<string>("");
+  const [driverBids, setDriverBids] = useState({ used: 0, limit: 3, lastReset: null });
+  const [driverVehicles, setDriverVehicles] = useState<any[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [showVehiclePreview, setShowVehiclePreview] = useState<{ show: boolean, vehicle?: any }>({ show: false });
+  const [previewImageIndex, setPreviewImageIndex] = useState(0);
+  const [showBidLimitModal, setShowBidLimitModal] = useState(false);
 
-  const [popupTimer, setPopupTimer] = useState<NodeJS.Timeout | null>(null);
+  // Standalone offer card state
+  const [showOfferCard, setShowOfferCard] = useState(false);
+  const [offerCardRequest, setOfferCardRequest] = useState<BookingRequestType | null>(null);
+  const [showDriverDeleteConfirm, setShowDriverDeleteConfirm] = useState<{ requestId: string, offerIndex: number } | null>(null);
+
+  const [contactForm, setContactForm] = useState({
+    carMake: "",
+    hasAC: true,
+    price: "",
+    message: "",
+    agreeTerms: false,
+    vehicleId: ""
+  });
+
+  const [popupTimer, setPopupTimer] = useState<any>(null);
 
   const [activeChat, setActiveChat] = useState<{
     show: boolean;
@@ -110,13 +418,8 @@ export default function ViewRequests({
     driver?: any;
   }>({ show: false });
 
-  const [contactForm, setContactForm] = useState({
-    carMake: "",
-    hasAC: true,
-    price: "",
-    message: "",
-    agreeTerms: false
-  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [adminConfig, setAdminConfig] = useState<any>(null);
 
   const [editForm, setEditForm] = useState({
     carType: "",
@@ -151,6 +454,49 @@ export default function ViewRequests({
     "Plateau": ["Jos", "Bukuru"]
   };
 
+  // Track previous offers per driver to detect new bids and prevent double counting
+  const [previousDriverOffers, setPreviousDriverOffers] = useState<Record<string, Record<string, number>>>({});
+
+  // Track if warning has been shown in this session
+  const [warningShown, setWarningShown] = useState(false);
+
+  // Add this useEffect after the existing useEffects to listen for real-time request count changes
+  useEffect(() => {
+    if (!userId || isDriver) return; // Only for customers
+
+    const requestsRef = collection(db, "bookingRequests");
+    const q = query(
+      requestsRef,
+      where("userId", "==", userId),
+      where("status", "==", "active")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const count = snapshot.size;
+      setUserRequestCount(count);
+
+      // Also update the warning shown state based on count
+      const vipLvl = userData.vipLevel || 0;
+      const getMaxBookings = (level: number) => {
+        if (level >= 5) return 8;
+        if (level === 4) return 5;
+        if (level === 3) return 4;
+        if (level === 2) return 3;
+        if (level === 1) return 2;
+        return 1;
+      };
+      const maxLimit = getMaxBookings(vipLvl);
+
+      // Reset warningShown when count is below limit
+      if (count < maxLimit) {
+        setWarningShown(false);
+        sessionStorage.removeItem('requestLimitWarningShown');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [userId, isDriver, userData.vipLevel]);
+
   useEffect(() => {
     const fetchUserData = async () => {
       if (!userId) return;
@@ -179,19 +525,91 @@ export default function ViewRequests({
               }
             });
           }
+
+          if (data.isDriver) {
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
+            const lastReset = data.lastBidReset || "";
+
+            let bidsUsed = data.bidsUsed || 0;
+            if (lastReset !== currentMonth) {
+              bidsUsed = 0;
+              updateDoc(doc(db, "users", userId), {
+                bidsUsed: 0,
+                lastBidReset: currentMonth
+              });
+            }
+
+            const vipLvl = data.vipLevel || 0;
+            const limits: Record<number, number> = { 0: 3, 1: 5, 2: 7, 3: 9, 4: 11, 5: 15 };
+            const limit = limits[vipLvl] || 3;
+
+            setDriverBids({
+              used: bidsUsed,
+              limit: limit,
+              lastReset: currentMonth as any
+            });
+
+            const vehicleIds = data.vehicleLog || [];
+            if (vehicleIds.length > 0) {
+              const vehicles: any[] = [];
+              try {
+                for (const vId of vehicleIds) {
+                  const vDoc = await getDoc(doc(db, "vehicleLog", vId));
+                  if (vDoc.exists()) {
+                    const vData = vDoc.data();
+                    // Check if vehicle is approved (either isApproved === true OR status === "approved")
+                    const isVehicleApproved = vData.isApproved === true || vData.status === "approved";
+
+                    const vImagesMap = vData.images || {};
+                    const essentialImages = [
+                      vImagesMap.front,
+                      vImagesMap.back,
+                      vImagesMap.side,
+                      vImagesMap.interior
+                    ].filter(Boolean);
+
+                    vehicles.push({
+                      id: vDoc.id,
+                      make: vData.carName || "Unknown",
+                      model: vData.carModel || "",
+                      type: vData.carType || "",
+                      year: vData.createdAt?.toDate?.().getFullYear() || "N/A",
+                      color: vData.exteriorColor || "",
+                      images: essentialImages,
+                      isApproved: isVehicleApproved,
+                      status: vData.status || "pending"
+                    });
+                  }
+                }
+                setDriverVehicles(vehicles);
+              } catch (err) {
+                console.error("Error fetching vehicles:", err);
+              }
+            } else {
+              setDriverVehicles([]);
+            }
+          }
+        }
+
+        const configSnap = await getDoc(doc(db, "adminfinance", "pricing"));
+        if (configSnap.exists()) {
+          setAdminConfig(configSnap.data());
         }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error fetching user data/config:", error);
       }
     };
 
     fetchUserData();
   }, [userId]);
 
+  // Replace the existing fetchUserRequestCount useEffect with this one
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || isDriver) return;
 
-    const fetchUserRequestCount = async () => {
+    // Initial fetch to set the count and show warning if needed
+    const fetchInitialCount = async () => {
       try {
         const requestsRef = collection(db, "bookingRequests");
         const q = query(
@@ -202,26 +620,13 @@ export default function ViewRequests({
         const snapshot = await getDocs(q);
         const count = snapshot.size;
         setUserRequestCount(count);
-
-        if (count >= 3) {
-          const warningMessage = "You have reached the maximum of 3 active requests. Please delete one to create a new request.";
-          const lastWarning = localStorage.getItem('requestLimitWarning');
-          const now = Date.now();
-
-          if (!lastWarning || (now - parseInt(lastWarning)) > 30000) {
-            toast.error(warningMessage, {
-              duration: 6000,
-              icon: '⚠️'
-            });
-            localStorage.setItem('requestLimitWarning', now.toString());
-          }
-        }
       } catch (error) {
         console.error("Error fetching user request count:", error);
       }
     };
-    fetchUserRequestCount();
-  }, [userId, requests]);
+
+    fetchInitialCount();
+  }, [userId, isDriver]);
 
   const checkLocationMatch = (request: BookingRequestType, driverState: string, driverCity: string) => {
     if (!driverState && !driverCity) return false;
@@ -259,16 +664,16 @@ export default function ViewRequests({
     try {
       const requestsRef = collection(db, "bookingRequests");
       let q;
-      
-      // Enforce the new Firestore rules: Customers MUST explicitly query only by their userId
+
       if (!isDriver) {
+        // Customers: only see their own requests
         if (filter === "urgent") {
           q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"), where("urgent", "==", true));
         } else {
           q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"));
         }
       } else {
-        // Drivers are authorized by Security Rules to view all active requests
+        // Drivers: see ALL active requests
         if (filter === "urgent") {
           q = query(requestsRef, where("status", "==", "active"), where("urgent", "==", true));
         } else {
@@ -288,7 +693,37 @@ export default function ViewRequests({
             } as BookingRequestType);
           });
 
-          const sortedRequests = requestsList.sort((a, b) => {
+          let accessibleRequests = requestsList;
+
+          // Ticket collection check for drivers
+          if (isDriver && adminConfig?.startTicketCollect) {
+            const hasValidTicket = userData?.hasActiveTicket &&
+              userData?.ticketExpiryDate?.toDate() > new Date();
+
+            const isTrialActive = () => {
+              if (!userData?.newDriverConfig?.registeredAt) return false;
+              const regDate = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt);
+              const trialDays = adminConfig?.newDriver?.freeTrialDays || 60;
+              const trialEnd = new Date(regDate);
+              trialEnd.setDate(trialEnd.getDate() + trialDays);
+              return new Date() < trialEnd;
+            };
+
+            if (!hasValidTicket && !isTrialActive()) {
+              accessibleRequests = [];
+            }
+          }
+
+          // For drivers: mark which ones they've made offers on
+          let processedRequests = accessibleRequests;
+          if (isDriver) {
+            processedRequests = accessibleRequests.map(request => ({
+              ...request,
+              userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false
+            }));
+          }
+
+          const sortedRequests = processedRequests.sort((a, b) => {
             const vipA = (a as any).vipLevel || 0;
             const vipB = (b as any).vipLevel || 0;
             if (vipB !== vipA) {
@@ -299,19 +734,39 @@ export default function ViewRequests({
             return dateB.getTime() - dateA.getTime();
           });
 
-          let filtered = sortedRequests;
+          let finalFiltered = sortedRequests;
 
           if (filter === "urgent") {
-            filtered = filtered.filter(req => req.urgent);
+            finalFiltered = finalFiltered.filter(req => req.urgent);
           }
 
           if (filter === "nearby" && isDriver) {
-            filtered = filtered.filter(request =>
+            finalFiltered = finalFiltered.filter(request =>
               checkLocationMatch(request, driverState, driverCity)
             );
           }
 
-          setRequests(filtered);
+          // Detect new bids for customers AND for drivers (when they are request owners)
+          if (!isDriver) {
+            // Customers: detect unread offers on their own requests
+            const newRequests = finalFiltered.map(request => {
+              const hasUnread = request.offers?.some(o => o.read === false) || false;
+              return { ...request, hasNewBid: hasUnread };
+            });
+            setRequests(newRequests);
+          } else {
+            // Drivers: also detect unread offers on requests they OWN (as customers)
+            const processedWithNotifications = finalFiltered.map(request => {
+              // If this is the driver's OWN request (they posted it as a customer)
+              if (request.userId === userId) {
+                const hasUnread = request.offers?.some(o => o.read === false) || false;
+                return { ...request, hasNewBid: hasUnread };
+              }
+              return { ...request, hasNewBid: false };
+            });
+            setRequests(processedWithNotifications);
+          }
+
           setLoading(false);
         },
         (error) => {
@@ -327,7 +782,8 @@ export default function ViewRequests({
       setError(`Error: ${error.message}`);
       setLoading(false);
     }
-  }, [filter, driverState, driverCity, isDriver, userId]);
+  }, [filter, driverState, driverCity, isDriver, userId, adminConfig, userData]);
+
 
   const getStats = () => {
     const active = requests.filter(r => r.status === "active").length;
@@ -350,54 +806,99 @@ export default function ViewRequests({
     }
   };
 
+  // Delete request
   const handleDeleteRequest = async (requestId: string) => {
     const deleteToast = toast.loading("Deleting request...");
 
     try {
-      await deleteDoc(doc(db, "bookingRequests", requestId));
-      toast.success("Request deleted successfully!", { id: deleteToast });
+      const requestRef = doc(db, "bookingRequests", requestId);
+      const requestDoc = await getDoc(requestRef);
+
+      if (!requestDoc.exists()) {
+        toast.error("Request not found", { id: deleteToast });
+        return;
+      }
+
+      const requestData = requestDoc.data();
+
+      if (requestData.userId !== userId) {
+        toast.error("You can only delete your own requests", { id: deleteToast });
+        return;
+      }
+
+      const offers = requestData.offers || [];
+      const batch = writeBatch(db);
+
+      // Add bid returns to batch
+      if (offers.length > 0) {
+        const driverIds: string[] = [];
+        offers.forEach((offer: OfferType) => {
+          if (!driverIds.includes(offer.driverId)) {
+            driverIds.push(offer.driverId);
+          }
+        });
+
+        for (const driverId of driverIds) {
+          const driverRef = doc(db, "users", driverId);
+          batch.update(driverRef, {
+            bidsUsed: increment(-1),
+            updatedAt: Timestamp.now()
+          });
+        }
+      }
+
+      // Add request deletion to batch
+      batch.delete(requestRef);
+
+      // Commit everything atomically
+      await batch.commit();
+
+      // Update local state
+      if (isDriver && offers.some((offer: OfferType) => offer.driverId === userId)) {
+        setDriverBids(prev => ({ ...prev, used: Math.max(0, prev.used - 1) }));
+      }
+
+      setRequests(prevRequests => prevRequests.filter(req => req.id !== requestId));
+
+      toast.success("Request deleted successfully! Bids returned to drivers.", { id: deleteToast });
+
+      if (viewingRequest?.id === requestId) {
+        setViewingRequest(null);
+      }
+      setShowDeleteConfirm(null);
+      setShowOfferCard(false);
+      setOfferCardRequest(null);
 
       if (onNotificationUpdate) onNotificationUpdate();
-    } catch (error) {
+
+    } catch (error: any) {
       console.error("Error deleting request:", error);
-      toast.error("Failed to delete request", { id: deleteToast });
-    }
-  };
 
-  const handleMessageIconClick = (request: BookingRequestType) => {
-    // Clear any existing timer
-    if (popupTimer) {
-      clearTimeout(popupTimer);
-      setPopupTimer(null);
-    }
-
-    // Toggle expanded offers section
-    setExpandedRequestId(expandedRequestId === request.id ? null : request.id);
-
-    // If customer clicked to view their offers, update notification badge
-    if (!isDriver && userId && request.userId === userId && request.offers?.length > 0) {
-      if (onNotificationUpdate) {
-        onNotificationUpdate();
-      }
-
-      // For customers, also trigger the callback to mark offers as viewed
-      if (onCustomerViewedOffers) {
-        onCustomerViewedOffers();
+      if (error.code === 'permission-denied') {
+        toast.error("You don't have permission to delete this request", { id: deleteToast });
+      } else if (error.code === 'not-found') {
+        toast.error("Request not found", { id: deleteToast });
+      } else {
+        toast.error(`Failed to delete request: ${error.message}`, { id: deleteToast });
       }
     }
   };
 
-  useEffect(() => {
-    // Cleanup timer on unmount
-    return () => {
-      if (popupTimer) {
-        clearTimeout(popupTimer);
-      }
-    };
-  }, [popupTimer]);
+  // Open standalone offer card
+  const openOfferCard = (request: BookingRequestType, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setOfferCardRequest(request);
+    setShowOfferCard(true);
 
-  const handleDeleteOffer = async (requestId: string, offerIndex: number) => {
-    const deleteToast = toast.loading("Removing offer...");
+    // Mark offers as viewed for request owners (both customers AND drivers who posted requests)
+    if (userId && request.userId === userId && request.offers?.length > 0) {
+      if (onNotificationUpdate) onNotificationUpdate();
+      if (onCustomerViewedOffers) onCustomerViewedOffers();
+    }
+  };
+
+  const handleDeleteOffer = async (requestId: string, offerIndex: number, isDriverSelfDelete: boolean = false) => {
+    const deleteToast = toast.loading(isDriverSelfDelete ? "Removing your bid..." : "Removing offer...");
 
     try {
       const requestRef = doc(db, "bookingRequests", requestId);
@@ -408,13 +909,38 @@ export default function ViewRequests({
         updatedOffers.splice(offerIndex, 1);
 
         await updateDoc(requestRef, { offers: updatedOffers });
-        toast.success("Offer removed successfully!", { id: deleteToast });
+        toast.success(isDriverSelfDelete ? "Your bid has been removed!" : "Offer removed successfully!", { id: deleteToast });
+
+        // Update local requests state
+        setRequests(prevRequests =>
+          prevRequests.map(req => {
+            if (req.id === requestId) {
+              const stillHasUnread = updatedOffers.some(o => o.read === false);
+              const userMadeOffer = updatedOffers.some(o => o.driverId === userId);
+              return { ...req, offers: updatedOffers, hasNewBid: stillHasUnread, userHasMadeOffer: userMadeOffer };
+            }
+            return req;
+          })
+        );
+
+        // Update the offer card if it's open
+        if (offerCardRequest?.id === requestId) {
+          const stillHasUnread = updatedOffers.some(o => o.read === false);
+          setOfferCardRequest({ ...offerCardRequest, offers: updatedOffers, hasNewBid: stillHasUnread });
+        }
+
+        // Close viewing request modal if open
+        if (viewingRequest?.id === requestId) {
+          setViewingRequest(null);
+        }
 
         if (onNotificationUpdate) onNotificationUpdate();
       }
     } catch (error) {
       console.error("Error deleting offer:", error);
       toast.error("Failed to remove offer", { id: deleteToast });
+    } finally {
+      setShowDriverDeleteConfirm(null);
     }
   };
 
@@ -429,8 +955,16 @@ export default function ViewRequests({
       return;
     }
 
+    // Check bidding limit first
+    if (driverBids.used >= driverBids.limit) {
+      setShowBidLimitModal(true);
+      return;
+    }
+
+    // Get reference to the request document
+    const requestRef = doc(db, "bookingRequests", request.id);
+
     try {
-      const requestRef = doc(db, "bookingRequests", request.id);
       await updateDoc(requestRef, { views: increment(1) });
     } catch (error) {
       console.error("Error incrementing views:", error);
@@ -440,31 +974,49 @@ export default function ViewRequests({
 
     if (existingOfferIndex !== -1) {
       const existingOffer = request.offers[existingOfferIndex];
-      toast.error(
-        <div>
-          You already made an offer on this request<br />
-          <button
-            onClick={() => {
-              handleDeleteOffer(request.id, existingOfferIndex);
-              setTimeout(() => {
-                setSelectedRequest(request);
-                setContactForm({
-                  carMake: existingOffer.carMake || "",
-                  hasAC: existingOffer.hasAC,
-                  price: existingOffer.price,
-                  message: existingOffer.message,
-                  agreeTerms: true
-                });
-                setShowContactModal(true);
-              }, 1000);
-            }}
-            className="mt-2 text-red-600 hover:text-red-800 underline"
-          >
-            Delete current offer to make a new one
-          </button>
-        </div>,
-        { duration: 5000 }
+
+      // Ask if they want to override their existing offer
+      const confirmOverride = window.confirm(
+        `You already have an existing offer of ₦${parseInt(existingOffer.price).toLocaleString()} on this request.\n\nDo you want to replace it with a new offer?`
       );
+
+      if (confirmOverride) {
+        try {
+          // Remove the existing offer first
+          const updatedOffers = [...request.offers];
+          updatedOffers.splice(existingOfferIndex, 1);
+
+          await updateDoc(requestRef, { offers: updatedOffers });
+
+          // Update local state
+          setRequests(prevRequests =>
+            prevRequests.map(req => {
+              if (req.id === request.id) {
+                const stillHasUnread = updatedOffers.some(o => o.read === false);
+                return { ...req, offers: updatedOffers, hasNewBid: stillHasUnread, userHasMadeOffer: false };
+              }
+              return req;
+            })
+          );
+
+          toast.success("Previous offer removed. You can now make a new offer.", { duration: 3000 });
+
+          // Now proceed with making new offer
+          setSelectedRequest(request);
+          setContactForm({
+            carMake: "",
+            hasAC: true,
+            price: request.budget || "",
+            message: "",
+            agreeTerms: false,
+            vehicleId: ""
+          });
+          setShowContactModal(true);
+        } catch (error) {
+          console.error("Error removing existing offer:", error);
+          toast.error("Failed to remove existing offer. Please try again.");
+        }
+      }
       return;
     }
 
@@ -474,9 +1026,87 @@ export default function ViewRequests({
       hasAC: true,
       price: request.budget || "",
       message: "",
-      agreeTerms: false
+      agreeTerms: false,
+      vehicleId: ""
     });
     setShowContactModal(true);
+  };
+
+  const handleMarkAsRead = async (requestId: string, offerIndex: number) => {
+    try {
+      const requestRef = doc(db, "bookingRequests", requestId);
+      const requestSnap = await getDoc(requestRef);
+      if (requestSnap.exists()) {
+        const data = requestSnap.data();
+        const offers = [...(data.offers || [])];
+        if (offers[offerIndex]) {
+          offers[offerIndex].read = true;
+          await updateDoc(requestRef, { offers });
+
+          // Update local requests state to remove pulse
+          setRequests(prevRequests =>
+            prevRequests.map(req => {
+              if (req.id === requestId) {
+                const updatedOffers = [...req.offers];
+                if (updatedOffers[offerIndex]) {
+                  updatedOffers[offerIndex].read = true;
+                }
+                // Check if any offers are still unread
+                const stillHasUnread = updatedOffers.some(o => o.read === false);
+                return { ...req, offers: updatedOffers, hasNewBid: stillHasUnread };
+              }
+              return req;
+            })
+          );
+
+          // Update the offer card if it's open
+          if (offerCardRequest?.id === requestId) {
+            const updatedOffers = [...offerCardRequest.offers];
+            if (updatedOffers[offerIndex]) {
+              updatedOffers[offerIndex].read = true;
+            }
+            const stillHasUnread = updatedOffers.some(o => o.read === false);
+            setOfferCardRequest({ ...offerCardRequest, offers: updatedOffers, hasNewBid: stillHasUnread });
+          }
+
+          if (onNotificationUpdate) onNotificationUpdate();
+        }
+      }
+    } catch (err) {
+      console.error("Error marking as read:", err);
+    }
+  };
+
+  const handleMarkAllRead = async (requestId: string) => {
+    try {
+      const requestRef = doc(db, "bookingRequests", requestId);
+      const requestSnap = await getDoc(requestRef);
+      if (requestSnap.exists()) {
+        const data = requestSnap.data();
+        const offers = (data.offers || []).map((o: any) => ({ ...o, read: true }));
+        await updateDoc(requestRef, { offers });
+
+        // Update local requests state to remove pulse
+        setRequests(prevRequests =>
+          prevRequests.map(req => {
+            if (req.id === requestId) {
+              const updatedOffers = offers;
+              return { ...req, offers: updatedOffers, hasNewBid: false };
+            }
+            return req;
+          })
+        );
+
+        // Update the offer card if it's open
+        if (offerCardRequest?.id === requestId) {
+          setOfferCardRequest({ ...offerCardRequest, offers, hasNewBid: false });
+        }
+
+        if (onNotificationUpdate) onNotificationUpdate();
+      }
+    } catch (err) {
+      console.error("Error marking all read:", err);
+    }
   };
 
   const handleEditRequest = (request: BookingRequestType) => {
@@ -524,7 +1154,6 @@ export default function ViewRequests({
         updatedAt: Timestamp.now()
       };
 
-      // Add isSameCity and destination if they exist
       if (editForm.isSameCity !== undefined) {
         updateData.isSameCity = editForm.isSameCity;
       }
@@ -547,7 +1176,9 @@ export default function ViewRequests({
   const handleSubmitOffer = async () => {
     if (!selectedRequest || !userId) return;
 
-    if (!contactForm.price.trim()) {
+    // FIX: Convert price to string before trim
+    const priceString = contactForm.price.toString();
+    if (!priceString.trim()) {
       toast.error("Please enter your price offer");
       return;
     }
@@ -559,6 +1190,12 @@ export default function ViewRequests({
 
     if (!contactForm.agreeTerms) {
       toast.error("Please agree to the terms");
+      return;
+    }
+
+    // Check bidding limit again before submitting
+    if (driverBids.used >= driverBids.limit) {
+      setShowBidLimitModal(true);
       return;
     }
 
@@ -585,26 +1222,34 @@ export default function ViewRequests({
         driverPhone: driverPhone,
         carMake: contactForm.carMake,
         hasAC: contactForm.hasAC,
-        price: contactForm.price,
+        price: priceString, // Use the string version
         message: contactForm.message,
         status: "pending",
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
+        read: false,
+        vehicleId: contactForm.vehicleId,
+        vehicleDetails: selectedVehicle ? {
+          make: selectedVehicle.make,
+          model: selectedVehicle.model,
+          year: selectedVehicle.year,
+          color: selectedVehicle.color,
+          images: selectedVehicle.images || []
+        } : null
       };
 
       const requestRef = doc(db, "bookingRequests", selectedRequest.id);
       const updatedOffers = [...(selectedRequest.offers || []), newOffer];
       await updateDoc(requestRef, { offers: updatedOffers });
 
-      toast.success("Offer submitted successfully!", { id: submitToast });
-      setShowContactModal(false);
-      setContactForm({
-        carMake: "",
-        hasAC: true,
-        price: "",
-        message: "",
-        agreeTerms: false
+      await updateDoc(doc(db, "users", userId), {
+        bidsUsed: increment(1)
       });
 
+      setDriverBids(prev => ({ ...prev, used: prev.used + 1 }));
+
+      toast.success("Offer submitted successfully!", { id: submitToast });
+      setShowContactModal(false);
+      setViewingRequest(null);
       if (onNotificationUpdate) onNotificationUpdate();
 
     } catch (error) {
@@ -698,6 +1343,10 @@ export default function ViewRequests({
 
   const hasUserMadeOffer = (request: BookingRequestType) => {
     if (!userId) return false;
+    // For drivers, use the userHasMadeOffer flag
+    if (isDriver) {
+      return request.userHasMadeOffer || false;
+    }
     return request.offers?.some(offer => offer.driverId === userId) || false;
   };
 
@@ -709,17 +1358,29 @@ export default function ViewRequests({
   const stats = getStats();
 
   const MaxRequestsWarning = () => {
-    if (userRequestCount >= 3) {
+    const vipLvl = userData.vipLevel || 0;
+    const getMaxBookings = (level: number) => {
+      if (level >= 5) return 8;
+      if (level === 4) return 5;
+      if (level === 3) return 4;
+      if (level === 2) return 3;
+      if (level === 1) return 2;
+      return 1;
+    };
+    const maxLimit = getMaxBookings(vipLvl);
+
+    // This will update in real-time because userRequestCount changes via onSnapshot
+    if (userRequestCount >= maxLimit) {
       return (
-        <div className="mb-4 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl shadow-sm">
+        <div className="mb-2 px-4 py-2 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="bg-red-100 p-2 rounded-lg">
-              <AlertCircle className="w-6 h-6 text-red-600" />
+            <div className="bg-red-100 p-1 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-600" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-red-800 mb-1">Maximum Requests Reached</h4>
-              <p className="text-sm text-red-700">
-                You have {userRequestCount} active requests (maximum is 3). Delete one to create a new request.
+              <h4 className="text-sm font-semibold text-red-800">Maximum Requests Reached</h4>
+              <p className="text-xs text-red-700">
+                You have {userRequestCount} active requests (maximum is {maxLimit}). Delete one to create a new request.
               </p>
             </div>
           </div>
@@ -749,13 +1410,14 @@ export default function ViewRequests({
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="border rounded-lg p-4 animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-            <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+      <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-blue-600 rounded-full animate-spin border-t-transparent"></div>
           </div>
-        ))}
+          <p className="text-gray-600 font-medium animate-pulse">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -764,11 +1426,11 @@ export default function ViewRequests({
     <div className="space-y-6">
       {/* Header & Stats */}
       <div className="w-full">
-        <MaxRequestsWarning />
+        {!isDriver && <MaxRequestsWarning />}
       </div>
 
       {/* Header - Responsive Fix */}
-      <div className="w-full bg-white shadow-sm p-3 md:px-6 mb-8">
+      <div className="-mt-6 w-full bg-white shadow-sm p-3 md:px-6 mb-8">
         <div className="flex flex-col justify-center md:justify-between items-center md:flex-row gap-4 text-center md:text-left">
           <div>
             <h1 className="font-bold text-gray-900">Booking Requests</h1>
@@ -794,11 +1456,11 @@ export default function ViewRequests({
             </div>
           </div>
 
-          {/* Filter Buttons - Responsive Stack */}
+          {/* Filter Buttons */}
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setFilter("all")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm ${filter === "all"
+              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs ${filter === "all"
                 ? "bg-blue-600 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
@@ -807,7 +1469,7 @@ export default function ViewRequests({
             </button>
             <button
               onClick={() => setFilter("urgent")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm  ${filter === "urgent"
+              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs ${filter === "urgent"
                 ? "bg-orange-600 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
@@ -819,7 +1481,7 @@ export default function ViewRequests({
             {isDriver && (
               <button
                 onClick={() => setFilter("nearby")}
-                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm ${filter === "nearby"
+                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs ${filter === "nearby"
                   ? "bg-green-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
@@ -833,124 +1495,41 @@ export default function ViewRequests({
         </div>
       </div>
 
-      {/* Requests List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {requests.length === 0 ? (
-          <div className="col-span-1 md:col-span-2 text-center py-12 bg-gray-900 rounded-xl shadow-sm border border-gray-700">
-            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Car className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-300 mb-2">No requests found</h3>
-            <p className="text-gray-500 mb-4">
-              {filter !== "all"
-                ? `No ${filter} requests available`
-                : "No requests to display"}
-            </p>
-            {filter !== "all" && (
-              <button
-                onClick={() => setFilter("all")}
-                className="text-blue-500 font-medium hover:underline"
-              >
-                View all requests
-              </button>
-            )}
-          </div>
-        ) : (
-          requests.map((request) => {
-            const userHasMadeOffer = hasUserMadeOffer(request);
-            const userOffer = getUserOffer(request);
-
-            // Parse trip type and determine if it's same city
-            const [tripCategory, tripPurpose] = request.tripType?.split(':') || ['city', ''];
-            const isSameCity = tripCategory === 'city' || request.isSameCity === true;
-            const destination = request.destination || request.location;
-
-            return (
-              <div
-                key={request.id}
-                onClick={() => {
-                  setViewingRequest(request);
-                }}
-                className="w-full relative overflow-hidden bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl shadow-lg border border-purple-500/30 hover:border-purple-400 hover:shadow-purple-500/30 transition-all cursor-pointer p-3 sm:p-4 group"
-              >
-                {/* Premium Background Accent */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/20 to-transparent rounded-bl-full pointer-events-none transition-transform group-hover:scale-110" />
-
-                <div className="relative z-10 flex flex-col gap-2">
-                  {/* Location */}
-                  <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5 truncate">
-                    <MapPin className="w-3.5 h-3.5 text-purple-400" />
-                    <span className="truncate">
-                      {isSameCity ? `Within ${request.location}` : `${request.location} → ${destination}`}
-                    </span>
-                  </div>
-
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-1.5 mt-0.5">
-                    {request.urgent && (
-                      <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-[9px] sm:text-[10px] font-bold rounded flex items-center gap-1 leading-none border border-orange-500/30">
-                        URGENT
-                      </span>
-                    )}
-                    {request.negotiable && (
-                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-[9px] sm:text-[10px] font-bold rounded leading-none border border-blue-500/30">
-                        NEGOTIABLE
-                      </span>
-                    )}
-                    <span className="px-2 py-0.5 bg-white/10 text-gray-200 text-[9px] sm:text-[10px] font-bold rounded uppercase leading-none border border-white/20">
-                      {request.tripType?.split(':')[0] || 'Ride'}
-                    </span>
-                  </div>
-
-                  {/* Vehicle Icon & Car Type */}
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="bg-white/10 p-1.5 rounded-md border border-white/20 text-purple-300">
-                      <Car className="w-3.5 h-3.5" />
-                    </div>
-                    <h3 className="text-sm font-bold text-white truncate">
-                      {request.carType}
-                    </h3>
-                  </div>
-
-                  {/* Price / Budget */}
-                  <div className="text-yellow-400 text-lg sm:text-xl font-black mt-1 drop-shadow-md">
-                    ₦{parseInt(request.budget || "0").toLocaleString()}
-                  </div>
-
-                  {/* xs Date, Offers, Views */}
-                  <div className="flex items-center justify-between text-[10px] text-gray-300 mt-1 border-t border-purple-500/30 pt-2 pb-1">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Calendar className="w-3 h-3 text-purple-400" /> {formatDate(request.startDate)}
-                    </span>
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex items-center gap-1 font-medium text-gray-400">
-                        <Eye className="w-3 h-3" /> {request.views || 0}
-                      </span>
-                      <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded ${request.offers?.length ? 'bg-purple-500/30 text-white font-bold' : 'bg-black/20 text-gray-400'}`}>
-                        <MessageCircle className="w-3 h-3" /> {request.offers?.length || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }))}
-      </div>
+      {/* Conditional Rendering for Customer vs Driver */}
+      {!isDriver ? (
+        <CustomerRequests
+          requests={requests}
+          userId={userId}
+          formatDate={formatDate}
+          openOfferCard={openOfferCard}
+          setViewingRequest={setViewingRequest}
+          setShowDeleteConfirm={setShowDeleteConfirm}
+        />
+      ) : (
+        <DriverRequests
+          requests={requests}
+          userId={userId}
+          formatDate={formatDate}
+          openOfferCard={openOfferCard}
+          setViewingRequest={setViewingRequest}
+          driverState={driverState}
+          driverCity={driverCity}
+          filter={filter}
+          driverVehicles={driverVehicles}
+        />
+      )}
 
       {/* Viewing Details Modal */}
       {viewingRequest && (
-        <div className="fixed inset-0 bg-black/60 flex flex-col items-center justify-center p-3 sm:p-4 z-50 backdrop-blur-sm">
-          <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col relative border border-gray-700 animate-fadeIn">
+        <div className="h-[100vh] fixed inset-0 bg-black/60 flex flex-col items-center justify-center p-2 sm:p-4 z-50 backdrop-blur-sm">
+          <div className="bg-gray-900 rounded md:rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col relative border border-gray-700 animate-fadeIn">
             <div className="p-4 flex justify-between items-center border-b border-gray-800 shrink-0 bg-gray-900 sticky top-0 z-10 w-full">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Car className="w-5 h-5 text-blue-500" />
                 Request Details
               </h3>
               <button
-                onClick={() => {
-                  setViewingRequest(null);
-                  setExpandedRequestId(null);
-                }}
+                onClick={() => setViewingRequest(null)}
                 className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -967,7 +1546,6 @@ export default function ViewRequests({
 
                 return (
                   <div className="w-full">
-                    {/* Inner Card Content Base from original */}
                     <div className="p-4 sm:p-5">
                       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                         <div className="flex-1 w-full">
@@ -990,7 +1568,6 @@ export default function ViewRequests({
                                       Negotiable
                                     </span>
                                   )}
-                                  {/* Trip Type Badge */}
                                   <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-md border ${isSameCity
                                     ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                                     : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
@@ -1004,7 +1581,7 @@ export default function ViewRequests({
                                 <span className="hidden sm:inline text-gray-700">•</span>
                                 <div className="flex items-center gap-1">
                                   <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
-                                  <div className="truncate">
+                                  <div className="truncate text-xs">
                                     {isSameCity ? (
                                       <span className="text-gray-300">{request.location}</span>
                                     ) : (
@@ -1020,97 +1597,74 @@ export default function ViewRequests({
                             </div>
                           </div>
 
-                          {/* 2-Column Grid for Information */}
                           <div className="grid grid-cols-2 gap-3 mt-5 p-4 bg-gray-800/40 rounded-xl border border-gray-700/50 backdrop-blur-sm">
                             <div className="flex flex-col gap-1">
                               <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date</span>
-                              <span className="text-sm font-semibold text-gray-200">
+                              <span className="text-sm font-semibold text-gray-200 text-xs">
                                 {formatDate(request.startDate)} {request.endDate > request.startDate && `- ${formatDate(request.endDate)}`}
                               </span>
                             </div>
                             <div className="flex flex-col gap-1">
                               <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Passengers</span>
-                              <span className="text-sm font-semibold text-gray-200">{request.passengers}</span>
+                              <span className="text-sm font-semibold text-gray-200 text-xs">{request.passengers}</span>
                             </div>
                             <div className="flex flex-col gap-1">
                               <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Car className="w-3.5 h-3.5" /> Trip Type</span>
-                              <span className="text-sm font-semibold text-gray-200 capitalize">{request.tripType?.split(':')[0]}</span>
+                              <span className="text-sm font-semibold text-gray-200 capitalize text-xs">{request.tripType?.split(':')[0]}</span>
                             </div>
                             <div className="flex flex-col gap-1">
                               <span className="text-xs font-medium text-gray-500">Budget Limit</span>
-                              <span className="text-base font-black text-emerald-400">
+                              <span className="text-base font-black text-emerald-400 text-xs">
                                 ₦{parseInt(request.budget || "0").toLocaleString()}
                               </span>
                             </div>
                           </div>
                         </div>
-
-                        {/* Action Buttons - Stack on Mobile */}
-                        <div className="flex flex-col items-stretch sm:items-end gap-2">
-                          {userId === request.userId && (
-                            <div className="flex flex-col xs:flex-row gap-2">
-                              <button
-                                onClick={() => handleEditRequest(request)}
-                                className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm"
-                              >
-                                <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                <span className="hidden xs:inline">Edit</span>
-                                <span className="xs:hidden">Edit Request</span>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteRequest(request.id)}
-                                className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm"
-                              >
-                                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                <span className="hidden xs:inline">Delete</span>
-                                <span className="xs:hidden">Delete Request</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
                       </div>
 
-                      {/* Trip Purpose Display */}
                       {tripPurpose && (
                         <div className="mt-3 p-2 bg-gray-800/50 rounded-lg border border-gray-700">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-400">Trip Purpose:</span>
-                            <span className="text-sm font-medium text-gray-300 capitalize">
+                            <span className="text-sm font-medium text-gray-300 capitalize text-xs">
                               {tripPurpose.replace(/([A-Z])/g, ' $1').trim()}
                             </span>
                           </div>
                         </div>
                       )}
 
-                      {/* Description */}
                       {request.description && (
                         <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                          <p className="text-gray-700 text-sm sm:text-base">{request.description}</p>
+                          <p className="text-gray-700 text-sm sm:text-base text-xs">{request.description}</p>
                         </div>
                       )}
 
                       {/* User's Offer Status (for drivers) */}
                       {isDriver && userId !== request.userId && userHasMadeOffer && userOffer && (
-                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                             <div className="w-full">
-                              <p className="font-medium text-blue-900">Your Offer</p>
-
-                              <p className="flex gap-4 items-center text-xs sm:text-sm text-blue-700">
+                              <p className="font-medium text-amber-900">Your Offer</p>
+                              <p className="flex gap-4 items-center text-xs sm:text-sm text-amber-700">
                                 <span>• ₦{parseInt(userOffer.price).toLocaleString()}</span>
                                 <span>• Status: <span className="font-medium capitalize">{userOffer.status}</span></span>
                               </p>
-                              <p className="flex gap-4 items-center text-xs sm:text-sm text-blue-700">
+                              <p className="flex gap-4 items-center text-xs sm:text-sm text-amber-700">
                                 <span>• Car: {userOffer.carMake || "Not specified"}</span>
                                 <span>• AC: {userOffer.hasAC ? 'Yes' : 'No'}</span>
                               </p>
                             </div>
                             <button
-                              onClick={() => handleDeleteOffer(request.id, request.offers.findIndex(o => o.driverId === userId))}
+                              onClick={() => {
+                                const offerIndex = request.offers.findIndex(o => o.driverId === userId);
+                                if (offerIndex !== -1) {
+                                  setShowDriverDeleteConfirm({ requestId: request.id, offerIndex });
+                                }
+                              }}
                               className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs sm:text-sm whitespace-nowrap"
                             >
                               <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                              Remove Offer
+                              Remove Your Bid
                             </button>
                           </div>
                         </div>
@@ -1119,14 +1673,17 @@ export default function ViewRequests({
                       {/* Footer Actions */}
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-6 pt-4 border-t border-gray-700">
                         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-50">
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 text-xs">
                             <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                             {request.views || 0} views
                           </span>
 
                           <button
-                            onClick={() => handleMessageIconClick(request)}
-                            className="flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-blue-500"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openOfferCard(request, e);
+                            }}
+                            className="flex items-center gap-1 hover:text-blue-400 transition-colors cursor-pointer text-blue-500 text-xs"
                           >
                             <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
                             {request.offers?.length || 0} offers
@@ -1135,7 +1692,7 @@ export default function ViewRequests({
                             )}
                           </button>
 
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-gray-400 text-xs">
                             Posted {(() => {
                               const date = request.createdAt?.toDate?.() || new Date(request.createdAt);
                               const now = new Date();
@@ -1163,12 +1720,13 @@ export default function ViewRequests({
                                       hasAC: existingOffer.hasAC,
                                       price: existingOffer.price,
                                       message: existingOffer.message,
-                                      agreeTerms: true
+                                      agreeTerms: true,
+                                      vehicleId: existingOffer.vehicleId || ""
                                     });
                                     setShowContactModal(true);
                                   }
                                 }}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm text-xs"
                               >
                                 <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                                 Edit Offer
@@ -1177,163 +1735,16 @@ export default function ViewRequests({
                           ) : (
                             <button
                               onClick={() => handleContactUser(request)}
-                              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 font-bold text-sm sm:text-base z-20"
+                              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 font-bold text-sm sm:text-base z-20 text-xs"
                             >
                               <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                               Make Offer
                             </button>
                           )
                         ) : userId === request.userId ? (
-                          <div className="text-sm text-gray-400">Your request</div>
+                          <div className="text-sm text-gray-400 text-xs">Your request</div>
                         ) : null}
                       </div>
-
-                      {/* Offers Section - Expandable */}
-                      {expandedRequestId === request.id && (
-                        <div className="mx-auto mt-4 border border-gray-700 rounded-xl px-2 sm:px-5 py-4 bg-gray-800">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-medium text-white flex items-center gap-2 text-sm sm:text-base">
-                              <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-                              Offers Received ({request.offers?.length || 0})
-                            </h4>
-                            <button
-                              onClick={() => setExpandedRequestId(null)}
-                              className="text-gray-400 hover:text-white"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-
-                          {(!request.offers || request.offers.length === 0) ? (
-                            <div className="text-center py-6">
-                              <MessageCircle className="w-10 h-10 sm:w-12 sm:h-12 text-gray-600 mx-auto mb-3" />
-                              <p className="text-gray-400">No offers yet</p>
-                              <p className="text-xs sm:text-sm text-gray-500 mt-1">Drivers will appear here when they make offers</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                              {request.offers.map((offer, index) => {
-                                const isUsersOffer = offer.driverId === userId;
-                                const isRequestOwner = request.userId === userId;
-
-                                return (
-                                  <div key={index} className={`bg-gray-700 border rounded-lg p-3 sm:p-4 hover:border-gray-500 transition-colors ${isUsersOffer ? 'border-blue-500 bg-blue-900/30' : 'border-gray-600'}`}>
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start mb-3 gap-3">
-                                      <div className="w-full flex-1">
-                                        <div className="flex items-center gap-2">
-                                          <h5 className="font-semibold text-white text-sm sm:text-base truncate">
-                                            {offer.driverName}
-                                            {isUsersOffer && (
-                                              <span className="ml-2 text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded whitespace-nowrap">
-                                                Your Offer
-                                              </span>
-                                            )}
-                                          </h5>
-                                        </div>
-                                        <p className="text-xs sm:text-sm text-gray-300 flex items-center gap-1 mt-1">
-                                          <Phone className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                                          <span className="truncate">{offer.driverPhone}</span>
-                                        </p>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="text-lg sm:text-xl font-bold text-green-400">
-                                          ₦{parseInt(offer.price).toLocaleString()}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-1">
-                                          <span className={`px-2 py-1 text-xs rounded-full ${offer.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
-                                            offer.status === 'accepted' ? 'bg-green-500/20 text-green-300' :
-                                              'bg-red-500/20 text-red-300'
-                                            }`}>
-                                            {offer.status}
-                                          </span>
-
-                                          {(isUsersOffer || isRequestOwner) && (
-                                            <button
-                                              onClick={() => handleDeleteOffer(request.id, index)}
-                                              className="text-red-400 hover:text-red-300 transition-colors"
-                                              title={isUsersOffer ? "Remove your offer" : "Remove this offer"}
-                                            >
-                                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Driver's Car Make Information */}
-                                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-3">
-                                      <div className="text-xs sm:text-sm">
-                                        <span className="text-gray-400">Driver's Car:</span>
-                                        <span className="ml-2 font-medium text-gray-200 truncate block">
-                                          {offer.carMake || "Not specified"}
-                                        </span>
-                                      </div>
-                                      <div className="text-xs sm:text-sm">
-                                        <span className="text-gray-400">AC Available:</span>
-                                        <span className={`ml-2 ${offer.hasAC ? 'text-green-400' : 'text-red-400'}`}>
-                                          {offer.hasAC ? 'Yes ✓' : 'No ✗'}
-                                        </span>
-                                      </div>
-                                      <div className="text-xs sm:text-sm">
-                                        <span className="text-gray-400">Car Requested:</span>
-                                        <span className="ml-2 font-medium text-gray-200 truncate block">{request.carType}</span>
-                                      </div>
-                                      <div className="text-xs sm:text-sm">
-                                        <span className="text-gray-400">Trip Type:</span>
-                                        <span className="ml-2 font-medium text-gray-200 truncate block">{request.tripType}</span>
-                                      </div>
-                                    </div>
-
-                                    {offer.message && (
-                                      <div className={`break-words mb-3 p-2 rounded text-xs sm:text-sm ${isUsersOffer ? 'bg-blue-900/40 text-blue-100' : 'bg-gray-800 text-gray-300'}`}>
-                                        <p>{offer.message}</p>
-                                      </div>
-                                    )}
-
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                      <span className="text-xs text-gray-400">
-                                        Offered {offer.createdAt?.toDate?.().toLocaleDateString() || 'recently'}
-                                      </span>
-                                      {/* Show WhatsApp and Chat buttons for request owner OR driver who made the offer */}
-                                      {(isRequestOwner || isUsersOffer) && (
-                                        <div className="flex flex-wrap gap-2">
-                                          {isRequestOwner && (
-                                            <>
-                                              <button
-                                                onClick={() => handleWhatsAppContact(offer.driverPhone, offer.driverName, offer.price)}
-                                                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 text-xs sm:text-sm"
-                                              >
-                                                <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                                WhatsApp
-                                              </button>
-                                              <button
-                                                onClick={() => handleChatDriver(offer.driverId, offer.driverName, request)}
-                                                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-xs sm:text-sm"
-                                              >
-                                                <Send className="w-3 h-3 sm:w-4 sm:h-4" />
-                                                Chat
-                                              </button>
-                                            </>
-                                          )}
-                                          {isUsersOffer && (
-                                            <button
-                                              onClick={() => handleChatDriver(request.userId, request.userName, request)}
-                                              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-xs sm:text-sm"
-                                            >
-                                              <Send className="w-3 h-3 sm:w-4 sm:h-4" />
-                                              Chat Requester
-                                            </button>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -1343,53 +1754,219 @@ export default function ViewRequests({
         </div>
       )}
 
-      {/* Driver Contact Modal Customer Form */}
+      {/* Driver Delete Confirmation Modal */}
+      {showDriverDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[200] backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scaleIn">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Remove Your Bid?</h3>
+              <p className="text-gray-600 mb-6 font-medium">
+                Are you sure you want to remove your bid from this request? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDriverDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (showDriverDeleteConfirm) {
+                      handleDeleteOffer(showDriverDeleteConfirm.requestId, showDriverDeleteConfirm.offerIndex, true);
+                    }
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-600/20"
+                >
+                  Remove Bid
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Offer Card Component */}
+      {showOfferCard && offerCardRequest && (
+        <OfferCard
+          request={offerCardRequest}
+          userId={userId}
+          userName={userName}
+          isDriverView={isDriver && offerCardRequest.userId !== userId} // Only true for drivers viewing OTHER people's requests
+          onClose={() => {
+            setShowOfferCard(false);
+            setOfferCardRequest(null);
+          }}
+          onDeleteOffer={handleDeleteOffer}
+          onMarkAsRead={handleMarkAsRead}
+          onMarkAllRead={handleMarkAllRead}
+          onWhatsAppContact={handleWhatsAppContact}
+          onChatDriver={handleChatDriver}
+          onViewVehiclePreview={(vehicle) => setShowVehiclePreview({ show: true, vehicle })}
+        />
+      )}
+
+      {/* Bid Limit Modal */}
+      {showBidLimitModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[150] backdrop-blur-md">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scaleIn border border-amber-500/30">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-amber-500">
+                <Crown className="w-10 h-10 text-amber-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-3">Bidding Limit Reached!</h3>
+              <p className="text-gray-300 mb-4">
+                You have exhausted your <span className="font-bold text-amber-400">{driverBids.limit}</span> monthly bids.
+              </p>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-6">
+                <p className="text-sm text-gray-300">
+                  Upgrade to VIP to get more bids and unlock premium features!
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBidLimitModal(false)}
+                  className="flex-1 px-4 py-2.5 bg-gray-700 text-gray-300 rounded-xl hover:bg-gray-600 transition-colors font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBidLimitModal(false);
+                    window.location.href = '/purchase';
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all font-bold shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2"
+                >
+                  <Crown className="w-4 h-4" />
+                  Upgrade VIP
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Driver Contact Modal */}
       {showContactModal && selectedRequest && userData && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-3 sm:p-4 z-[60] backdrop-blur-sm">
-          <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col border border-gray-700 animate-fadeIn">
+        <div className="h-[100vh] fixed inset-0 bg-black/60 flex items-center justify-center p-3 sm:p-4 z-[60] backdrop-blur-sm">
+          <div className="bg-gray-900 rounded md:rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col border border-gray-700 animate-fadeIn">
             <div className="p-4 sm:p-5 flex-shrink-0 border-b border-gray-800 bg-gray-900 rounded-t-xl sticky top-0 z-10 w-full">
               <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg sm:text-lg font-bold text-white flex items-center gap-2"><Car className="w-5 h-5 text-emerald-500" /> Make an Offer</h3>
-                  <p className="text-xs sm:text-sm text-gray-400 mt-1 truncate">
+                <div className="w-full">
+                  <div className="flex justify-between items-center gap-2">
+                    <h3 className="text-lg sm:text-lg font-bold text-white flex items-center gap-2">
+                      <Car className="w-5 h-5 text-emerald-500" /> Make an Offer
+                    </h3>
+                    <button
+                      onClick={() => setShowContactModal(false)}
+                      className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-colors"
+                    >
+                      <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-3 md:mt-1 truncate text-xs">
                     You're offering for: <span className="font-medium text-gray-200">{selectedRequest.carType}</span>
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowContactModal(false)}
-                  className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-colors"
-                >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
               </div>
             </div>
 
             <div className="overflow-y-auto flex-1 p-4 sm:p-5 w-full">
-              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-800/60 border border-gray-700 rounded-lg">
-                <p className="font-medium text-emerald-400 text-sm">Your Details</p>
+              {/* Requester's Details Section */}
+              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                <p className="font-medium text-emerald-400 text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Requester's Details
+                </p>
                 <div className="mt-2 space-y-1 text-xs sm:text-sm text-gray-300">
-                  <p><span className="text-gray-500">Name:</span> {userData.fullName || userName}</p>
-                  <p><span className="text-gray-500">Phone:</span> {userData.phoneNumber || "Not provided"}</p>
-                  <p><span className="text-gray-500">Location:</span> {userData.city ? `${userData.city}, ${userData.state}` : userData.state || "Unknown"}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500 mt-1">This info will be safely shared with the requester</p>
+                  <p><span className="text-gray-500">Name:</span> {selectedRequest.userName || "Anonymous"}</p>
+                  <p><span className="text-gray-500">Location:</span> {selectedRequest.city ? `${selectedRequest.city}, ${selectedRequest.state}` : selectedRequest.location || "Unknown"}</p>
+                  <p className="text-[10px] sm:text-xs text-emerald-500/70 mt-2 flex items-center gap-1">
+                    <span className="text-emerald-400">💡</span> Contact info will be shared after you submit your offer
+                  </p>
                 </div>
               </div>
 
+              {/* Your Details Section (Driver's info) */}
+              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-800/60 border border-gray-700 rounded-lg">
+                <p className="font-medium text-blue-400 text-sm flex items-center gap-2">
+                  <Car className="w-4 h-4" />
+                  Your Details (Will be shared with requester)
+                </p>
+                <div className="mt-2 space-y-1 text-xs sm:text-sm text-gray-300">
+                  <p><span className="text-gray-500">Name:</span> {userData.fullName || userData.firstName ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userName : userName || "Not provided"}</p>
+                  <p><span className="text-gray-500">Phone:</span> {userData.phoneNumber || "Not provided"}</p>
+                  <p><span className="text-gray-500">Location:</span> {userData.city ? `${userData.city}, ${userData.state}` : userData.state || "Unknown"}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-1">This info will be safely shared with the requester upon offer submission</p>
+                </div>
+              </div>
+
+              {/* Offer Form */}
               <div className="space-y-4 pb-2">
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-400 mb-1.5">
-                    Your Car Make/Model *
+                    Select Your Car from Fleet *
                   </label>
-                  <input
-                    type="text"
-                    value={contactForm.carMake}
-                    onChange={(e) => setContactForm({ ...contactForm, carMake: e.target.value })}
-                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm placeholder-gray-500"
-                    placeholder="e.g., Toyota Camry, Honda Accord"
+                  <select
+                    value={contactForm.vehicleId}
+                    onChange={(e) => {
+                      const v = driverVehicles.find(veh => veh.id === e.target.value);
+                      setSelectedVehicle(v || null);
+                      setContactForm({
+                        ...contactForm,
+                        vehicleId: e.target.value,
+                        carMake: v ? `${v.make} ${v.model}` : ""
+                      });
+                    }}
+                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                     required
-                  />
+                  >
+                    <option value="">-- Choose Car --</option>
+                    {driverVehicles.map((v) => (
+                      <option
+                        key={v.id}
+                        value={v.id}
+                        disabled={!v.isApproved}
+                        className={!v.isApproved ? 'text-gray-500 bg-gray-900' : ''}
+                      >
+                        {v.make} {v.model} ({v.year}) {v.isApproved ? '✓ Approved' : '⏳ Pending Approval'}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Show warning when driver has ZERO approved vehicles */}
+                  {driverVehicles.filter(v => v.isApproved === true).length === 0 && driverVehicles.length > 0 && (
+                    <div className="mt-2 p-2 bg-orange-500/20 border border-orange-500/50 rounded-lg">
+                      <p className="text-orange-400 text-[11px] font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        ⚠️ You have no approved vehicles. Please wait for admin approval or contact support.
+                      </p>
+                    </div>
+                  )}
+
+                  {driverVehicles.length === 0 && (
+                    <div className="mt-2 p-2 bg-orange-500/20 border border-orange-500/50 rounded-lg">
+                      <p className="text-orange-400 text-[11px] font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        ⚠️ You have no vehicles. Please add a vehicle to your profile first.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.href = `/user/driver-profile/${userId}#vehicle-section`;
+                        }}
+                        className="mt-2 text-xs bg-orange-500/30 text-orange-300 px-3 py-1 rounded-lg hover:bg-orange-500/40 transition-colors"
+                      >
+                        Add Vehicle
+                      </button>
+                    </div>
+                  )}
                 </div>
 
+                {/* Price Input */}
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-400 mb-1.5">
                     Your Offer Price (₦) *
@@ -1403,13 +1980,15 @@ export default function ViewRequests({
                       className="w-full pl-8 pr-3 py-2 sm:py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm placeholder-gray-500 font-medium tracking-wide"
                       placeholder="Enter price"
                       required
+                      disabled={driverVehicles.filter(v => v.isApproved === true).length === 0}
                     />
                   </div>
                   <p className="text-[10px] sm:text-xs text-emerald-500 mt-1.5 font-medium">
-                    Requested budget block: ₦{parseInt(selectedRequest.budget || "0").toLocaleString()}
+                    Requested budget: ₦{parseInt(selectedRequest.budget || "0").toLocaleString()}
                   </p>
                 </div>
 
+                {/* Air Conditioning Checkbox */}
                 <div className="flex items-start mt-2">
                   <input
                     type="checkbox"
@@ -1417,13 +1996,15 @@ export default function ViewRequests({
                     checked={contactForm.hasAC}
                     onChange={(e) => setContactForm({ ...contactForm, hasAC: e.target.checked })}
                     className="h-4 w-4 bg-gray-800 text-emerald-500 rounded border-gray-600 mt-0.5 focus:ring-emerald-500"
+                    disabled={driverVehicles.filter(v => v.isApproved === true).length === 0}
                   />
                   <label htmlFor="hasAC" className="ml-2.5 text-gray-300">
                     <span className="font-medium text-sm">Air Conditioning</span>
-                    <p className="text-[10px] sm:text-xs text-gray-500">I have a heavily functional AC system.</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500">I have a functional AC system.</p>
                   </label>
                 </div>
 
+                {/* Message */}
                 <div className="pt-2">
                   <label className="block text-xs sm:text-sm font-medium text-gray-400 mb-1.5">
                     Message (Optional)
@@ -1433,10 +2014,12 @@ export default function ViewRequests({
                     onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm placeholder-gray-500"
                     rows={2}
-                    placeholder="Short message to hook the requester..."
+                    placeholder="Short message to the requester..."
+                    disabled={driverVehicles.filter(v => v.isApproved === true).length === 0}
                   />
                 </div>
 
+                {/* Terms Agreement */}
                 <div className="flex items-start bg-gray-800/40 p-3 rounded-lg border border-gray-700/50 mt-2">
                   <input
                     type="checkbox"
@@ -1445,6 +2028,7 @@ export default function ViewRequests({
                     onChange={(e) => setContactForm({ ...contactForm, agreeTerms: e.target.checked })}
                     className="h-4 w-4 bg-gray-800 text-emerald-500 rounded border-gray-600 mt-0.5 focus:ring-emerald-500"
                     required
+                    disabled={driverVehicles.filter(v => v.isApproved === true).length === 0}
                   />
                   <label htmlFor="agreeTerms" className="ml-2.5 text-gray-300">
                     <span className="font-medium text-xs sm:text-sm">I agree to terms</span>
@@ -1456,6 +2040,7 @@ export default function ViewRequests({
               </div>
             </div>
 
+            {/* Action Buttons */}
             <div className="p-4 border-t border-gray-800 bg-gray-900 rounded-b-xl flex-shrink-0 w-full">
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
@@ -1466,8 +2051,19 @@ export default function ViewRequests({
                 </button>
                 <button
                   onClick={handleSubmitOffer}
-                  disabled={!contactForm.agreeTerms || !contactForm.price || !contactForm.carMake}
-                  className="flex-1 px-4 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 disabled:border disabled:border-gray-600 disabled:cursor-not-allowed transition-colors text-sm font-bold shadow-md shadow-emerald-500/20"
+                  disabled={
+                    !contactForm.agreeTerms ||
+                    !contactForm.price ||
+                    !contactForm.carMake ||
+                    driverVehicles.filter(v => v.isApproved === true).length === 0
+                  }
+                  className={`flex-1 px-4 py-2.5 rounded-lg transition-colors text-sm font-bold shadow-md ${!contactForm.agreeTerms ||
+                      !contactForm.price ||
+                      !contactForm.carMake ||
+                      driverVehicles.filter(v => v.isApproved === true).length === 0
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed shadow-none'
+                      : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20'
+                    }`}
                 >
                   Confirm Offer
                 </button>
@@ -1477,7 +2073,7 @@ export default function ViewRequests({
         </div>
       )}
 
-      {/* Customer Edit Request Modal Form  */}
+      {/* Customer Edit Request Modal */}
       {showEditModal && selectedRequest && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-[40rem] max-h-[90vh] overflow-y-auto">
@@ -1739,9 +2335,40 @@ export default function ViewRequests({
         />
       )}
 
-      {/* Tip for Drivers & passengers */}
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scaleIn">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Request?</h3>
+              <p className="text-gray-600 mb-6 font-medium">
+                Are you sure you want to delete this trip request? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteRequest(showDeleteConfirm)}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-600/20"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tip for Drivers */}
       {isDriver && (
-        <div className="mx-2 mt-6 md:mt-8 md:mx-0 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-5">
+        <div className="mx-2 mt-6 md:mt-8 md:mx-0 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row items-start gap-3">
             <div className="bg-blue-100 p-2 rounded-lg self-start">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
@@ -1759,9 +2386,73 @@ export default function ViewRequests({
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>You can only make one offer per request. Delete your current offer to make a new one.</span>
+                  <span>You can only make one offer per request. Making a new offer will replace your previous one.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span>You have used <strong>{driverBids.used}</strong> out of <strong>{driverBids.limit}</strong> bids this month.</span>
                 </li>
               </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vehicle Image Preview Modal */}
+      {showVehiclePreview.show && showVehiclePreview.vehicle && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
+          <div className="relative w-full max-w-2xl bg-gray-900 rounded-2xl overflow-hidden border border-gray-700">
+            <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <Car className="w-5 h-5 text-blue-400" />
+                {showVehiclePreview.vehicle.make} {showVehiclePreview.vehicle.model}
+              </h3>
+              <button onClick={() => setShowVehiclePreview({ show: false })} className="p-2 bg-gray-800 rounded-full text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative aspect-video bg-black flex items-center justify-center">
+              {showVehiclePreview.vehicle.images?.length > 0 ? (
+                <>
+                  <img
+                    src={showVehiclePreview.vehicle.images[previewImageIndex]}
+                    alt="Vehicle"
+                    className="w-full h-full object-contain"
+                  />
+                  {showVehiclePreview.vehicle.images.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => setPreviewImageIndex(prev => (prev === 0 ? showVehiclePreview.vehicle.images.length - 1 : prev - 1))}
+                        className="absolute left-2 p-3 bg-black/50 text-white rounded-full hover:bg-black/70"
+                      >
+                        &lt;
+                      </button>
+                      <button
+                        onClick={() => setPreviewImageIndex(prev => (prev === showVehiclePreview.vehicle.images.length - 1 ? 0 : prev + 1))}
+                        className="absolute right-2 p-3 bg-black/50 text-white rounded-full hover:bg-black/70"
+                      >
+                        &gt;
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="text-gray-500 flex flex-col items-center gap-2">
+                  <Car className="w-12 h-12" />
+                  No images available
+                </div>
+              )}
+            </div>
+            <div className="p-4 bg-gray-900">
+              <div className="flex gap-2 justify-center">
+                {showVehiclePreview.vehicle.images?.map((_: any, i: number) => (
+                  <button
+                    key={i}
+                    onClick={() => setPreviewImageIndex(i)}
+                    className={`w-2 h-2 rounded-full ${i === previewImageIndex ? 'bg-blue-500 w-4' : 'bg-gray-700'} transition-all`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
