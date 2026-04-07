@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebaseConfig";
@@ -99,6 +99,18 @@ export default function MobilityView() {
   const [isLocationSharing, setIsLocationSharing] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeEmergencyContact, setActiveEmergencyContact] = useState<any>(null);
+  const searchParams = useSearchParams();
+  const [shouldBlinkManage, setShouldBlinkManage] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "manage") {
+      setShouldBlinkManage(true);
+      setIsSafetyExpanded(true);
+      // Auto-stop blinking after some time
+      const timer = setTimeout(() => setShouldBlinkManage(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (firebaseUser) => {
@@ -300,13 +312,22 @@ export default function MobilityView() {
             </div>
           </div>
 
-          <button
+          <motion.button
             onClick={toggleSafetyPanel}
+            animate={shouldBlinkManage ? {
+              backgroundColor: ["#111827", "#2563eb", "#111827"],
+              scale: [1, 1.05, 1],
+            } : {}}
+            transition={shouldBlinkManage ? {
+              duration: 1,
+              repeat: Infinity,
+              ease: "easeInOut"
+            } : {}}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-sm group"
           >
             Manage
             {isSafetyExpanded ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
-          </button>
+          </motion.button>
         </div>
 
         <AnimatePresence>
@@ -468,7 +489,7 @@ export default function MobilityView() {
               description="Shared Transit. Join other passengers going your way and split the fare."
               icon={<FaUsers className="w-5 h-5" />}
               image="/cab.png"
-              route="/user/load-booking"
+              route="/user/mobility/load-booking"
               gradient="from-amber-500/90 to-orange-700/90"
               delay={0.3}
               isLocked={!isLocationSharing}
@@ -479,7 +500,7 @@ export default function MobilityView() {
               description="Nomo Hailing. Get a professional driver at your doorstep instantly."
               icon={<FaCar className="w-5 h-5" />}
               image="/driverShareProfile.jpeg"
-              route="/user/car-hire"
+              route="/user/mobility/bookings"
               gradient="from-blue-600/90 to-indigo-800/90"
               delay={0.1}
               isLocked={!isLocationSharing}
@@ -489,7 +510,7 @@ export default function MobilityView() {
               description="Ride Negotiation. Post your trip and let verified drivers bid for your business."
               icon={<FaHandshake className="w-5 h-5" />}
               image="/carHire.webp"
-              route="/user/car-hire"
+              route="/user/mobility/car-hire"
               gradient="from-emerald-600/90 to-teal-800/90"
               delay={0.2}
               isLocked={!isLocationSharing}
@@ -500,7 +521,7 @@ export default function MobilityView() {
               description="Nigerian Price Scraper. Real-time prices for major road transport companies."
               icon={<FaGlobe className="w-5 h-5" />}
               image="/park.png"
-              route="/user/transport-hub"
+              route="/user/mobility/transport-hub"
               gradient="from-slate-700/90 to-gray-900/90"
               delay={0.4}
               isLocked={!isLocationSharing}
@@ -571,7 +592,7 @@ export default function MobilityView() {
                   <button
                     onClick={() => {
                       if (!isLocationSharing) setIsSafetyExpanded(true);
-                      else router.push('/user/car-hire');
+                      else router.push('/user/mobility/car-hire');
                     }}
                     className="mt-4 px-6 py-2 bg-blue-600 text-white font-black rounded-lg text-[10px] uppercase tracking-widest shadow-lg shadow-blue-900/20 active:scale-95"
                   >

@@ -101,7 +101,7 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
                             <div className="text-gray-400 text-5xl mb-3">🚗</div>
                             <p className="text-gray-500 text-sm mb-3">No trip history yet</p>
                             <button
-                                onClick={() => router.push('/user/car-hire')}
+                                onClick={() => router.push('/user/mobility/car-hire')}
                                 className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2 rounded-lg text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-md"
                             >
                                 Book Your First Trip

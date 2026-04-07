@@ -16,7 +16,7 @@ import NewsPageUi from '@/components/transportNews';
 
 // --- CONFIGURATION: Add paths here where you want the News to show ---
 const showNewsPaths = ["/", "/location", "/user/profile", "/user/driver-profile",
-  "/user/car-hire", "/user/booking", "/user/load-booking", "/user/transport"];
+  "/user/mobility/car-hire", "/user/mobility/bookings", "/user/mobility/load-booking", "/user/mobility/transport-hub"];
 
 // --- Service Link with Hover Hint ---
 function ServiceLink({ href, label, icon, hint }: { href: string; label: string; icon: any; hint: string }) {
@@ -149,10 +149,10 @@ export default function Footer() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Services</h2>
             <ul className="flex flex-col gap-3">
-              <ServiceLink href="/user/car-hire" label="Hire Car" icon={<FaCar />} hint="Private Uber-style service. Rent a car and driver for your exclusive use." />
-              <ServiceLink href="/user/booking" label="Booking" icon={<FaGavel />} hint="A negotiation hub: Drop your request and price, and let drivers bid for your trip." />
-              <ServiceLink href="/user/load-booking" label="Load-Booking" icon={<FaSuitcase />} hint="Shared travel: Book a specific vacant seat in a vehicle heading your way." />
-              <ServiceLink href="/user/transport" label="Transport" icon={<FaBus />} hint="View prices and routes from major transport companies across Nigeria." />
+              <ServiceLink href="/user/mobility/load-booking" label="Load-Booking" icon={<FaSuitcase />} hint="Shared travel: Book a specific vacant seat in a vehicle heading your way." />
+              <ServiceLink href="/user/mobility/car-hire" label="Hire a Car" icon={<FaCar />} hint="Private Uber-style service. Rent a car and driver for your exclusive use." />
+              <ServiceLink href="/user/mobility/bookings" label="Bookings" icon={<FaGavel />} hint="A negotiation hub: Drop your request and price, and let drivers bid for your trip." />
+              <ServiceLink href="/user/mobility/transport-hub" label="Transport Hub" icon={<FaBus />} hint="View prices and routes from major transport companies across Nigeria." />
             </ul>
           </div>
 

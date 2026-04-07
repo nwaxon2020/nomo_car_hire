@@ -578,7 +578,7 @@ export default function DriverProfilePage() {
   };
 
   const handleRateTrip = (driverId: string, vehicleId: string) => {
-    router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
+    router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
   };
 
   // Fetch Data Effect

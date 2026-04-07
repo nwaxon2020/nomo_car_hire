@@ -39,7 +39,7 @@ export default function PassengerSafety({ data }: any) {
             
             <div className="mt-8 flex justify-center md:justify-start">
               <button
-                onClick={() => router.push("/user/car-hire")}
+                onClick={() => router.push("/user/mobility/car-hire")}
                 className="inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all"
               >
                 <FaCar /> {content.buttonText || content.btnMain || "Book Your First Ride"}

@@ -184,7 +184,7 @@ export default function PublicLiveTrackPage() {
               <p className="text-xs text-slate-400 font-medium">Experience the Nomo difference with real-time tracking on every trip.</p>
             </div>
             <button
-              onClick={() => router.push('/user/car-hire')}
+              onClick={() => router.push('/user/mobility/car-hire')}
               className="mt-8 w-full py-4 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-2xl group-hover:bg-emerald-500 transition-all"
             >
               Book My Own Chauffeur →

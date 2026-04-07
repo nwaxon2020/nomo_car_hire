@@ -272,12 +272,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         >
                             <span>🎮</span> Play Game
                         </motion.button>
-
                         <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => router.push(`/user/purchase?userId=${userData?.id || userData?.uid || ''}`)}
-                            className="w-full md:w-auto bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg flex items-center justify-center gap-2"
+                            onClick={() => router.push(`/user/mobility/purchase?userId=${userData?.id || userData?.uid || ''}`)}
+                            className="w-full md:w-auto bg-gradient-to-r from-amber-500 to-yellow-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-yellow-700 transition-all shadow-lg flex items-center justify-center gap-2"
                         >
                             <span>⭐</span> Upgrade VIP
                         </motion.button>

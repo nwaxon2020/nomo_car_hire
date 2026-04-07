@@ -14,9 +14,9 @@ import { auth } from "@/lib/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
-import CreateRequest from "../components/BookingRequest/CreateRequest";
-import ViewRequests from "../components/BookingRequest/ViewRequests";
-import NotificationBadge from "../components/BookingRequest/NotificationBadge";
+import CreateRequest from "../components/carHireBookings/CreateRequest";
+import ViewRequests from "../components/carHireBookings/ViewRequests";
+import NotificationBadge from "../components/carHireBookings/NotificationBadge";
 import { div } from "framer-motion/client";
 
 interface BookingRequestProps {

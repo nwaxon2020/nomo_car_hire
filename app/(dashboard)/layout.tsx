@@ -159,8 +159,10 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     { name: "Dashboard", href: dashboardRoute, icon: <LayoutDashboard size={20} /> },
     { name: "Chat", href: "/user/chat", icon: <MessageSquare size={20} /> },
     { name: "Mobility", href: "/user/mobility", icon: <Navigation size={20} /> },
-    { name: "Bookings", href: "/user/bookings", icon: <Car size={20} /> },
-    { name: "Hire a Car", href: "/user/car-hire", icon: <Car size={20} /> },
+    { name: "Load Booking", href: "/user/mobility/load-booking", icon: <Car size={20} /> },
+    { name: "Hire a Car", href: "/user/mobility/car-hire", icon: <Car size={20} /> },
+    { name: "Bookings", href: "/user/mobility/bookings", icon: <Car size={20} /> },
+    { name: "Transport Hub", href: "/user/mobility/transport-hub", icon: <Navigation size={20} /> },
     !isDriver && { name: "Register as Driver", href: "/user/driver-register", icon: <UserPlus size={20} /> },
     {
       name: "About",

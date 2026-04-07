@@ -263,14 +263,14 @@ export default function UserProfilePageUi() {
 
     const handleContactAgain = (driverId: string, vehicleId?: string) => {
         if (vehicleId) {
-            router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}#contact-driver`);
+            router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}#contact-driver`);
         } else {
-            router.push(`/user/car-hire?driver=${driverId}#contact-driver`);
+            router.push(`/user/mobility/car-hire?driver=${driverId}#contact-driver`);
         }
     };
 
     const handleRateTrip = (driverId: string, vehicleId: string) => {
-        router.push(`/user/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
+        router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
     };
 
     const referralPoints = userData?.referralPoints || 0;
@@ -324,7 +324,7 @@ export default function UserProfilePageUi() {
                 <ContactHistory
                     contactedDrivers={userData.contactedDrivers || []}
                     onContactAgain={handleContactAgain}
-                    onConnectDrivers={() => router.push('/user/car-hire')}
+                    onConnectDrivers={() => router.push('/user/mobility/car-hire')}
                 />
 
                 {/* Trip History */}
@@ -332,15 +332,15 @@ export default function UserProfilePageUi() {
                     trips={tripHistory}
                     loading={loadingTripHistory}
                     onRateTrip={handleRateTrip}
-                    onBookTrip={() => router.push('/user/car-hire')}
+                    onBookTrip={() => router.push('/user/mobility/car-hire')}
                 />
 
 
                 {/* Promotional Cards */}
                 <PromotionalCards
                     userId={userId}
-                    onUpgradeVIP={() => router.push('/user/purchase')}
-                    onBookKeke={() => router.push('/user/car-hire?category=keke')}
+                    onUpgradeVIP={() => router.push('/user/mobility/purchase')}
+                    onBookKeke={() => router.push('/user/mobility/car-hire?category=keke')}
                 />
 
                 {/* Contact Section */}

@@ -132,12 +132,12 @@ export const defaultContent: FullPageContent = {
     stats: { drivers: 1000, rides: 10000, cities: 50 },
     backgroundImage: ""
   },
-  howItWorks: {
+      howItWorks: {
     title: "How Nomo Cars Works",
     subtitle: "Simple steps to get you moving",
     steps: [
       { id: "1", title: "Create Account", description: "Sign up as a passenger or driver.", icon: "FaUserCheck", buttonText: "Sign Up", buttonLink: "/signup" },
-      { id: "2", title: "Book or Drive", description: "Book rides instantly or start earning.", icon: "FaCar", buttonText: "Book Ride", buttonLink: "/user/car-hire" },
+      { id: "2", title: "Book or Drive", description: "Book rides instantly or start earning.", icon: "FaCar", buttonText: "Book Ride", buttonLink: "/user/mobility/car-hire" },
       { id: "3", title: "Enjoy & Earn", description: "Enjoy safe rides or earn money.", icon: "FaWallet", buttonText: "Dashboard", buttonLink: "/dashboard" }
     ]
   },

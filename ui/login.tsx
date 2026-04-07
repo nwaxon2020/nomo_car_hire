@@ -152,7 +152,7 @@ export default function LoginUi() {
             message: `You earned a free ride! You now have ${freeRides} free ride(s).`,
             timestamp: new Date().toISOString(),
             read: false,
-            actionUrl: "/user/bookings"
+            actionUrl: "/user/mobility/bookings"
           }),
           hasUnreadNotifications: true
         });
