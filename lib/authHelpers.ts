@@ -114,6 +114,10 @@ export const createUserData = (
     hasUnreadNotifications: welcomeNote ? true : false,
     fcmToken: "",
 
+    // Status flags
+    justJoined: true,
+    newCarCount: 0,
+
     // Preferences
     preferences: { theme: "light", language: "en", currency: "NGN" },
   };

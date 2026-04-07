@@ -29,10 +29,8 @@ export default function AdminDriversPage() {
     const searchLower = search.toLowerCase();
     const matchesSearch = fullName.includes(searchLower) || d.uid?.toLowerCase().includes(searchLower);
 
-    // 2. 60-Day Logic
-    const sixtyDaysInMs = 60 * 24 * 60 * 60 * 1000;
-    const joinTimeMs = d.driverJoinedDate?.seconds * 1000;
-    const isNew = joinTimeMs > Date.now() - sixtyDaysInMs;
+    // 2. Just Joined Logic
+    const isNew = d.justJoined === true;
 
     // Apply multiple filters
     let passes = matchesSearch;

@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { db, storage } from "@/lib/firebaseConfig";
 import {
-  doc, collection, addDoc, updateDoc, deleteDoc, query, where,
+  doc, collection, addDoc, updateDoc, deleteDoc, query, where, increment,
   onSnapshot, getDoc, Timestamp, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -470,6 +470,8 @@ export default function DriverProfilePage() {
           const userRef = doc(db, "users", driverId);
           await updateDoc(userRef, {
             vehicleLog: arrayUnion(newDocRef.id),
+            newCarCount: increment(1),
+            justJoined: true,
             updatedAt: Timestamp.now()
           });
         } catch (uErr: any) {
