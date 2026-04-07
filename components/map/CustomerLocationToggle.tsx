@@ -358,7 +358,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
               }
 
               setGpsModalOpen(true);
-              stopLocationSharing();
             },
             {
               enableHighAccuracy: true,

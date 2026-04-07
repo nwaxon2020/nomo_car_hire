@@ -21,6 +21,7 @@ import Features from "@/components/home/Features";
 import DriverPartner from "@/components/home/DriverPartner";
 import PassengerSafety from "@/components/home/PassengerSafety";
 import CTASection from "@/components/home/CTASection";
+import Reviews from "@/components/Reviews";
 
 export default function HomePageUi() {
   const router = useRouter();
@@ -188,6 +189,8 @@ export default function HomePageUi() {
       <PassengerSafety 
         data={cmsData?.safety}
       />
+
+      <Reviews />
 
       <CTASection 
         data={cmsData?.cta}

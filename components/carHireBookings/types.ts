@@ -25,6 +25,10 @@ export interface BookingRequestType {
   destination?: string;
   hasNewBid?: boolean;
   userHasMadeOffer?: boolean;
+  userWasRejected?: boolean;
+  userIsBlocked?: boolean;
+  rejectedOnce?: string[];
+  rejectedTwice?: string[];
   vipLevel?: number;
 }
 

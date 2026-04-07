@@ -67,14 +67,22 @@ export default function DriverRequests({
                             onClick={() => setViewingRequest(request)}
                             className={`w-full relative overflow-hidden rounded-xl shadow-lg transition-all cursor-pointer p-3 sm:p-4 group ${isOwnRequest
                                     ? 'bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900'
-                                    : userHasMadeOffer
-                                        ? 'bg-gray-800/80'
-                                        : 'bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900'
+                                    : request.userIsBlocked
+                                        ? 'bg-red-900/40 border-red-600 shadow-[inset_0_0_20px_rgba(220,38,38,0.2)]'
+                                        : request.userWasRejected
+                                            ? 'bg-red-950/30 border-red-500/40'
+                                            : userHasMadeOffer
+                                                ? 'bg-gray-800/80'
+                                                : 'bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900'
                                 } border ${hasNewBids
                                     ? 'border-2 border-green-500'
-                                    : userHasMadeOffer && !isOwnRequest
-                                        ? 'border-amber-500/50 hover:border-amber-400'
-                                        : 'border-purple-500/30 hover:border-purple-400'
+                                    : request.userIsBlocked
+                                        ? 'border-red-600'
+                                        : request.userWasRejected
+                                            ? 'border-red-500/60 hover:border-red-400'
+                                            : userHasMadeOffer && !isOwnRequest
+                                                ? 'border-amber-500/50 hover:border-amber-400'
+                                                : 'border-purple-500/30 hover:border-purple-400'
                                 }`}
                         >
                             {/* Green pulse border effect for new bids on OWN requests - only border animation */}
@@ -91,8 +99,18 @@ export default function DriverRequests({
                                 </div>
                             )}
 
+                            {/* Rejection Badge */}
+                            {(request.userWasRejected || request.userIsBlocked) && !isOwnRequest && (
+                                <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-red-600 text-white rounded-lg border border-red-400/30 z-20 shadow-lg shadow-red-600/20">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span className="text-[10px] font-black tracking-tighter uppercase">
+                                        {request.userIsBlocked ? 'Blocked' : 'Bidding Rejected'}
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Driver Bidded Indicator (for requests they bid on) */}
-                            {userHasMadeOffer && !isOwnRequest && (
+                            {userHasMadeOffer && !isOwnRequest && !request.userWasRejected && !request.userIsBlocked && (
                                 <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 text-amber-400 rounded-lg border border-amber-500/30 z-20 transition-opacity">
                                     <Edit2 className="w-3 h-3" />
                                     <span className="text-[10px] font-bold">EDIT BIDDING</span>

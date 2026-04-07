@@ -8,6 +8,8 @@ interface ViewRequestModalProps {
   isDriver: boolean;
   userId?: string;
   userHasMadeOffer: boolean;
+  userWasRejected?: boolean;
+  userIsBlocked?: boolean;
   userOffer: OfferType | null;
   formatDate: (date: string) => string;
   onClose: () => void;
@@ -228,11 +230,32 @@ export default function ViewRequestModal({
                     </div>
                   ) : (
                     <button
-                      onClick={() => onContactUser(request)}
-                      className="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 font-bold text-sm sm:text-base z-20 text-xs"
+                      onClick={() => !request.userIsBlocked && onContactUser(request)}
+                      disabled={request.userIsBlocked}
+                      className={`w-full sm:w-auto px-4 sm:px-5 py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 font-bold text-sm sm:text-base z-20 text-xs ${
+                        request.userIsBlocked 
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed border border-gray-600' 
+                          : request.userWasRejected 
+                            ? 'bg-amber-600 text-white hover:bg-amber-500 shadow-amber-500/25 border border-amber-500/50' 
+                            : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/25 border border-emerald-400/30'
+                      }`}
                     >
-                      <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                      Make Offer
+                      {request.userIsBlocked ? (
+                        <>
+                          <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                          Bidding Blocked
+                        </>
+                      ) : request.userWasRejected ? (
+                        <>
+                          <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                          Bid Again
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                          Make Offer
+                        </>
+                      )}
                     </button>
                   )
                 ) : userId === request.userId ? (

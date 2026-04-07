@@ -16,6 +16,8 @@ import {
   increment,
   setDoc,
   writeBatch,
+  arrayUnion,
+  arrayRemove
 } from "firebase/firestore";
 import toast from 'react-hot-toast';
 import { X, Check, Phone, Car, Calendar, Users, MapPin, MessageCircle, AlertCircle, Trash2, Edit2, Send, Eye, Navigation, Crown } from 'lucide-react';
@@ -35,6 +37,7 @@ import BidLimitModal from "./BidLimitModal";
 import VehiclePreviewModal from "./VehiclePreviewModal";
 import MaxRequestsWarning from "./MaxRequestsWarning";
 import DriverTips from "./DriverTips";
+import ReBidWarningModal from "./ReBidWarningModal";
 
 interface ViewRequestsProps {
   userId?: string;
@@ -75,6 +78,8 @@ export default function ViewRequests({
   const [showOfferCard, setShowOfferCard] = useState(false);
   const [offerCardRequest, setOfferCardRequest] = useState<BookingRequestType | null>(null);
   const [showDriverDeleteConfirm, setShowDriverDeleteConfirm] = useState<{ requestId: string, offerIndex: number } | null>(null);
+  const [showReBidWarning, setShowReBidWarning] = useState(false);
+  const [pendingReBidRequest, setPendingReBidRequest] = useState<BookingRequestType | null>(null);
 
   const [contactForm, setContactForm] = useState({
     carMake: "",
@@ -171,7 +176,7 @@ export default function ViewRequests({
           if (data.city) setDriverCity(data.city);
 
           if (!data.state || !data.city) {
-            const locationStr = (data.location || "").toLowerCase();
+            const locationStr = (typeof data.location === 'string' ? data.location : (data.location?.address || "")).toLowerCase();
             Object.keys(nigeriaLocations).forEach(state => {
               if (locationStr.includes(state.toLowerCase())) {
                 setDriverState(state);
@@ -378,7 +383,9 @@ export default function ViewRequests({
           if (isDriver) {
             processedRequests = accessibleRequests.map(request => ({
               ...request,
-              userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false
+              userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false,
+              userWasRejected: request.rejectedOnce?.includes(userId || "") || false,
+              userIsBlocked: request.rejectedTwice?.includes(userId || "") || false
             }));
           }
 
@@ -565,9 +572,25 @@ export default function ViewRequests({
 
       if (request) {
         const updatedOffers = [...request.offers];
+        const offerToDelete = updatedOffers[offerIndex];
         updatedOffers.splice(offerIndex, 1);
 
-        await updateDoc(requestRef, { offers: updatedOffers });
+        const updateData: any = { offers: updatedOffers };
+
+        // If customer deletes a driver's bid, track it as a rejection
+        if (!isDriverSelfDelete && offerToDelete) {
+          const rejectedDriverId = offerToDelete.driverId;
+          const isAlreadyRejectedOnce = request.rejectedOnce?.includes(rejectedDriverId);
+
+          if (isAlreadyRejectedOnce) {
+            updateData.rejectedOnce = arrayRemove(rejectedDriverId);
+            updateData.rejectedTwice = arrayUnion(rejectedDriverId);
+          } else {
+            updateData.rejectedOnce = arrayUnion(rejectedDriverId);
+          }
+        }
+
+        await updateDoc(requestRef, updateData);
         toast.success(isDriverSelfDelete ? "Your bid has been removed!" : "Offer removed successfully!", { id: deleteToast });
 
         // Update local requests state
@@ -603,7 +626,7 @@ export default function ViewRequests({
     }
   };
 
-  const handleContactUser = async (request: BookingRequestType) => {
+  const handleContactUser = async (request: BookingRequestType, bypassWarning = false) => {
     if (!isDriver) {
       toast.error("Only drivers can make offers");
       return;
@@ -611,6 +634,17 @@ export default function ViewRequests({
 
     if (userId === request.userId) {
       toast.error("You cannot make offers on your own request");
+      return;
+    }
+
+    if (request.userIsBlocked) {
+      toast.error("You cannot bid on this request again as your previous offers were rejected.");
+      return;
+    }
+
+    if (request.userWasRejected && !showReBidWarning && !bypassWarning) {
+      setPendingReBidRequest(request);
+      setShowReBidWarning(true);
       return;
     }
 
@@ -898,7 +932,10 @@ export default function ViewRequests({
 
       const requestRef = doc(db, "bookingRequests", selectedRequest.id);
       const updatedOffers = [...(selectedRequest.offers || []), newOffer];
-      await updateDoc(requestRef, { offers: updatedOffers });
+      
+      await updateDoc(requestRef, { 
+        offers: updatedOffers 
+      });
 
       await updateDoc(doc(db, "users", userId), {
         bidsUsed: increment(1)
@@ -929,25 +966,36 @@ export default function ViewRequests({
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
+    
+    // Auto-close modals to show the background/chat
+    setShowOfferCard(false);
+    setViewingRequest(null);
   };
 
-  const handleChatDriver = async (otherUserId: string, otherUserName: string, request?: BookingRequestType) => {
-    if (!userId) {
-      toast.error("You must be logged in to chat");
+  const handleChatDriver = async (otherUserId: string, otherUserName: string, request?: BookingRequestType, driverPhone?: string) => {
+    if (!userId || !otherUserId) {
+      toast.error("Unable to start chat: Missing user information");
       return;
     }
 
     try {
       const chatId = [userId, otherUserId].sort().join('_');
       const chatRef = doc(db, "preChats", chatId);
-      const chatDoc = await getDoc(chatRef);
+      let chatDoc;
+      
+      try {
+        chatDoc = await getDoc(chatRef);
+      } catch (e) {
+        // If this fails, it's usually a permission error on the read check
+        console.warn("Read permission denied or doc missing, attempting to proceed...");
+      }
 
       const carInfo = request ? {
-        id: request.id,
-        title: `${request.carType} - ${request.location}`,
-        carType: request.carType,
-        location: request.location,
-        budget: request.budget
+        id: request.id || 'unknown',
+        title: `${request.carType || 'Trip'} - ${request.location || 'Unknown'}`,
+        carType: request.carType || 'General',
+        location: request.location || 'Unknown',
+        budget: request.budget || '0'
       } : {
         id: 'general',
         title: 'Car Rental Request',
@@ -958,45 +1006,47 @@ export default function ViewRequests({
 
       const driverInfo = {
         id: otherUserId,
-        name: otherUserName,
-        phone: '',
+        name: otherUserName || "Driver",
+        phone: driverPhone || '',
       };
 
-      const currentUserName = userData.fullName || userName || "User";
+      const currentUserName = userData?.fullName || userName || "User";
 
-      if (!chatDoc.exists()) {
+      const chatData = {
+        participants: [userId, otherUserId],
+        participantNames: {
+          [userId]: currentUserName,
+          [otherUserId]: otherUserName || "Driver"
+        },
+        carInfo: carInfo,
+        lastActivity: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      if (!chatDoc?.exists()) {
         await setDoc(chatRef, {
-          participants: [userId, otherUserId],
-          participantNames: {
-            [userId]: currentUserName,
-            [otherUserId]: otherUserName
-          },
-          carInfo: carInfo,
-          lastActivity: Timestamp.now(),
+          ...chatData,
           messages: [],
           createdAt: Timestamp.now()
         });
       } else {
-        await updateDoc(chatRef, {
-          participantNames: {
-            [userId]: currentUserName,
-            [otherUserId]: otherUserName
-          },
-          carInfo: carInfo,
-          lastActivity: Timestamp.now()
-        });
+        await updateDoc(chatRef, chatData);
       }
 
       setActiveChat({
         show: true,
-        chatId,
+        chatId: chatId,
         car: carInfo,
         driver: driverInfo
       });
 
+      // Auto-close modals to show the chat window
+      setShowOfferCard(false);
+      setViewingRequest(null);
+
     } catch (error) {
       console.error("Error opening chat:", error);
-      toast.error("Failed to open chat");
+      toast.error("Permission denied: Check Firestore rules");
     }
   };
 
@@ -1064,11 +1114,13 @@ export default function ViewRequests({
       {/* Viewing Details Modal */}
       {viewingRequest && (
         <ViewRequestModal
-          request={viewingRequest}
+          request={requests.find(r => r.id === viewingRequest.id) || viewingRequest}
           isDriver={isDriver}
           userId={userId}
-          userHasMadeOffer={hasUserMadeOffer(viewingRequest)}
-          userOffer={getUserOffer(viewingRequest)}
+          userHasMadeOffer={hasUserMadeOffer(requests.find(r => r.id === viewingRequest.id) || viewingRequest)}
+          userWasRejected={(requests.find(r => r.id === viewingRequest.id) || viewingRequest).userWasRejected}
+          userIsBlocked={(requests.find(r => r.id === viewingRequest.id) || viewingRequest).userIsBlocked}
+          userOffer={getUserOffer(requests.find(r => r.id === viewingRequest.id) || viewingRequest)}
           formatDate={formatDate}
           onClose={() => setViewingRequest(null)}
           openOfferCard={openOfferCard}
@@ -1203,6 +1255,22 @@ export default function ViewRequests({
           onClose={() => setShowVehiclePreview({ show: false })}
         />
       )}
+      {/* Re-Bid Warning Modal */}
+      <ReBidWarningModal
+        show={showReBidWarning}
+        onClose={() => {
+          setShowReBidWarning(false);
+          setPendingReBidRequest(null);
+        }}
+        onProceed={() => {
+          const req = pendingReBidRequest;
+          setShowReBidWarning(false);
+          setPendingReBidRequest(null);
+          if (req) {
+            handleContactUser(req, true);
+          }
+        }}
+      />
     </div>
   );
 }
