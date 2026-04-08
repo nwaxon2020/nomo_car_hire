@@ -78,7 +78,7 @@ const ServiceCard = ({ title, description, icon, image, route, gradient, delay, 
           <h3 className="text-lg md:text-xl font-black mb-1 truncate">
             {title}
           </h3>
-          <p className="text-white/80 text-[9px] uppercase font-bold leading-tight opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 tracking-widest">
+          <p className="text-white/80 text-[9px] uppercase font-bold leading-tight md:opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 tracking-widest">
             {description}
           </p>
         </div>

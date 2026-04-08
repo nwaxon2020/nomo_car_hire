@@ -16,6 +16,7 @@ interface OfferCardProps {
   onWhatsAppContact: (phoneNumber: string, driverName: string, price: string) => void;
   onChatDriver: (otherUserId: string, otherUserName: string, request?: BookingRequestType, driverPhone?: string) => void;
   onViewVehiclePreview: (vehicle: any) => void;
+  onFlagDriver?: (driver: { uid: string, fullName: string, email?: string, phoneNumber?: string }) => void;
 }
 
 export default function OfferCard({
@@ -29,7 +30,8 @@ export default function OfferCard({
   onMarkAllRead,
   onWhatsAppContact,
   onChatDriver,
-  onViewVehiclePreview
+  onViewVehiclePreview,
+  onFlagDriver
 }: OfferCardProps) {
   const isRequestOwner = request.userId === userId;
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ offerIndex: number, driverName: string } | null>(null);
@@ -219,6 +221,19 @@ export default function OfferCard({
                               <Send className="w-4 h-4" />
                               Chat
                             </button>
+                            {onFlagDriver && (
+                              <button
+                                onClick={() => onFlagDriver({
+                                  uid: offer.driverId,
+                                  fullName: offer.driverName,
+                                  phoneNumber: offer.driverPhone
+                                })}
+                                className="px-3 py-1.5 text-xs text-red-500 hover:text-red-400 font-bold flex items-center gap-1 transition-colors"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                Flag Driver
+                              </button>
+                            )}
                           </>
                         )}
                         {isUsersOffer && (

@@ -2,11 +2,14 @@
 
 import LoadBookingUi from "@/ui/load-booking";
 import LocationGuard from "@/components/mobility/LocationGuard";
+import TicketGuard from "@/components/mobility/TicketGuard";
 
 export default function LoadBookingPage() {
     return (
-        <LocationGuard>
-            <LoadBookingUi />
-        </LocationGuard>
+        <TicketGuard>
+            <LocationGuard>
+                <LoadBookingUi />
+            </LocationGuard>
+        </TicketGuard>
     );
 }

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
@@ -38,6 +38,7 @@ import VehiclePreviewModal from "./VehiclePreviewModal";
 import MaxRequestsWarning from "./MaxRequestsWarning";
 import DriverTips from "./DriverTips";
 import ReBidWarningModal from "./ReBidWarningModal";
+import FlagOverlay from "../mobility/FlagOverlay";
 
 interface ViewRequestsProps {
   userId?: string;
@@ -98,6 +99,11 @@ export default function ViewRequests({
     car?: any;
     driver?: any;
   }>({ show: false });
+
+  const [flagOverlay, setFlagOverlay] = useState<{
+    show: boolean;
+    targetUser: { uid: string; fullName: string; email?: string; phoneNumber?: string; type: "driver" | "customer" } | null;
+  }>({ show: false, targetUser: null });
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [adminConfig, setAdminConfig] = useState<any>(null);
@@ -670,7 +676,7 @@ export default function ViewRequests({
 
       // Ask if they want to override their existing offer
       const confirmOverride = window.confirm(
-        `You already have an existing offer of ₦${parseInt(existingOffer.price).toLocaleString()} on this request.\n\nDo you want to replace it with a new offer?`
+        `You already have an existing offer of â‚¦${parseInt(existingOffer.price).toLocaleString()} on this request.\n\nDo you want to replace it with a new offer?`
       );
 
       if (confirmOverride) {
@@ -962,7 +968,7 @@ export default function ViewRequests({
       formattedPhone = '234' + formattedPhone;
     }
 
-    const message = `Hi ${driverName}, I'm interested in your offer of ₦${price} for my car request.`;
+    const message = `Hi ${driverName}, I'm interested in your offer of â‚¦${price} for my car request.`;
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
@@ -1096,6 +1102,7 @@ export default function ViewRequests({
           openOfferCard={openOfferCard}
           setViewingRequest={setViewingRequest}
           setShowDeleteConfirm={setShowDeleteConfirm}
+          onFlagCustomer={(customer) => setFlagOverlay({ show: true, targetUser: { ...customer, type: "customer" } })}
         />
       ) : (
         <DriverRequests
@@ -1175,6 +1182,7 @@ export default function ViewRequests({
           onWhatsAppContact={handleWhatsAppContact}
           onChatDriver={handleChatDriver}
           onViewVehiclePreview={(vehicle) => setShowVehiclePreview({ show: true, vehicle })}
+          onFlagDriver={(driver) => setFlagOverlay({ show: true, targetUser: { ...driver, type: "driver" } })}
         />
       )}
 
@@ -1271,6 +1279,19 @@ export default function ViewRequests({
           }
         }}
       />
+
+      {/* Flag Overlay */}
+      {flagOverlay.show && flagOverlay.targetUser && (
+        <FlagOverlay
+          isOpen={flagOverlay.show}
+          onClose={() => setFlagOverlay({ show: false, targetUser: null })}
+          targetUser={flagOverlay.targetUser}
+          reporterUser={{
+            uid: userId || "",
+            fullName: userName || "Anonymous User"
+          }}
+        />
+      )}
     </div>
   );
 }

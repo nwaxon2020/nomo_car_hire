@@ -69,8 +69,7 @@ export default function FilterBar({
               }`}
           >
             <AlertCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Urgent</span>
-            <span className="sm:hidden">Urg</span>
+            <span className="inline">Urgent</span>
           </button>
           {isDriver && (
             <button
@@ -81,8 +80,7 @@ export default function FilterBar({
                 }`}
             >
               <MapPin className="w-4 h-4" />
-              <span className="hidden sm:inline">Nearby</span>
-              <span className="sm:hidden">Near</span>
+              <span className="inline">Nearby</span>
             </button>
           )}
         </div>

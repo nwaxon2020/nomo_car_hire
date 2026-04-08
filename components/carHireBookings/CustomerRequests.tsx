@@ -9,6 +9,7 @@ interface CustomerRequestsProps {
     openOfferCard: (request: any, e?: React.MouseEvent) => void;
     setViewingRequest: (request: any) => void;
     setShowDeleteConfirm: (id: string) => void;
+    onFlagCustomer?: (customer: { uid: string, fullName: string, email?: string, phoneNumber?: string }) => void;
 }
 
 export default function CustomerRequests({
@@ -17,7 +18,8 @@ export default function CustomerRequests({
     formatDate,
     openOfferCard,
     setViewingRequest,
-    setShowDeleteConfirm
+    setShowDeleteConfirm,
+    onFlagCustomer
 }: CustomerRequestsProps) {
     return (
         <div className="px-4 md:px-12 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -140,6 +142,23 @@ export default function CustomerRequests({
                                         >
                                             <MessageCircle className="w-3 h-3" /> {request.offers?.length || 0}
                                         </button>
+                                        {onFlagCustomer && !isCustomerRequest && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onFlagCustomer({
+                                                        uid: request.userId,
+                                                        fullName: request.userName || "Customer",
+                                                        email: request.userEmail,
+                                                        phoneNumber: request.phoneNumber
+                                                    });
+                                                }}
+                                                className="text-[10px] text-red-400 hover:text-red-300 font-bold ml-1 transition-colors flex items-center gap-0.5"
+                                            >
+                                                <AlertCircle className="w-2.5 h-2.5" />
+                                                Flag
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

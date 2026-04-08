@@ -17,7 +17,6 @@ import { useRouter } from "next/navigation";
 import CreateRequest from "../components/carHireBookings/CreateRequest";
 import ViewRequests from "../components/carHireBookings/ViewRequests";
 import NotificationBadge from "../components/carHireBookings/NotificationBadge";
-import { div } from "framer-motion/client";
 
 interface BookingRequestProps {
   userId?: string;
@@ -277,7 +276,8 @@ export default function CarHireUi({
             <span>✅ Negotiate best price</span>
           </div>
           <span className="text-blue-600 font-medium">
-            🇳🇬 Perfect for Nigerian market
+            Since 2026, We Have Been Serving The Nigerian Market.
+            <span className="block text-[8px] text-green-600 font-bold">&copy;Nomopo Ventures</span>
           </span>
         </div>
       </div>

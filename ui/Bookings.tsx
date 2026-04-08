@@ -1,18 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
-    arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc
+    arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc, onSnapshot
 } from "firebase/firestore"
 import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
 import {
     FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt,
     FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope,
-    FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaShieldAlt
+    FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaShieldAlt, FaCrown, FaGem,
+    FaLocationArrow, FaTimes, FaBolt, FaChevronRight
 } from 'react-icons/fa'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -23,286 +24,49 @@ import SimpleBookingMap from "@/components/map/SimpleBookingMap"
 import TripTracker from "@/components/map/TripTracker"
 import ShareLocation from "@/components/map/ShareLocation"
 import CustomerLocationToggle from "@/components/map/CustomerLocationToggle"
-import { div } from "framer-motion/client"
+import FlagOverlay from "@/components/mobility/FlagOverlay"
+
 
 // Interfaces matching your Firebase data structure
-interface VehicleLog {
-    id: string;
-    carName: string;
-    carModel: string;
-    carType: string;
-    exteriorColor: string;
-    passengers: number;
-    ac: boolean;
-    description: string;
-    status: string;
-    driverId: string;
-    images?: {
-        front?: string;
-        back?: string;
-        side?: string;
-        interior?: string;
-    };
-}
+import { 
+    VehicleLog, Comment, Driver, DriverWithVehicle, TripHistory, 
+    ContactedDriver, HiredCar, Trip, VIP_CONFIG 
+} from "@/components/mobilityBookings/types"
+import { 
+    calculateDistance, getVehicleImages, getDriverLocation, 
+    getDriverAddress, formatDate, getDefaultVehicleImage 
+} from "@/components/mobilityBookings/utils"
 
-interface Comment {
-    id?: string;
-    userId: string;
-    userName: string;
-    userEmail: string;
-    firstName?: string;
-    lastName?: string;
-    comment: string;
-    rating?: number;
-    createdAt: any;
-    updatedAt?: any;
-}
+// NEW: Refactored Components
+import BookingHeader from "@/components/mobilityBookings/BookingHeader"
+import TripNotification from "@/components/mobilityBookings/TripNotification"
+import ActiveTripBanner from "@/components/mobilityBookings/ActiveTripBanner"
+import QuickViewHistory from "@/components/mobilityBookings/QuickViewHistory"
+import SearchFilters from "@/components/mobilityBookings/SearchFilters"
+import BookingGrid from "@/components/mobilityBookings/BookingGrid"
+import DriverDetailsModal from "@/components/mobilityBookings/DriverDetailsModal"
+import WaitingSection from "@/components/mobilityBookings/WaitingSection"
+import ListingStars from "@/components/mobilityBookings/ui/ListingStars"
+import VIPStar from "@/components/mobilityBookings/ui/VIPStar"
+import MyVehiclesSelector from "@/components/mobilityBookings/MyVehiclesSelector"
 
-interface Driver {
-    id: string;
-    uid: string;
-    firstName: string;
-    lastName: string;
-    fullName: string;
-    phoneNumber: string;
-    email: string;
-    city: string;
-    state: string;
-    country: string;
-    verified: boolean;
-    whatsappPreferred: boolean;
-    profileImage?: string;
-    vehicleLog: string[];
-    comments?: Comment[];
-    ratings?: number[];
-    averageRating?: number;
-    totalRatings?: number;
-    customersCarried?: string[];
-    // VIP FIELDS BASED ON YOUR SYSTEM
-    isVip?: boolean;
-    vipLevel?: number;
-    purchasedVipLevel?: number;
-    prestigeLevel?: number;
-    referralCount?: number;
-    vipBadge?: string;
+const SubtleDriverNotice = () => (
+    <div className="mb-2 p-2 bg-gray-900 border border-gray-800 rounded-xl flex items-center gap-3">
+        <div className="bg-emerald-600 p-1.5 rounded-lg text-white shadow-lg">
+            <FaCar size={12} />
+        </div>
+        <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Fleet Active</p>
+            <p className="text-[10px] font-medium text-gray-400">Tap a vehicle below to set your active booking car.</p>
+        </div>
+    </div>
+);
 
-    // ADD THESE LOCATION FIELDS
-    location?: {
-        latitude: number;
-        longitude: number;
-        accuracy?: number;
-        address?: string;
-        timestamp?: any; // Firestore Timestamp
-        isSharing: boolean;
-        vehicleId?: string;
-    };
-    isLocationActive?: boolean;
-    locationSharedAt?: any; // Firestore Timestamp
-    lastLocationUpdate?: any; // Firestore Timestamp
-}
 
-interface DriverWithVehicle extends Driver {
-    vehicles: VehicleLog[];
-}
-
-interface TripHistory {
-    id?: string;
-    tripId: string;
-    driverId: string;
-    driverName: string;
-    driverPhone: string;
-    driverImage?: string;
-    vehicleId: string;
-    vehicleName: string;
-    vehicleModel: string;
-    vehicleType: string;
-    vehicleImage?: string;
-    // Trip details
-    pickupLocation: string;
-    destination: string;
-    fare: number;
-    status: 'active' | 'completed' | 'cancelled';
-    startTime: any;
-    endTime?: any;
-    // Additional info
-    rating?: number;
-    review?: string;
-    createdAt: any;
-    updatedAt: any;
-}
-
-interface ContactedDriver {
-    id?: string;
-    driverId: string;
-    driverName: string;
-    phoneNumber: string;
-    vehicleId: string;
-    vehicleName: string;
-    vehicleModel: string;
-    contactDate: any;
-    lastContacted: any;
-    timestamp?: any;
-}
-
-interface HiredCar {
-    id?: string;
-    driverId: string;
-    vehicleId: string;
-    driverName: string;
-    vehicleName: string;
-    vehicleModel: string;
-    hireDate: any;
-    lastHired: any;
-    timestamp?: any;
-}
-
-interface Trip {
-    id: string;
-    driverId: string;
-    vehicleId: string;
-    customerId: string;
-    customerName: string;
-    pickupLocation: string;
-    destination: string;
-    fare: number;
-    status: string;
-    startTime: Timestamp | null;
-    createdAt: Timestamp;
-    updatedAt: Timestamp;
-    endTime?: Timestamp;
-    // NEW: For real-time tracking
-    driverLocation?: {
-        lat: number;
-        lng: number;
-        address?: string;
-        timestamp: Timestamp;
-    };
-    routePolyline?: string; // For showing route on map
-    currentLocation?: {
-        lat: number;
-        lng: number;
-        address?: string;
-        timestamp: Timestamp;
-    };
-}
 
 ///////////////////////////////////////////////////////////////////////
 // VIP Configuration - Same as in driver profile
-const VIP_CONFIG = {
-    levels: [
-        { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },
-        { level: 2, name: "Yellow VIP", color: "yellow", stars: 2, referralsRequired: 20, price: 7500 },
-        { level: 3, name: "Purple VIP", color: "purple", stars: 3, referralsRequired: 25, price: 11000 },
-        { level: 4, name: "Gold VIP", color: "gold", stars: 4, referralsRequired: 30, price: 15000 },
-        { level: 5, name: "Black VIP", color: "black", stars: 5, referralsRequired: 35, price: 20000 },
-    ],
-    maxLevel: 5,
-    referralMultiplier: 5,
-};
 
-// Helper to get VIP name and color from level
-const getVIPDetails = (vipLevel: number, prestigeLevel: number = 0) => {
-    if (vipLevel <= 0) return { name: "", color: "", stars: 0 };
-
-    const vipInfo = VIP_CONFIG.levels.find(level => level.level === vipLevel);
-    if (!vipInfo) return { name: "", color: "", stars: 0 };
-
-    return {
-        name: vipInfo.name,
-        color: vipInfo.color,
-        stars: vipInfo.stars,
-        level: vipLevel,
-        prestigeLevel,
-        displayName: prestigeLevel > 0
-            ? `${vipInfo.name} LV${prestigeLevel}`
-            : vipInfo.name
-    };
-};
-
-// Helper to check if driver is VIP
-const isDriverVIP = (driver: Driver): boolean => {
-    return (driver.vipLevel || 0) > 0 || (driver.purchasedVipLevel || 0) > 0;
-};
-
-
-// VIP Star Component (add this in your component file)
-const VIPStar = ({
-    vipLevel,
-    prestigeLevel = 0,
-    size = "sm"
-}: {
-    vipLevel: number,
-    prestigeLevel?: number,
-    size?: "sm" | "md" | "lg"
-}) => {
-    if (vipLevel <= 0) return null;
-
-    const vipDetails = getVIPDetails(vipLevel, prestigeLevel);
-    if (!vipDetails.name) return null;
-
-    const sizeClasses = {
-        sm: "w-3 h-3",
-        md: "w-4 h-4",
-        lg: "w-5 h-5"
-    };
-
-    const getColorClass = (color: string) => {
-        const colors: Record<string, string> = {
-            green: "text-green-500 bg-green-100",
-            yellow: "text-yellow-500 bg-yellow-100",
-            purple: "text-purple-500 bg-purple-100",
-            gold: "text-yellow-600 bg-yellow-100",
-            black: "text-gray-900 bg-gray-100"
-        };
-        return colors[color] || colors.green;
-    };
-
-    const getBorderClass = (color: string) => {
-        const colors: Record<string, string> = {
-            green: "border-green-300",
-            yellow: "border-yellow-300",
-            purple: "border-purple-300",
-            gold: "border-yellow-400",
-            black: "border-gray-300"
-        };
-        return colors[color] || colors.green;
-    };
-
-    const getTextClass = (color: string) => {
-        const colors: Record<string, string> = {
-            green: "text-green-800",
-            yellow: "text-yellow-800",
-            purple: "text-purple-800",
-            gold: "text-yellow-900",
-            black: "text-gray-900"
-        };
-        return colors[color] || colors.green;
-    };
-
-    return (
-        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${getColorClass(vipDetails.color)} ${getBorderClass(vipDetails.color)} border`}>
-            <div className="flex items-center gap-0.5">
-                {Array.from({ length: vipDetails.stars }).map((_, i) => (
-                    <svg
-                        key={i}
-                        className={`${sizeClasses[size]} fill-current`}
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                    </svg>
-                ))}
-            </div>
-            {prestigeLevel > 0 && (
-                <span className="text-xs font-bold px-1 py-0.5 rounded bg-gray-800 text-white">
-                    LV{prestigeLevel}
-                </span>
-            )}
-            <span className={`text-xs font-semibold ${getTextClass(vipDetails.color)}`}>
-                {vipDetails.name}
-            </span>
-        </div>
-    );
-};
 
 export default function BookingUi() {
     // activate for parameters
@@ -399,6 +163,19 @@ export default function BookingUi() {
     // ✅ NEW: State for Enhanced WhatsApp Modal
     const [showEnhancedWhatsApp, setShowEnhancedWhatsApp] = useState(false)
 
+    // Flag driver state
+    const [flagDriverOverlay, setFlagDriverOverlay] = useState<{
+        show: boolean;
+        driver: DriverWithVehicle | null;
+        vehicle: VehicleLog | null;
+    }>({ show: false, driver: null, vehicle: null });
+    const [flagReason, setFlagReason] = useState("");
+    const [flagSubmitting, setFlagSubmitting] = useState(false);
+    const [flagSuccess, setFlagSuccess] = useState("");
+
+    // Customer geolocation
+    const [customerLocation, setCustomerLocation] = useState<{ lat: number; lng: number } | null>(null);
+
     // Check if user has already reviewed
     const hasUserReviewed = selectedDriver?.comments?.some(comment => comment.userId === currentUserId)
 
@@ -414,6 +191,10 @@ export default function BookingUi() {
     const [showTripSuccess, setShowTripSuccess] = useState(false);
     const [tripSuccessMessage, setTripSuccessMessage] = useState('');
 
+    // OWN VEHICLE SELECTOR STATE
+    const [ownVehicles, setOwnVehicles] = useState<VehicleLog[]>([])
+    const [activeOwnVehicleId, setActiveOwnVehicleId] = useState<string>("")
+
 
     // Initialize auth and load history from Firebase
     useEffect(() => {
@@ -423,16 +204,12 @@ export default function BookingUi() {
                 setCurrentUser(user)
                 setCurrentUserId(user.uid)
                 loadUserHistory(user.uid)
-
-                // ✅ Clean way: Call notification function
                 loadNotificationData(user.uid)
             } else {
                 setCurrentUser(null)
                 setCurrentUserId("")
                 setContactedDrivers([])
                 setHiredCars([])
-
-                // Clear notification data for logged out users
                 setNotificationCount(0)
                 setNotificationType("customer")
                 setIsDriver(false)
@@ -443,6 +220,15 @@ export default function BookingUi() {
         const savedHistory = localStorage.getItem('carHireQuickView')
         if (savedHistory) {
             setQuickViewHistory(JSON.parse(savedHistory))
+        }
+
+        // Get customer's geolocation for proximity sorting
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => setCustomerLocation(null),
+                { enableHighAccuracy: false, timeout: 8000 }
+            );
         }
 
         return () => unsubscribe()
@@ -458,6 +244,25 @@ export default function BookingUi() {
                 const driverStatus = userData.isDriver || false;
                 setIsDriver(driverStatus);
                 setNotificationType(driverStatus ? "driver" : "customer");
+
+                // Notification counts for drivers
+                if (driverStatus) {
+                    const requestsRef = collection(db, "bookingRequests");
+                    const querySnapshot = await getDocs(query(
+                        requestsRef,
+                        where("status", "==", "active")
+                    ));
+
+                    let unofferedCount = 0;
+                    querySnapshot.forEach((docSnap) => {
+                        const request = docSnap.data();
+                        const hasMadeOffer = request.offers?.some((offer: any) => offer.driverId === userId);
+                        if (!hasMadeOffer && request.userId !== userId) {
+                            unofferedCount++;
+                        }
+                    });
+                    setNotificationCount(Math.min(unofferedCount, 99));
+                }
 
                 if (driverStatus) {
                     // For drivers: Count unoffered requests
@@ -497,6 +302,74 @@ export default function BookingUi() {
             console.error("Error fetching notification data:", error);
         }
     };
+
+    // Dedicated effector to fetch driver's own approved/available vehicles
+    useEffect(() => {
+        if (!currentUserId || !isDriver) {
+            setOwnVehicles([]);
+            return;
+        }
+
+        const fetchOwnVehicles = async () => {
+            try {
+                const userDoc = await getDoc(doc(db, "users", currentUserId));
+                if (!userDoc.exists()) return;
+
+                const userData = userDoc.data();
+                const vehicleIds = userData.vehicleLog || [];
+                const myVehiclesList: VehicleLog[] = [];
+
+                if (vehicleIds.length > 0) {
+                    for (const vId of vehicleIds) {
+                        const vDoc = await getDoc(doc(db, "vehicleLog", vId));
+                        if (vDoc.exists()) {
+                            const vData = vDoc.data();
+                            // Broaden filter: car should be approved OR simply available (but not rejected/maintenance)
+                            const isApproved = vData.status === 'approved' || vData.isApproved === true;
+                            const isAvailable = vData.status === 'available';
+                            
+                            if (isApproved || isAvailable) {
+                                myVehiclesList.push({
+                                    id: vDoc.id,
+                                    carName: vData.carName || "",
+                                    carModel: vData.carModel || "",
+                                    carType: vData.carType || "",
+                                    exteriorColor: vData.exteriorColor || "",
+                                    passengers: vData.passengers || 0,
+                                    ac: vData.ac || false,
+                                    description: vData.description || "",
+                                    status: vData.status || "available",
+                                    driverId: vData.driverId || "",
+                                    images: vData.images || {},
+                                });
+                            }
+                        }
+                    }
+                }
+                setOwnVehicles(myVehiclesList);
+            } catch (error) {
+                console.error("Error fetching own vehicles:", error);
+            }
+        };
+
+        fetchOwnVehicles();
+    }, [currentUserId, isDriver]);
+
+    // Listen for current user profile changes (especially bookingVehicleId)
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const unsubscribe = onSnapshot(doc(db, "users", currentUserId), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.bookingVehicleId) {
+                    setActiveOwnVehicleId(data.bookingVehicleId);
+                }
+            }
+        });
+
+        return () => unsubscribe();
+    }, [currentUserId]);
 
     // Save to localStorage when quickViewHistory changes
     useEffect(() => {
@@ -791,10 +664,6 @@ export default function BookingUi() {
                     lastLocationUpdate: data.lastLocationUpdate || undefined,
                 };
 
-                // Skip if this driver is the current user (prevent self-booking)
-                if (driver.uid === currentUserId) {
-                    return;
-                }
 
                 // Get ALL vehicles for this driver (including unavailable ones)
                 const driverVehicles: VehicleLog[] = [];
@@ -831,6 +700,9 @@ export default function BookingUi() {
                     }
                 });
 
+                // Skip if this driver is the current user (prevent self-booking)
+                if (driver.uid === currentUserId) return;
+
                 // Only include driver if they have at least one vehicle
                 if (driverVehicles.length > 0) {
                     driversWithVehiclesList.push({
@@ -840,47 +712,35 @@ export default function BookingUi() {
                 }
             });
 
-            // SORT DRIVERS BY PRIORITY (EXACT ORDER YOU REQUESTED):
+            // SORT DRIVERS BY PRIORITY: VIP level → Verified → Distance
+            const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLng = (lng2 - lng1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            };
+
+            const getDriverDistance = (driver: DriverWithVehicle): number => {
+                if (!customerLocation || !driver.location?.latitude || !driver.location?.longitude) return 9999;
+                return haversineDistance(customerLocation.lat, customerLocation.lng, driver.location.latitude, driver.location.longitude);
+            };
+
             driversWithVehiclesList.sort((a, b) => {
-                // Get VIP level (use the higher of vipLevel or purchasedVipLevel)
-                const getEffectiveVipLevel = (driver: DriverWithVehicle): number => {
-                    return Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
-                };
+                const getEffectiveVipLevel = (driver: DriverWithVehicle): number =>
+                    Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
 
-                const aVipLevel = getEffectiveVipLevel(a);
-                const bVipLevel = getEffectiveVipLevel(b);
-                const aIsVIP = aVipLevel > 0;
-                const bIsVIP = bVipLevel > 0;
-                const aVerified = a.verified;
-                const bVerified = b.verified;
+                const aVip = getEffectiveVipLevel(a);
+                const bVip = getEffectiveVipLevel(b);
 
-                // 1. VIP with Verified
-                if (aIsVIP && aVerified && !(bIsVIP && bVerified)) return -1;
-                if (bIsVIP && bVerified && !(aIsVIP && aVerified)) return 1;
+                // 1. Higher VIP first
+                if (aVip !== bVip) return bVip - aVip;
 
-                // 2. VIP without Verified
-                if (aIsVIP && !aVerified && !(bIsVIP && bVerified) && !(bIsVIP && bVerified)) {
-                    // Both are VIP without verified, compare VIP levels
-                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
-                    // Same VIP level, compare ratings
-                    return (b.averageRating || 0) - (a.averageRating || 0);
-                }
-                if (bIsVIP && !bVerified && !(aIsVIP && aVerified) && !(aIsVIP && aVerified)) {
-                    // Both are VIP without verified, compare VIP levels
-                    if (aVipLevel !== bVipLevel) return bVipLevel - aVipLevel;
-                    // Same VIP level, compare ratings
-                    return (b.averageRating || 0) - (a.averageRating || 0);
-                }
+                // 2. Same VIP: verified first
+                if (a.verified !== b.verified) return a.verified ? -1 : 1;
 
-                // 3. Verified without VIP
-                if (aVerified && !aIsVIP && !bIsVIP && !bVerified) return -1;
-                if (bVerified && !bIsVIP && !aIsVIP && !aVerified) return 1;
-
-                // 4. Others (neither VIP nor verified)
-                // Sort by rating for non-VIP, non-verified drivers
-                return (b.averageRating || 0) - (a.averageRating || 0);
-
-                // If all criteria are equal, maintain original order
+                // 3. Same VIP + verified: closest first
+                return getDriverDistance(a) - getDriverDistance(b);
             });
 
             setDriversWithVehicles(driversWithVehiclesList);
@@ -893,50 +753,39 @@ export default function BookingUi() {
         }
     }
 
-    // Filter drivers by location, category, AC, verification, and location sharing status
+    // Filter drivers - only approved vehicles, with location/category/AC/verified filters
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
         return driver.vehicles
             .filter((vehicle) => {
+                // ONLY show approved vehicles
+                if (!vehicle.status || (vehicle.status !== 'approved' && !(vehicle as any).isApproved)) {
+                    return false;
+                }
+
                 // Check if driver has location sharing enabled
                 const locationSharingOn =
                     (driver.location && driver.location.isSharing === true) ||
                     driver.isLocationActive === true;
 
-                // Skip driver if location sharing is not enabled
-                if (!locationSharingOn) {
-                    return false;
-                }
+                if (!locationSharingOn) return false;
 
-                // Check if location was updated recently (e.g., within last 30 minutes)
-                // This prevents showing drivers who turned on location but then went offline
+                // Check if location was updated recently (within 30 min)
                 if (driver.lastLocationUpdate) {
-                    const lastUpdate = driver.lastLocationUpdate.toDate(); // Convert Firestore Timestamp
-                    const now = new Date();
-                    const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
-
-                    // Don't show drivers who haven't updated location in over 30 minutes
-                    if (minutesSinceUpdate > 30) {
-                        return false;
-                    }
+                    const lastUpdate = driver.lastLocationUpdate.toDate();
+                    const minutesSinceUpdate = (new Date().getTime() - lastUpdate.getTime()) / (1000 * 60);
+                    if (minutesSinceUpdate > 30) return false;
                 }
 
                 const locationMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
                     driver.state?.toLowerCase().includes(searchLocation.toLowerCase()) ||
                     searchLocation === ""
 
-                // If AC filter is on, remove keke even if driver has AC true
                 let categoryMatch = true
                 if (selectedCategory === "all") {
-                    // If AC filter is on and category is all, exclude keke
-                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
-                        categoryMatch = false
-                    }
+                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false
                 } else {
                     categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase()
-                    // If AC filter is on and category is keke, exclude it
-                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
-                        categoryMatch = false
-                    }
+                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false
                 }
 
                 const acMatch = !showACOnly || (vehicle.ac && vehicle.carType.toLowerCase() !== "keke")
@@ -946,6 +795,20 @@ export default function BookingUi() {
             })
             .map(vehicle => ({ driver, vehicle }))
     })
+
+    // Handle own vehicle selection (persists to Firestore)
+    const handleOwnVehicleSelect = async (vehicle: VehicleLog) => {
+        if (!currentUserId || !vehicle.id) return;
+
+        try {
+            await updateDoc(doc(db, "users", currentUserId), {
+                bookingVehicleId: vehicle.id
+            });
+            // onSnapshot will handle local state update
+        } catch (error) {
+            console.error("Error updating booking vehicle:", error);
+        }
+    }
 
     // Handle driver selection
     const handleDriverSelect = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
@@ -1187,16 +1050,60 @@ export default function BookingUi() {
     // Handle complain button
     const handleComplain = (driverName: string, vehicle: VehicleLog) => {
         setSelectDriver(`${driverName} - ${vehicle.carName} ${vehicle.carModel}`)
-
-        // Scroll to the div with id="complains"
         const complainsDiv = document.getElementById('complain');
         if (complainsDiv) {
-            complainsDiv.scrollIntoView({
-                behavior: "smooth",
-                block: "start" // or "center", "end", "nearest"
-            });
+            complainsDiv.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     }
+
+    // Handle flag driver - opens overlay
+    const handleFlagDriver = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
+        setFlagDriverOverlay({ show: true, driver, vehicle });
+        setFlagReason("");
+        setFlagSuccess("");
+    };
+
+    // Submit flag to Firestore complains collection
+    const submitFlag = async () => {
+        if (!flagReason.trim()) return;
+        if (!flagDriverOverlay.driver || !currentUser) return;
+        setFlagSubmitting(true);
+        try {
+            const driver = flagDriverOverlay.driver;
+            const vehicle = flagDriverOverlay.vehicle;
+            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            const userData = userDoc.data();
+            await addDoc(collection(db, "complains"), {
+                targetType: "driver",
+                targetId: driver.uid || driver.id,
+                targetUid: driver.uid || driver.id,
+                targetName: driver.fullName || `${driver.firstName} ${driver.lastName}`,
+                targetEmail: driver.email,
+                targetPhone: driver.phoneNumber,
+                reporterUid: currentUser.uid,
+                reporterName: userData?.fullName || currentUser.email || "Customer",
+                reportedBy: "customer",
+                reason: flagReason,
+                vehicleInfo: vehicle ? `${vehicle.carName} ${vehicle.carModel}` : "",
+                message: flagReason,
+                name: userData?.fullName || currentUser.email || "Customer",
+                email: currentUser.email || "",
+                phone: userData?.phoneNumber || "",
+                status: "unread",
+                createdAt: Timestamp.now(),
+            });
+            setFlagSuccess("Flag submitted. Our team will review this report.");
+            setTimeout(() => {
+                setFlagDriverOverlay({ show: false, driver: null, vehicle: null });
+                setFlagReason("");
+                setFlagSuccess("");
+            }, 2500);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setFlagSubmitting(false);
+        }
+    };
 
     // Handle delete comment
     const handleDeleteComment = async (commentToDelete: Comment) => {
@@ -1437,105 +1344,6 @@ export default function BookingUi() {
         }
     }
 
-    // Get default image for a vehicle
-    const getDefaultVehicleImage = (carType: string) => {
-        const images: Record<string, string> = {
-            "sedan": "/carr.jpg",
-            "suv": "/car.jpg",
-            "truck": "/carz.jpg",
-            "van": "/car.jpg",
-            "keke": "/carz.jpg",
-            "luxury": "/carr.jpg",
-            "bus": "/carz.jpg",
-        }
-        return images[carType?.toLowerCase()] || "/car_select.jpg"
-    }
-
-    // Get all images for a vehicle
-    const getVehicleImages = (vehicle: VehicleLog) => {
-        const images: string[] = []
-        if (vehicle.images?.front) images.push(vehicle.images.front)
-        if (vehicle.images?.side) images.push(vehicle.images.side)
-        if (vehicle.images?.back) images.push(vehicle.images.back)
-        if (vehicle.images?.interior) images.push(vehicle.images.interior)
-
-        if (images.length === 0) {
-            images.push(getDefaultVehicleImage(vehicle.carType))
-            images.push("/car.jpg")
-            images.push("/carz.jpg")
-        }
-
-        return images
-    }
-
-    const getDriverLocation = (driver: any) => {
-        // 1. Safety Check: If no driver or no location data, return null
-        if (!driver || !driver.location) return null;
-
-        // 2. Ensure we are sending valid numbers (prevents "string is not assignable to number" errors)
-        const lat = typeof driver.location.lat === 'string'
-            ? parseFloat(driver.location.lat)
-            : driver.location.lat;
-
-        const lng = typeof driver.location.lng === 'string'
-            ? parseFloat(driver.location.lng)
-            : driver.location.lng;
-
-        // 3. Final Validation: If the math failed (NaN), don't break the map
-        if (isNaN(lat) || isNaN(lng)) return null;
-
-        return { lat, lng };
-    };
-
-    const getDriverAddress = (driver: any) => {
-        return driver?.location?.address || "Scanning for location...";
-    };
-
-    // Format timestamp to readable date
-    const formatDate = (timestamp: any) => {
-        if (!timestamp) return "Recently"
-
-        try {
-            if (timestamp.toDate) {
-                return timestamp.toDate().toLocaleDateString("en-GB")
-            } else if (timestamp.seconds) {
-                return new Date(timestamp.seconds * 1000).toLocaleDateString("en-GB")
-            }
-            return new Date(timestamp).toLocaleDateString("en-GB")
-        } catch (error) {
-            return "Recently"
-        }
-    }
-
-    // Render star rating with react-icons
-    const renderStars = (rating: number, size: "sm" | "md" | "lg" = "md", showNumber: boolean = true) => {
-        const sizeClasses = {
-            sm: "w-3 h-3",
-            md: "w-4 h-4",
-            lg: "w-5 h-5"
-        }
-
-        return (
-            <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                    <span key={star} className="text-yellow-400">
-                        {star <= rating ? (
-                            <FaStar className={`${sizeClasses[size]}`} />
-                        ) : star - 0.5 <= rating ? (
-                            <FaStarHalfAlt className={`${sizeClasses[size]}`} />
-                        ) : (
-                            <FaRegStar className={`${sizeClasses[size]}`} />
-                        )}
-                    </span>
-                ))}
-                {showNumber && (
-                    <span className="ml-1 text-sm text-gray-600">
-                        ({rating.toFixed(1)})
-                    </span>
-                )}
-            </div>
-        )
-    }
 
     // Function to re-open driver details from quick view
     const handleQuickViewClick = () => {
@@ -1861,1080 +1669,94 @@ export default function BookingUi() {
             <div className="p-2 px-1 md:p-5 md:pt-0 relative bg-[#F9FAF9]">
                 {/* Select Car Page */}
                 <div className="p-2 md:p-8 mx-auto max-w-6xl bg-white rounded-lg shadow-md">
-                    {/* Book Page Header section */}
-                    <div className="pt-4 left-0 top-0 text-center w-full">
-                        <h1 className="mb-2 text-2xl md:text-3xl text-gray-600 font-extrabold">Book a Car</h1>
-                        <div className="m-2 p-2 sm:p-2 rounded bg-gray-200 font-semibold text-red-800">
-                            <small><span className="font-black">Important Notice:</span> Please make sure you contact drivers, book appointments properly, negotiate on or before services.</small>
-                        </div>
 
-                        <div className="pt-6 pb-4 px-2">
-                            {/* Trip Notification Popup */}
-                            {showTripSuccess && (
-                                <div className="fixed top-4 right-4 z-50 animate-slideIn">
-                                    <div className={`border rounded-lg shadow-lg p-4 max-w-sm ${tripSuccessMessage.includes('successfully')
-                                        ? 'bg-green-50 border-green-200'
-                                        : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
-                                            ? 'bg-red-50 border-red-200'
-                                            : 'bg-yellow-50 border-yellow-200'
-                                        }`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tripSuccessMessage.includes('successfully')
-                                                ? 'bg-green-100 text-green-600'
-                                                : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
-                                                    ? 'bg-red-100 text-red-600'
-                                                    : 'bg-yellow-100 text-yellow-600'
-                                                }`}>
-                                                {tripSuccessMessage.includes('successfully')
-                                                    ? <span className="text-lg">✓</span>
-                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
-                                                        ? <span className="text-lg">✗</span>
-                                                        : <span className="text-lg">⚠</span>
-                                                }
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className={`font-medium ${tripSuccessMessage.includes('successfully')
-                                                    ? 'text-green-800'
-                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
-                                                        ? 'text-red-800'
-                                                        : 'text-yellow-800'
-                                                    }`}>
-                                                    {tripSuccessMessage}
-                                                </p>
-                                            </div>
-                                            <button
-                                                onClick={() => setShowTripSuccess(false)}
-                                                className={`${tripSuccessMessage.includes('successfully')
-                                                    ? 'text-green-400 hover:text-green-600'
-                                                    : tripSuccessMessage.includes('Failed') || tripSuccessMessage.includes('not authorized') || tripSuccessMessage.includes('not found')
-                                                        ? 'text-red-400 hover:text-red-600'
-                                                        : 'text-yellow-400 hover:text-yellow-600'
-                                                    }`}
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                    <QuickViewHistory 
+                        quickViewHistory={quickViewHistory}
+                        driverInfo={driverInfo}
+                        handleQuickViewClick={handleQuickViewClick}
+                        handleClearQuickView={handleClearQuickView}
+                        formatDate={formatDate}
+                    />
 
+                    {isDriver && ownVehicles.length > 1 && (
+                        <SubtleDriverNotice />
+                    )}
 
-                            {/* Active Trip Banner with Tracker */}
-                            {activeTrip && (
-                                <div className="mb-4 rounded-xl overflow-hidden shadow-xl border border-blue-200">
-                                    {/* Banner Header with Gradient */}
-                                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="bg-white/20 p-2 rounded-full">
-                                                    <FaCar className="text-white text-lg" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-white text-lg">🚗 Active Trip</h3>
-                                                    <p className="text-blue-100 text-sm">Real-time tracking enabled</p>
-                                                </div>
-                                            </div>
-                                            <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
-                                                🟢 LIVE
-                                            </span>
-                                        </div>
-
-                                        {/* Route Info */}
-                                        <div className="flex justify-center md:justify-start items-center gap-4 space-y-1 text-white">
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                                                <span className="truncate">{activeTrip.pickupLocation}</span>
-                                            </div>
-                                            <div><p className="font-bold">to</p></div>
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <div className="w-2 h-2 rounded-full bg-red-400"></div>
-                                                <span className="truncate">{activeTrip.destination}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* LIVE TRIP TRACKER WIDGET - ADD THIS */}
-                                    <div className="p-3 bg-white">
-                                        <TripTracker
-                                            tripId={activeTrip.id}
-                                            driverId={selectedDriver?.id || activeTrip.driverId}
-                                            customerId={currentUser?.uid}
-                                        />
-                                    </div>
-
-                                    {/* Action Buttons */}
-                                    <div className="p-3 bg-white border-t border-gray-100">
-                                        <div className="flex flex-col sm:flex-row gap-2">
-                                            <button
-                                                onClick={() => updateTripStatus(activeTrip.id, 'completed')}
-                                                className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
-                                            >
-                                                <FaCheckCircle />
-                                                Mark Completed
-                                            </button>
-                                            <button
-                                                onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
-                                                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
-                                            >
-                                                <FaTimesCircle />
-                                                Cancel Trip
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Safety Section */}
-                                    <div className="p-3 bg-gradient-to-r from-blue-50 to-blue-100 border-t border-blue-200">
-                                        <div className="flex flex-col md:flex-row items-center justify-between mb-2">
-                                            <h4 className="font-semibold text-blue-800 flex items-center gap-2">
-                                                <FaShieldAlt className="text-blue-600" />
-                                                Safety Features
-                                            </h4>
-                                            <ShareLocation
-                                                tripId={activeTrip.id}
-                                                driverId={selectedDriver?.id || activeTrip.driverId}
-                                                driverName={selectedDriver?.fullName || 'Driver'}
-                                                vehicleDetails={`${selectedVehicle?.carName} ${selectedVehicle?.carModel}`}
-                                                pickup={activeTrip.pickupLocation}
-                                                destination={activeTrip.destination}
-                                                currentUserId={currentUser?.uid}
-                                            />
-                                        </div>
-
-                                        <p className="text-blue-700 text-xs">
-                                            ✅ Your trip is being tracked for safety. Share location with loved ones.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                        </div>
-                    </div>
-
-                    {/* Error Message */}
-                    {error && (
-                        <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-lg">
-                            <p className="text-red-700 text-center">{error}</p>
+                    {isDriver && ownVehicles.length > 1 && (
+                        <div className="bg-gray-950 p-1.5 rounded-xl mb-4 shadow-2xl border border-gray-800">
+                            <MyVehiclesSelector 
+                                vehicles={ownVehicles}
+                                selectedVehicleId={activeOwnVehicleId}
+                                onSelect={handleOwnVehicleSelect}
+                            />
                         </div>
                     )}
 
-                    {/* Save Message on Main Page (only show when modal is closed) */}
-                    {saveMessage.text && !driverInfo && (
-                        <div className={`mt-4 p-3 rounded-lg ${saveMessage.type === "success" ? "bg-green-100 border border-green-300 text-green-700" :
-                            saveMessage.type === "error" ? "bg-red-100 border border-red-300 text-red-700" :
-                                "bg-blue-100 border border-blue-300 text-blue-700"
-                            }`}>
-                            <div className="flex items-center">
-                                {saveMessage.type === "success" && <FaCheckCircle className="mr-2" />}
-                                {saveMessage.type === "error" && <FaTimesCircle className="mr-2" />}
-                                {saveMessage.type === "info" && <FaClock className="mr-2" />}
-                                <p className="text-center flex-1">{saveMessage.text}</p>
-                            </div>
-                        </div>
-                    )}
+                    <SearchFilters 
+                        searchLocation={searchLocation}
+                        setSearchLocation={setSearchLocation}
+                        selectedCategory={selectedCategory}
+                        setSelectedCategory={setSelectedCategory}
+                        showACOnly={showACOnly}
+                        setShowACOnly={setShowACOnly}
+                        showVerifiedOnly={showVerifiedOnly}
+                        setShowVerifiedOnly={setShowVerifiedOnly}
+                        filteredDriversCount={filteredDrivers.length}
+                    />
 
-                    {/* Quick View History (Persistent) - Show only if there's history AND we're not viewing a driver */}
-                    {quickViewHistory && !driverInfo && (
-                        <div className="mt-6 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="flex justify-between items-start sm:items-center">
-                                <div
-                                    onClick={handleQuickViewClick}
-                                    className="cursor-pointer hover:bg-blue-100 p-2 rounded-lg flex-1"
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="font-bold text-blue-800 text-lg">Recent Driver</h3>
-                                        <span className="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">
-                                            Click to view details
-                                        </span>
-                                    </div>
-                                    <p className="text-gray-700">{quickViewHistory.driverName} - {quickViewHistory.vehicleName} {quickViewHistory.vehicleModel}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <small className="text-blue-600">Contact: {quickViewHistory.phoneNumber}</small>
-                                    </div>
-                                    <small className="text-gray-500 text-sm">
-                                        Last contacted: {formatDate(quickViewHistory.lastContacted)}
-                                    </small>
-                                </div>
-                                <button
-                                    onClick={handleClearQuickView}
-                                    className="text-red-500 hover:text-red-700 ml-2"
-                                    title="Remove from history"
-                                >
-                                    <FaTrash />
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Search and Filter Section - Now with AC and Verified filters */}
-                    <div className="mt-8 mb-6 p-4 bg-gray-50 rounded-lg">
-                        <div className="grid grid-cols-1 lg:grid-cols-4 md:items-center gap-4">
-                            {/* Search Location */}
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="Search by city, state, or location..."
-                                    value={searchLocation}
-                                    onChange={(e) => setSearchLocation(e.target.value)}
-                                    className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 placeholder:text-gray-400 placeholder:text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                                />
-                                <FaSearch className="absolute top-5 left-3 text-gray-400" />
-                            </div>
-
-                            {/* Select Car category */}
-                            <div>
-                                <select
-                                    className="text-gray-700 outline-blue-600 w-full p-3 border-2 border-gray-300 rounded-lg"
-                                    name="category"
-                                    id="category"
-                                    value={selectedCategory}
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                >
-                                    <option value="all">All Categories</option>
-                                    <option value="sedan">Sedan</option>
-                                    <option value="bus">Bus</option>
-                                    <option value="suv">SUV</option>
-                                    <option value="truck">Truck</option>
-                                    <option value="van">Van</option>
-                                    <option value="keke">Keke</option>
-                                    <option value="luxury">Luxury</option>
-                                </select>
-                            </div>
-
-                            {/* Filter Checkboxes */}
-                            <div className="flex flex-col space-y-2">
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={showACOnly}
-                                        onChange={(e) => setShowACOnly(e.target.checked)}
-                                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                    />
-                                    <span className="text-gray-700 font-medium flex items-center">
-                                        <FaSnowflake className="mr-2 text-blue-500" />
-                                        AC Cars Only
-                                    </span>
-                                </label>
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={showVerifiedOnly}
-                                        onChange={(e) => setShowVerifiedOnly(e.target.checked)}
-                                        className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                                    />
-                                    <span className="text-gray-700 font-medium flex items-center">
-                                        <FaCheckCircle className="mr-2 text-green-500" />
-                                        Verified Drivers Only
-                                    </span>
-                                </label>
-                            </div>
-
-                            {/* Results Count */}
-                            <div className="flex items-center justify-end">
-                                <span className="text-gray-600 font-semibold">
-                                    {filteredDrivers.length} {filteredDrivers.length === 1 ? 'car' : 'cars'} available
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Cars Grid - Display all cars directly */}
-                    <h1 className="border-b border-gray-300 px-4 py-2 mb-0 mt-8 md:mt-12 text-xl font-bold ">Available Cars</h1>
-                    <div id="search-results" className="p-3 px-1 pt-0 max-h-[65rem] overflow-y-auto">
-                        {filteredDrivers.length === 0 ? (
-                            <div className="text-center py-12">
-                                <FaCar className="text-5xl text-gray-300 mb-4 mx-auto" />
-                                <h3 className="text-xl text-gray-600 mb-2">No Cars Found</h3>
-                                <p className="text-gray-500">Try adjusting your search filters</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                                {filteredDrivers.map(({ driver, vehicle }, index) => {
-                                    const vehicleImages = getVehicleImages(vehicle)
-                                    return (
-                                        <div
-                                            key={`${driver.id}-${vehicle.id}-${index}`}
-                                            className="bg-gray-50 rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow duration-300"
-                                        >
-                                            {/* Car Image */}
-                                            <div className="relative h-48 w-full">
-                                                <Image
-                                                    src={vehicleImages[0]}
-                                                    alt={`${vehicle.carName} ${vehicle.carModel}`}
-                                                    fill
-                                                    className="object-cover"
-                                                />
-                                                {/* VIP and Verified Badges */}
-                                                <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
-                                                    {driver.verified && (
-                                                        <div className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center">
-                                                            <FaCheckCircle className="mr-1" /> Verified
-                                                        </div>
-                                                    )}
-                                                    {driver.vipLevel && driver.vipLevel > 0 ? (
-                                                        <div className="mt-1">
-                                                            <VIPStar
-                                                                vipLevel={driver.vipLevel}
-                                                                prestigeLevel={driver.prestigeLevel}
-                                                                size="sm"
-                                                            />
-                                                        </div>
-                                                    ) : null
-                                                    }
-                                                </div>
-                                            </div>
-
-                                            {/* Car Info */}
-                                            <div className="p-4">
-                                                <div className="relative flex justify-between items-start mb-1">
-                                                    {/* Car availability status */}
-                                                    {vehicle.status !== 'available' && (
-                                                        <div className="text-xs absolute top-6 right-0 bg-red-500 text-white text-xs px-2 py-1 rounded-tl-lg">
-                                                            In USE
-                                                        </div>
-                                                    )}
-                                                    <div>
-                                                        <h3 className="font-semibold text-gray-900">
-                                                            {vehicle.carName} {vehicle.carModel}
-                                                        </h3>
-                                                        <p className="text-gray-600 text-sm capitalize">{vehicle.carType}</p>
-                                                    </div>
-                                                    {/* Only show rating if it exists and is greater than 0 */}
-                                                    {driver.averageRating !== undefined && driver.averageRating !== null && driver.averageRating > 0 ? (
-                                                        <div className="flex items-center gap-1">
-                                                            <FaStar className="text-yellow-500" />
-                                                            <span className="font-bold">
-                                                                {driver.averageRating.toFixed(1)}
-                                                            </span>
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                                <hr className="text-gray-400 mb-1" />
-
-                                                <div className="bg-white p-2 rounded-lg space-y-2 mb-4 text-xs sm:text-sm">
-
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center text-gray-700">
-                                                            <FaUsers className="mr-2 text-gray-400" />
-                                                            <span>{vehicle.passengers} seats</span>
-                                                        </div>
-                                                        <div className="flex items-center text-gray-700">
-                                                            <FaPalette className="mr-2 text-gray-400" />
-                                                            <span>{vehicle.exteriorColor}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center text-gray-700">
-                                                            <FaSnowflake className="mr-2 text-gray-400" />
-                                                            <span className={vehicle.ac ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
-                                                                {vehicle.ac ? "AC Available" : "No AC"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center text-gray-700">
-                                                            <FaPhone className="mr-2 text-gray-400" />
-                                                            <span className="font-medium">{driver.phoneNumber}</span>
-                                                            {driver.whatsappPreferred && (
-                                                                <span className="ml-2 text-green-500">
-                                                                    <FaWhatsapp />
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Action Buttons with Pre-Chat */}
-                                                <div className="flex flex-col gap-2 mt-4">
-                                                    {/* View Details Button */}
-                                                    <button
-                                                        onClick={() => handleDriverSelect(driver, vehicle)}
-                                                        className="w-full text-center text-white rounded-lg font-semibold py-3 bg-blue-600 hover:bg-blue-700 transition-all duration-300"
-                                                    >
-                                                        View Details
-                                                    </button>
-
-                                                    {/* Contact Options Row */}
-                                                    <div className="grid grid-cols-3 gap-2">
-
-                                                        {/* Enhanced WhatsApp */}
-                                                        {driver.whatsappPreferred ? (
-                                                            <button
-                                                                onClick={() => handleEnhancedWhatsAppClick(driver, vehicle)}
-                                                                className="flex items-center justify-center gap-1 bg-green-50 text-green-700 border border-green-200 px-3 py-2 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-                                                            >
-                                                                <FaWhatsapp className="text-sm" />
-                                                                <span>WhatsApp</span>
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => handlePhoneCall(driver.phoneNumber)}
-                                                                className="flex items-center justify-center gap-1 bg-gray-50 text-gray-700 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-                                                            >
-                                                                <FaPhone className="text-sm" />
-                                                                <span>Call</span>
-                                                            </button>
-                                                        )}
-
-                                                        {/* Pre-Chat Button */}
-                                                        <button
-                                                            onClick={() => handlePreChatClick(driver, vehicle)}
-                                                            className="flex items-center justify-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-                                                        >
-                                                            <FaComment className="text-sm" />
-                                                            <span>Chat</span>
-                                                        </button>
-
-                                                        {/* Complain Button */}
-                                                        <button
-                                                            onClick={() => handleComplain(driver.fullName, vehicle)}
-                                                            className="flex items-center justify-center gap-1 bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
-                                                            title="Complain about driver"
-                                                        >
-                                                            <FaFlag className="text-sm" />
-                                                            <span>Flag</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Complain about selected driver */}
-                    <div id="complain" className="mt-8 mb-6 w-full">
-                        {selectDriver && (
-                            <div className="relative flex flex-col mb-3 w-full rounded-lg py-3 px-4 bg-red-100 border border-red-200">
-                                <button
-                                    onClick={() => setSelectDriver("")}
-                                    className="absolute top-3 right-3 text-red-900 text-lg cursor-pointer hover:text-red-700"
-                                >
-                                    ✖️
-                                </button>
-                                <p className="font-bold text-red-800 text-lg mb-2">Complain about this driver:</p>
-                                <small className="text-red-700 font-semibold">
-                                    Driver & Vehicle: <span className="text-gray-800 font-black">{selectDriver}</span>
-                                </small>
-                                {selectedDriver && (
-                                    <small className="text-red-700 font-semibold">
-                                        Contact: <span className="text-gray-800 font-black">{selectedDriver.phoneNumber}</span>
-                                    </small>
-                                )}
-                            </div>
-                        )}
-                        {selectDriver && (
-                            <a
-                                href="mailto:nomopoventures@yahoo.com"
-                                className="text-center block w-full rounded-lg py-3 bg-[#3688EE] hover:bg-blue-700 transition-all duration-300 text-white font-semibold"
-                            >
-                                Lodge Complain!
-                            </a>
-                        )}
-                    </div>
+                    <BookingGrid 
+                        filteredDrivers={filteredDrivers}
+                        currentUser={currentUser}
+                        customerLocation={customerLocation}
+                        onSelect={handleDriverSelect}
+                        onPreChat={handlePreChatClick}
+                        onWhatsApp={(d, v) => d.whatsappPreferred ? handleEnhancedWhatsAppClick(d, v) : handleWhatsAppMessage(d, v)}
+                        onCall={handlePhoneCall}
+                        onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
+                    />
                 </div>
-
-                {/* Driver's Information Display - Modal */}
-                {driverInfo && selectedDriver && selectedVehicle && (
-                    <div id="contact-driver" className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-2 sm:p-8 z-50 overflow-y-auto">
-
-                        <div className="bg-gray-900 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-
-                            {/* Header */}
-                            <div className="sticky top-0 bg-gray-900 z-10 p-4 border-b border-gray-800 flex justify-between items-center">
-                                <h2 className="text-xl font-bold text-white">Driver & Vehicle Details</h2>
-                                <button
-                                    onClick={handleCloseDriverInfo}
-                                    className="text-gray-400 hover:text-white text-2xl"
-                                >
-                                    ✖
-                                </button>
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-4 md:p-6">
-                                {/* Save Message Inside Modal - This will be visible when user clicks save */}
-                                {saveMessage.text && (
-                                    <div className={`mb-4 p-3 rounded-lg ${saveMessage.type === "success" ? "bg-green-900 border border-green-700 text-green-300" :
-                                        saveMessage.type === "error" ? "bg-red-900 border border-red-700 text-red-300" :
-                                            "bg-blue-900 border border-blue-700 text-blue-300"
-                                        }`}>
-                                        <div className="flex items-center">
-                                            {saveMessage.type === "success" && <FaCheckCircle className="mr-2" />}
-                                            {saveMessage.type === "error" && <FaExclamationTriangle className="mr-2" />}
-                                            {saveMessage.type === "info" && <FaClock className="mr-2" />}
-                                            <p className="flex-1">{saveMessage.text}</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Delete Confirmation Modal for reviews */}
-                                {showDeleteConfirm.show && (
-                                    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-                                        <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
-                                            <h3 className="text-xl font-bold text-white mb-4">Delete Review</h3>
-                                            <p className="text-gray-300 mb-6">Are you sure you want to delete your review? This action cannot be undone.</p>
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={cancelDeleteComment}
-                                                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-all duration-300"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={confirmDeleteComment}
-                                                    className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all duration-300"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Driver Profile */}
-                                <div className="flex flex-col md:flex-row gap-6 mb-8">
-                                    {/* Driver Image */}
-                                    <div className="flex-shrink-0">
-                                        <Image
-                                            src={selectedDriver.profileImage || "/per.png"}
-                                            alt="Driver's profile picture"
-                                            width={150}
-                                            height={150}
-                                            className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-gray-700"
-                                        />
-                                    </div>
-
-                                    {/* Driver Info */}
-                                    <div className="relative flex-1">
-                                        <h1 className="text-2xl font-bold text-white mb-2">{selectedDriver.firstName} {selectedDriver.lastName}</h1>
-                                        <div className="space-y-2 mb-4">
-                                            <div className="flex items-center text-gray-700">
-                                                <FaMapMarkerAlt className="mr-2 text-gray-400" />
-                                                <span>{getDriverAddress(selectedDriver)}</span>
-                                            </div>
-                                            <div className="flex items-center text-gray-300">
-                                                <FaPhone className="mr-3 text-gray-400" />
-                                                <span className="font-medium">{selectedDriver.phoneNumber}</span>
-                                                {selectedDriver.whatsappPreferred && (
-                                                    <span className="ml-2 text-xs text-green-400 flex items-center">
-                                                        <FaWhatsapp className="mr-1" /> WhatsApp Available
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {selectedDriver.email && (
-                                                <div className="flex items-center text-gray-300">
-                                                    <FaEnvelope className="mr-3 text-gray-400" />
-                                                    <span>{selectedDriver.email}</span>
-                                                </div>
-                                            )}
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${selectedDriver.verified ? 'bg-green-900 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
-                                                    {selectedDriver.verified ? (
-                                                        <>
-                                                            <FaCheckCircle className="mr-2 inline" />
-                                                            Verified Driver
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <FaTimesCircle className="mr-2 inline" />
-                                                            Not Verified
-                                                        </>
-                                                    )}
-                                                </span>
-
-                                                {selectedDriver.vipLevel && selectedDriver.vipLevel > 0 && (
-                                                    <VIPStar
-                                                        vipLevel={selectedDriver.vipLevel}
-                                                        prestigeLevel={selectedDriver.prestigeLevel || 0}
-                                                        size="md"
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Enhanced Contact Buttons */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                                            {/* Pre-Chat Button */}
-                                            <button
-                                                onClick={() => {
-                                                    setDriverInfo(false)
-                                                    setTimeout(() => setShowPreChat(true), 300)
-                                                }}
-                                                className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-                                            >
-                                                <FaComment className="mr-2" />
-                                                Chat with Driver
-                                            </button>
-
-                                            {/* Enhanced WhatsApp Button (only if whatsappPreferred is true) */}
-                                            {selectedDriver.whatsappPreferred ? (
-                                                <button
-                                                    onClick={() => {
-                                                        setDriverInfo(false)
-                                                        setTimeout(() => setShowEnhancedWhatsApp(true), 300)
-                                                    }}
-                                                    className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
-                                                >
-                                                    <FaWhatsapp className="mr-2" />
-                                                    Enhanced WhatsApp
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => handlePhoneCall(selectedDriver.phoneNumber)}
-                                                    className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
-                                                >
-                                                    <FaPhone className="mr-2" />
-                                                    Call Driver
-                                                </button>
-                                            )}
-
-                                            {/* Direct WhatsApp */}
-                                            {selectedDriver.whatsappPreferred && (
-                                                <div className="absolute top-0 right-1 md:static">
-                                                    <button
-                                                        onClick={() => handleWhatsAppMessage(selectedDriver, selectedVehicle)}
-                                                        className="w-12 h-12 md:w-full  text-white font-semibold rounded-full md:rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800"
-                                                    >
-                                                        <FaWhatsapp className="text-4xl md:text-sm md:mr-2" /> <span className="hidden md:block">WhatsApp</span>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Save to History Button with Cooldown Check */}
-                                        <div className="mb-4">
-                                            {activeTrip && activeTrip.driverId === selectedDriver.uid && activeTrip.vehicleId === selectedVehicle.id ? (
-                                                <div className="space-y-3">
-                                                    <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3">
-                                                        <h4 className="font-bold text-white mb-2">🚗 Active Trip</h4>
-                                                        <div className="space-y-1">
-                                                            <p className="text-gray-300 text-sm">
-                                                                <span className="font-medium">Pickup:</span> {activeTrip.pickupLocation}
-                                                            </p>
-                                                            <p className="text-gray-300 text-sm">
-                                                                <span className="font-medium">Destination:</span> {activeTrip.destination}
-                                                            </p>
-                                                            <p className="text-gray-300 text-sm">
-                                                                <span className="font-medium">Fare:</span> <span className="text-yellow-300">₦{activeTrip.fare?.toLocaleString()}</span>
-                                                            </p>
-                                                            <p className="text-gray-300 text-xs mt-2">
-                                                                Trip started: {activeTrip.startTime?.toDate?.()?.toLocaleString() || 'Recently'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <button
-                                                            onClick={() => updateTripStatus(activeTrip.id, 'completed')}
-                                                            className="py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-300"
-                                                        >
-                                                            ✅ Complete Trip
-                                                        </button>
-                                                        <button
-                                                            onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
-                                                            className="py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300"
-                                                        >
-                                                            ❌ Cancel Trip
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-gray-400 text-xs text-center">
-                                                        Complete trip when you reach your destination. Cancel if plans change.
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {/* Trip Safety Info Section */}
-                                                    <div className="mb-4">
-                                                        <h3 className="text-lg font-bold text-white mb-3 flex justify-center md:justify-start items-center gap-2">
-                                                            <span className="text-blue-400">🛡️</span> Trip Safety Information
-                                                        </h3>
-
-                                                        {/* Fill Info Link - Only shown when location/destination not set */}
-                                                        {(!tripInfo.pickupLocation || !tripInfo.destination) && (
-                                                            <div className="text-center md:text-left mb-4">
-                                                                <p className="text-gray-400 text-sm mb-2">
-                                                                    For your safety and trip tracking, please provide:
-                                                                </p>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        // Toggle the form visibility
-                                                                        setTripInfo(prev => ({
-                                                                            ...prev,
-                                                                            showForm: !prev.showForm
-                                                                        }));
-                                                                    }}
-                                                                    className="text-blue-400 hover:text-blue-300 underline decoration-2 underline-offset-2 text-sm font-medium transition-colors duration-200"
-                                                                >
-                                                                    📝 Fill Info for Safety Travel
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Simple map for trip planning - Only shown when form is active */}
-                                                        {(tripInfo.showForm || (tripInfo.pickupLocation && tripInfo.destination)) && (
-                                                            <SimpleBookingMap
-                                                                pickupLocation={tripInfo.pickupLocation}
-                                                                destination={tripInfo.destination}
-                                                                driverLocation={getDriverLocation(selectedDriver)}
-                                                                onLocationSelect={(type: 'pickup' | 'destination', value: string) => {
-                                                                    setTripInfo(prev => ({
-                                                                        ...prev,
-                                                                        [type === 'pickup' ? 'pickupLocation' : 'destination']: value
-                                                                    }));
-                                                                }}
-                                                            />
-                                                        )}
-                                                    </div>
-
-                                                    {/* Start Trip Button - Only enabled when both locations are set */}
-                                                    {(tripInfo.pickupLocation && tripInfo.destination) && (
-                                                        <>
-                                                            {/* Start Trip Button */}
-                                                            <button
-                                                                onClick={async () => {
-                                                                    if (!tripInfo.pickupLocation || !tripInfo.destination) {
-                                                                        return;
-                                                                    }
-
-                                                                    const tripId = await startTrip(
-                                                                        selectedDriver.uid,
-                                                                        selectedVehicle.id,
-                                                                        tripInfo.pickupLocation,
-                                                                        tripInfo.destination
-                                                                    );
-
-                                                                    // Only close modal if trip was successful AND after showing success message
-                                                                    if (tripId) {
-                                                                        // Wait for success message to show before closing modal
-                                                                        setTimeout(() => {
-                                                                            setDriverInfo(false);
-                                                                        }, 1500); // Wait 1.5 seconds before closing
-                                                                    }
-                                                                }}
-                                                                disabled={!tripInfo.pickupLocation || !tripInfo.destination}
-                                                                className={`w-full py-3 text-white font-semibold rounded-lg transition-all duration-300 mb-2 ${tripInfo.pickupLocation && tripInfo.destination
-                                                                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 cursor-pointer'
-                                                                    : 'bg-gray-500 cursor-not-allowed opacity-50'
-                                                                    }`}
-                                                            >
-                                                                🚀 Start Trip for Safety Tracking
-                                                            </button>
-
-                                                            <p className="text-gray-400 text-xs text-center mb-3">
-                                                                Click "Start Trip" to enable real-time tracking for your safety
-                                                            </p>
-                                                        </>
-                                                    )}
-
-                                                    {/* Original Save Button (optional - keep if you still want it) */}
-                                                    {currentUser && (
-                                                        <div className="mt-4 pt-4 border-t border-gray-700">
-                                                            <button
-                                                                onClick={handleSaveDriver}
-                                                                disabled={!canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave}
-                                                                className={`w-full py-2 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center ${canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                                    ? "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
-                                                                    : "bg-gray-800 cursor-not-allowed"
-                                                                    }`}
-                                                            >
-                                                                <FaEye className="mr-2" />
-                                                                {canSaveDriver(selectedDriver.uid, selectedVehicle.id).canSave
-                                                                    ? "Mark as Contacted"
-                                                                    : "Save (Cooldown)"}
-                                                            </button>
-                                                            <p className="text-gray-400 text-xs mt-1 text-center">
-                                                                Save driver to your history for future reference
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-
-                                        {/* Real-time Trip Tracker - Only show if this is the active trip */}
-                                        {activeTrip && activeTrip.driverId === selectedDriver.uid && activeTrip.vehicleId === selectedVehicle.id && (
-                                            <div className="mt-6">
-                                                <TripTracker
-                                                    tripId={activeTrip.id}
-                                                    driverId={selectedDriver.uid}
-                                                    customerId={currentUser?.uid}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {/* Rating Summary - Only show if driver has ratings */}
-                                        {selectedDriver.averageRating !== undefined && selectedDriver.averageRating !== null && selectedDriver.averageRating > 0 ? (
-                                            <div className="bg-gray-800 rounded-lg p-4">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="text-3xl font-bold text-white">
-                                                            {selectedDriver.averageRating.toFixed(1)}
-                                                        </div>
-                                                        <div>
-                                                            {renderStars(selectedDriver.averageRating, "lg", false)}
-                                                            <div className="text-gray-400 text-sm mt-1">
-                                                                {selectedDriver.totalRatings || 0} {selectedDriver.totalRatings === 1 ? 'review' : 'reviews'}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    {selectedDriver.customersCarried && selectedDriver.customersCarried.length > 0 && (
-                                                        <div className="text-sm text-gray-300">
-                                                            <FaUserCheck className="inline mr-1" />
-                                                            {selectedDriver.customersCarried.length} customer{selectedDriver.customersCarried.length === 1 ? '' : 's'}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </div>
-
-                                {/* Vehicle Details */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                                    {/* Vehicle Images */}
-                                    <div>
-                                        <div className="mb-4">
-                                            <h3 className="text-lg font-bold text-white mb-3">Vehicle Gallery</h3>
-                                            <div className="relative h-76 bg-gray-800 rounded-lg overflow-hidden mb-4">
-                                                <Image
-                                                    src={mainImage}
-                                                    alt="Car Image"
-                                                    fill
-                                                    className="object-contain w-full h-full"
-                                                />
-                                            </div>
-                                            <div className="flex justify-center items-center gap-2 overflow-x-auto pb-2">
-                                                {getVehicleImages(selectedVehicle).map((img, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => setMainImage(img)}
-                                                        className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden cursor-pointer border-2 ${mainImage === img ? "border-blue-500" : "border-gray-700"
-                                                            }`}
-                                                    >
-                                                        <Image
-                                                            src={img}
-                                                            alt="car thumbnail"
-                                                            width={80}
-                                                            height={80}
-                                                            className="object-cover w-full h-full"
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Vehicle Info */}
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white mb-4">Vehicle Information</h3>
-                                        <div className="bg-gray-800 rounded-lg p-5">
-                                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                                <div>
-                                                    <p className="text-gray-400 text-sm">Car Name</p>
-                                                    <p className="font-bold text-white">{selectedVehicle.carName}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-gray-400 text-sm">Model</p>
-                                                    <p className="font-bold text-white">{selectedVehicle.carModel}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-gray-400 text-sm">Type</p>
-                                                    <p className="font-bold text-white capitalize">{selectedVehicle.carType}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-gray-400 text-sm">Seats</p>
-                                                    <p className="font-bold text-white">{selectedVehicle.passengers}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-gray-400 text-sm">Color</p>
-                                                    <p className="font-bold text-white">{selectedVehicle.exteriorColor}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-gray-400 text-sm">AC</p>
-                                                    <p className={`font-bold ${selectedVehicle.ac ? "text-green-400" : "text-red-400"}`}>
-                                                        {selectedVehicle.ac ? "Available" : "Not Available"}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {/* Description */}
-                                            <div className="mt-4">
-                                                <p className="text-gray-400 text-sm mb-2">Description</p>
-                                                <p className="text-gray-300">{selectedVehicle.description}</p>
-                                            </div>
-
-                                            {/* Other Vehicles from this driver */}
-                                            {selectedDriver.vehicles.length > 1 && (
-                                                <div className="mt-6 pt-4 border-t border-gray-700">
-                                                    <p className="text-gray-400 text-sm mb-2">Other vehicles from this driver:</p>
-                                                    <div className="flex gap-2 overflow-x-auto">
-                                                        {selectedDriver.vehicles
-                                                            .filter(v => v.id !== selectedVehicle.id)
-                                                            .map((vehicle, idx) => (
-                                                                <button
-                                                                    key={idx}
-                                                                    onClick={() => {
-                                                                        setSelectedVehicle(vehicle)
-                                                                        const vehicleImages = getVehicleImages(vehicle)
-                                                                        setMainImage(vehicleImages[0])
-                                                                    }}
-                                                                    className="flex-shrink-0 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
-                                                                >
-                                                                    {vehicle.carName} ({vehicle.carType})
-                                                                </button>
-                                                            ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Reviews Section */}
-                                <div id="reviews-section" className="bg-gray-800 rounded-lg md:px-26 p-2 sm:p-4">
-                                    <h3 className="text-lg font-bold text-white mb-4">Reviews & Ratings</h3>
-
-                                    {/* Review Form */}
-                                    {currentUser && (
-                                        <div className="mb-6 sm:p-4 p-2 bg-gray-900 rounded-lg">
-                                            {hasUserReviewed ? (
-                                                <div className="text-center p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
-                                                    <FaUser className="mx-auto text-3xl text-blue-400 mb-2" />
-                                                    <p className="text-white font-medium">You have already reviewed this driver</p>
-                                                    <p className="text-gray-300 text-sm mt-1">You can delete your existing review to submit a new one</p>
-                                                </div>
-                                            ) : (
-                                                <form onSubmit={handleReviewSubmit}>
-                                                    {/* Rating Stars */}
-                                                    <div className="mb-4">
-                                                        <p className="text-white mb-2">Rate this driver:</p>
-                                                        <div className="flex items-center gap-1 mb-4">
-                                                            {[1, 2, 3, 4, 5].map((star) => (
-                                                                <button
-                                                                    key={star}
-                                                                    type="button"
-                                                                    onClick={() => handleRatingClick(star)}
-                                                                    onMouseEnter={() => setHoverRating(star)}
-                                                                    onMouseLeave={() => setHoverRating(0)}
-                                                                    className="text-2xl focus:outline-none"
-                                                                >
-                                                                    <FaStar className={`${star <= (hoverRating || reviewForm.rating) ? "text-yellow-400" : "text-gray-400"}`} />
-                                                                </button>
-                                                            ))}
-                                                            <span className="ml-3 text-white">
-                                                                {reviewForm.rating > 0 ? `${reviewForm.rating} star${reviewForm.rating === 1 ? '' : 's'}` : "Click to rate"}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    <textarea
-                                                        className="w-full outline-none rounded bg-gray-700 text-white p-3 sm:mb-3"
-                                                        name="comment"
-                                                        rows={3}
-                                                        maxLength={500}
-                                                        placeholder="Write your review here..."
-                                                        value={reviewForm.comment}
-                                                        onChange={handleReviewChange}
-                                                        required
-                                                        disabled={hasUserReviewed}
-                                                    ></textarea>
-
-                                                    <div className="flex flex-col sm:flex-row justify-between items-center">
-                                                        <span className="my-1 text-sm text-gray-400">
-                                                            {reviewForm.comment.length}/500 characters
-                                                        </span>
-                                                        <button
-                                                            type="submit"
-                                                            className={`w-full sm:w-50 px-6 py-2 text-white font-semibold rounded ${hasUserReviewed ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                                                            disabled={hasUserReviewed}
-                                                        >
-                                                            {hasUserReviewed ? 'Already Reviewed' : 'Submit Review'}
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            )}
-
-                                            {/* Review Message */}
-                                            {reviewMessage.text && (
-                                                <div className={`mt-3 p-2 text-center rounded ${reviewMessage.type === "success" ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"
-                                                    }`}>
-                                                    {reviewMessage.text}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Reviews List */}
-                                    <div className="mt-6 sm:mt-12 max-h-96 overflow-y-auto pr-2">
-                                        {selectedDriver.comments && selectedDriver.comments.length > 0 ? (
-                                            [...selectedDriver.comments]
-                                                .sort((a, b) => {
-                                                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0)
-                                                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0)
-                                                    return dateB.getTime() - dateA.getTime()
-                                                })
-                                                .map((comment, idx) => {
-                                                    const isCurrentUserComment = comment.userId === currentUserId
-                                                    const userInitial = comment.firstName ? comment.firstName.charAt(0).toUpperCase() :
-                                                        comment.userName ? comment.userName.charAt(0).toUpperCase() : 'U'
-
-                                                    return (
-                                                        <div key={idx} className="mb-4 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-700">
-                                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                                                                        <span className="text-white font-bold text-sm sm:text-base">{userInitial}</span>
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <p className="font-bold text-white text-sm sm:text-base truncate">
-                                                                            {comment.firstName || comment.userName.split(' ')[0] || 'User'}
-                                                                            {comment.lastName ? ` ${comment.lastName}` : ''}
-                                                                            {isCurrentUserComment && (
-                                                                                <span className="ml-2 text-xs bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded">You</span>
-                                                                            )}
-                                                                        </p>
-                                                                        <p className="text-gray-400 text-xs sm:text-sm truncate">{comment.userEmail}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col items-start sm:items-end gap-2">
-                                                                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                                                                        <div className="flex text-yellow-400 text-xs sm:text-sm">
-                                                                            {comment.rating && renderStars(comment.rating, "sm", false)}
-                                                                        </div>
-                                                                        <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap">
-                                                                            {formatDate(comment.createdAt)}
-                                                                        </span>
-                                                                    </div>
-                                                                    {isCurrentUserComment && (
-                                                                        <button
-                                                                            onClick={() => handleDeleteComment(comment)}
-                                                                            className="text-red-400 hover:text-red-300 text-xs sm:text-sm flex items-center gap-1 mt-1"
-                                                                            title="Delete your review"
-                                                                        >
-                                                                            <FaTrash className="text-xs" />
-                                                                            <span>Delete</span>
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <p className="p-2 sm:p-3 rounded-lg bg-gray-800/50 text-gray-300 text-sm sm:text-base border-l-2 sm:border-l-4 border-blue-600">
-                                                                {comment.comment}
-                                                            </p>
-                                                        </div>
-                                                    )
-                                                })
-                                        ) : (
-                                            <div className="text-center py-8 text-gray-400">
-                                                <div className="text-3xl mb-3">💬</div>
-                                                <p>No reviews yet. Be the first to review this driver!</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+            <DriverDetailsModal 
+                show={driverInfo}
+                driver={selectedDriver as DriverWithVehicle}
+                vehicle={selectedVehicle as VehicleLog}
+                currentUser={currentUser}
+                activeTrip={activeTrip}
+                saveMessage={saveMessage}
+                showDeleteConfirm={showDeleteConfirm}
+                tripInfo={{
+                    showForm: tripInfo.showForm || false,
+                    pickupLocation: tripInfo.pickupLocation,
+                    destination: tripInfo.destination
+                }}
+                reviewForm={reviewForm}
+                hoverRating={hoverRating}
+                hasUserReviewed={hasUserReviewed || false}
+                currentUserId={currentUserId}
+                mainImage={mainImage}
+                onClose={handleCloseDriverInfo}
+                onSaveDriver={handleSaveDriver}
+                onStartTrip={startTrip}
+                onUpdateTripStatus={updateTripStatus}
+                onDeleteComment={handleDeleteComment}
+                onConfirmDeleteComment={confirmDeleteComment}
+                onCancelDeleteComment={cancelDeleteComment}
+                onReviewSubmit={handleReviewSubmit}
+                onReviewChange={handleReviewChange}
+                onRatingClick={handleRatingClick}
+                onSetHoverRating={setHoverRating}
+                onSetMainImage={setMainImage}
+                onSetTripInfo={setTripInfo}
+                onSetDriverInfo={setDriverInfo}
+                onSetPreChat={setShowPreChat}
+                onSetEnhancedWhatsApp={setShowEnhancedWhatsApp}
+                onPhoneCall={handlePhoneCall}
+                onWhatsAppMessage={handleWhatsAppMessage}
+                getDriverAddress={getDriverAddress}
+                getDriverLocation={getDriverLocation}
+                canSaveDriver={canSaveDriver}
+                formatDate={formatDate}
+                onSetVehicle={setSelectedVehicle}
+            />
 
                 {/* ✅ NEW: Pre-Chat Modal */}
                 {showPreChat && selectedDriver && selectedVehicle && (
@@ -2966,9 +1788,9 @@ export default function BookingUi() {
                                 car={{
                                     id: selectedVehicle.id,
                                     title: `${selectedVehicle.carName} ${selectedVehicle.carModel}`,
-                                    price: 0, // You can add price field if available
+                                    price: 0,
                                     model: selectedVehicle.carModel,
-                                    year: "", // Add year if available
+                                    year: "", 
                                 }}
                                 driver={{
                                     id: selectedDriver.id,
@@ -2982,40 +1804,26 @@ export default function BookingUi() {
                         </div>
                     </div>
                 )}
+
+                {/* Flag Overlay Integration */}
+                {currentUser && flagDriverOverlay.show && flagDriverOverlay.driver && (
+                    <FlagOverlay
+                        isOpen={flagDriverOverlay.show}
+                        onClose={() => setFlagDriverOverlay({ show: false, driver: null, vehicle: null })}
+                        targetUser={{
+                            uid: flagDriverOverlay.driver.uid,
+                            fullName: flagDriverOverlay.driver.fullName,
+                            email: flagDriverOverlay.driver.email,
+                            phone: flagDriverOverlay.driver.phoneNumber,
+                            type: "driver"
+                        }}
+                        reporterUser={{
+                            uid: currentUser.uid,
+                            fullName: currentUser.displayName || "Anonymous Customer"
+                        }}
+                    />
+                )}
             </div>
-
-
         </>
-
-    )
-}
-
-export function Waiting() {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] p-6 text-center">
-            <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.5 }}
-                className="bg-white/10 backdrop-blur-md p-12 rounded-3xl border border-white/20 shadow-2xl"
-            >
-                <div className="bg-green-500/20 p-6 rounded-full inline-block mb-6">
-                    <FaCar size={64} className="text-green-500 animate-pulse" />
-                </div>
-                <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-                    Load Booking
-                </h1>
-                <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                    We are building a seamless way for you to book and manage load logistics. This feature will be available very soon!
-                </p>
-                <div className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-full font-semibold shadow-lg hover:bg-gray-800 transition-colors">
-                    <span className="relative flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                    </span>
-                    Coming Soon
-                </div>
-            </motion.div>
-        </div>
     )
 }

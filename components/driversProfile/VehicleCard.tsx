@@ -1,10 +1,14 @@
 // components/driver/VehicleCard.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Edit3, Trash2, CheckCircle, Clock,
     ChevronLeft, ChevronRight, X, ShieldCheck,
-    User, Wind, Paintbrush, FileText, ChevronDown, ChevronUp
+    User, Wind, Paintbrush, FileText, ChevronDown, ChevronUp, Bookmark
 } from 'lucide-react';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebaseConfig';
+import { getAuth } from 'firebase/auth';
+import toast from 'react-hot-toast';
 
 interface Vehicle {
     id?: string; // Add this if you use v.id
@@ -47,6 +51,42 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const [showDescription, setShowDescription] = useState(false);
     const [showNoDocsOverlay, setShowNoDocsOverlay] = useState(false);
+    const [isBookingVehicle, setIsBookingVehicle] = useState(false);
+    const [settingBooking, setSettingBooking] = useState(false);
+
+    // Listen for booking vehicle status
+    useEffect(() => {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user || !vehicle.id) return;
+
+        const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                setIsBookingVehicle(data.bookingVehicleId === vehicle.id);
+            }
+        });
+        return () => unsubscribe();
+    }, [vehicle.id]);
+
+    const handleSetBookingVehicle = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user || !vehicle.id) return;
+
+        setSettingBooking(true);
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                bookingVehicleId: isBookingVehicle ? null : vehicle.id
+            });
+            toast.success(isBookingVehicle ? 'Booking vehicle deselected' : `${vehicle.carName} set as your booking vehicle!`);
+        } catch (err) {
+            toast.error('Failed to update booking vehicle');
+        } finally {
+            setSettingBooking(false);
+        }
+    };
 
     const allImages = [
         { url: vehicle.images.front, label: 'Front View' },
@@ -190,6 +230,20 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                                 : 'Pending: Under document review.'}
                         </span>
                     </div>
+
+                    {/* Set as Booking Vehicle Button */}
+                    <button
+                        onClick={handleSetBookingVehicle}
+                        disabled={settingBooking}
+                        className={`w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm ${
+                            isBookingVehicle
+                                ? 'bg-emerald-500 border-emerald-400 text-white shadow-emerald-200'
+                                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                    >
+                        <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />
+                        {settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : 'Set as Booking Vehicle'}
+                    </button>
 
                     {/* Action Buttons */}
                     <div className="flex gap-2">

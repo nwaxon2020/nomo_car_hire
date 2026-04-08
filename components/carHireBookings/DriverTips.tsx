@@ -27,11 +27,11 @@ export default function DriverTips({
           <ul className="space-y-2 text-gray-700 text-xs sm:text-sm">
             <li className="flex items-start gap-2">
               <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-              <span><strong>Nearby Filter:</strong> Shows requests matching your location: {driverCity ? `${driverCity}, ${driverState}` : driverState || "Set your location in profile"}</span>
+              <span><strong>Nearby Filter:</strong> Shows requests matching your Registered location: {driverCity ? `${driverCity}, ${driverState}` : driverState || "Set your location in profile"}</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-              <span>Views increase when you click "Make Offer" - even if you don't submit</span>
+              <span>Visibility increases when you purcase VIPs, Boosts, or Subscribe to a Plan</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
