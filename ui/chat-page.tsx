@@ -14,7 +14,8 @@ import {
   updateDoc,
   Timestamp,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  arrayRemove
 } from "firebase/firestore";
 import ChatWindow from "@/components/PreChat/chat-window";
 import {
@@ -103,6 +104,10 @@ export default function ChatPageUi() {
     const q = query(chatsRef, where("participants", "array-contains", currentUser.uid));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      // 🚨 CRITICAL FIX: Prevent the bubble from flickering back 
+      // by ignoring local changes that haven't been confirmed by the server yet.
+      if (snapshot.metadata.hasPendingWrites) return;
+
       const expiredChatIds: string[] = [];
       const chatPromises = snapshot.docs.map(async (chatDoc) => {
         const chatData = chatDoc.data();
@@ -129,25 +134,20 @@ export default function ChatPageUi() {
         );
 
         if (!otherParticipantId) {
-          console.warn("No other participant found in chat:", chatId);
           return null;
         }
 
-        // Get participant info - Handle missing data
         let otherParticipantName = "Unknown User";
         let isDriver = false;
-        let userData = null;
 
         try {
-          // Try to get from chat data first
           if (chatData.participantNames && chatData.participantNames[otherParticipantId]) {
             otherParticipantName = chatData.participantNames[otherParticipantId];
           }
 
-          // Get user data for other participant
           const userDoc = await getDoc(doc(db, "users", otherParticipantId));
           if (userDoc.exists()) {
-            userData = userDoc.data();
+            const userData = userDoc.data();
             otherParticipantName = userData.firstName || userData.fullName || otherParticipantName;
             isDriver = userData.isDriver || false;
           }
@@ -155,17 +155,14 @@ export default function ChatPageUi() {
           console.warn("Error fetching user data for participant:", otherParticipantId, error);
         }
 
-        // Get car info
         const carInfo = chatData.carInfo || {
           id: chatData.carId || 'general',
           title: chatData.carTitle || 'Car Rental Request'
         };
 
-        // Get last message
         const messages = chatData.messages || [];
         const lastMessage = messages[messages.length - 1];
 
-        // Count unread messages - Only count messages from other participant
         const unreadCount = messages.filter(
           (msg: any) => msg.senderId !== currentUser.uid && !msg.read
         ).length;
@@ -183,7 +180,6 @@ export default function ChatPageUi() {
         };
       });
 
-      // Queue expired chats for deletion
       if (expiredChatIds.length > 0) {
         setExpiredChatsToDelete(prev => [...prev, ...expiredChatIds]);
       }
@@ -191,7 +187,6 @@ export default function ChatPageUi() {
       const chatResults = await Promise.all(chatPromises);
       const validChats = chatResults.filter(chat => chat !== null) as ChatUser[];
 
-      // Sort by last message time
       const sortedChats = validChats.sort((a, b) => {
         const timeA = a.lastMessageTime?.getTime() || 0;
         const timeB = b.lastMessageTime?.getTime() || 0;
@@ -200,11 +195,9 @@ export default function ChatPageUi() {
 
       setChats(sortedChats);
 
-      // Calculate total unread
       const totalUnread = sortedChats.reduce((sum, chat) => sum + chat.unreadCount, 0);
       setUnreadTotal(totalUnread);
 
-      // Update user's last chat view time
       if (currentUser) {
         try {
           await updateDoc(doc(db, "users", currentUser.uid), {
@@ -267,9 +260,17 @@ export default function ChatPageUi() {
 
   // Add this new function to actually do the work
   const confirmDelete = async () => {
-    if (!deleteConfirmId) return;
+    if (!deleteConfirmId || !currentUser) return;
     try {
+      // 1. Delete the chat document
       await deleteDoc(doc(db, "preChats", deleteConfirmId));
+
+      // 2. THE MISSING PIECE: Clean up the user's unread list
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        unreadChats: arrayRemove(deleteConfirmId)
+      });
+
+      // 3. Update local UI state
       setChats(prevChats => prevChats.filter(chat => chat.chatId !== deleteConfirmId));
       if (selectedChat?.chatId === deleteConfirmId) {
         setSelectedChat(null);
@@ -290,6 +291,7 @@ export default function ChatPageUi() {
     try {
       let driverPhone = "";
 
+      // 1. Fetch the driver/other participant's phone number
       if (currentUser) {
         try {
           const driverDoc = await getDoc(doc(db, "users", chat.userId));
@@ -302,17 +304,19 @@ export default function ChatPageUi() {
         }
       }
 
-      // CRITICAL FIX: Mark messages as read in Firestore when opening chat
+      // 2. Clear notifications if there are unread messages
       if (chat.unreadCount > 0 && currentUser) {
         try {
           const chatRef = doc(db, "preChats", chat.chatId);
-          const chatSnap = await getDoc(chatRef);
+          const userRef = doc(db, "users", currentUser.uid);
 
+          // Mark individual messages as read in the chat document
+          const chatSnap = await getDoc(chatRef);
           if (chatSnap.exists()) {
             const messages = chatSnap.data().messages || [];
             const updatedMessages = messages.map((msg: any) => ({
               ...msg,
-              // Mark as read if message is from the other participant
+              // Mark as read if the message was sent by the other person
               read: msg.senderId !== currentUser.uid ? true : msg.read
             }));
 
@@ -320,14 +324,20 @@ export default function ChatPageUi() {
               messages: updatedMessages,
               lastActivity: Timestamp.now()
             });
-
-            console.log("Marked messages as read for chat:", chat.chatId);
           }
+
+          // REMOVE FROM SIDEBAR/NAVBAR: Remove this chatId from the user's unread list
+          await updateDoc(userRef, {
+            unreadChats: arrayRemove(chat.chatId)
+          });
+
+          console.log("Notifications cleared for chat:", chat.chatId);
         } catch (error) {
-          console.error("Error marking messages as read:", error);
+          console.error("Error clearing notifications:", error);
         }
       }
 
+      // 3. Set the selected chat for the UI
       const { id, userId, name, carInfo, chatId, unreadCount, lastMessage, lastMessageTime, isDriver, ...rest } = chat;
 
       setSelectedChat({
@@ -342,7 +352,7 @@ export default function ChatPageUi() {
         }
       });
 
-      // Update local state
+      // 4. Update local state immediately to hide the bubble
       if (chat.unreadCount > 0) {
         setChats(prevChats =>
           prevChats.map(c =>
@@ -471,7 +481,7 @@ export default function ChatPageUi() {
     <div className="bg-gradient-to-b from-gray-900 via-gray-950 to-black min-h-screen text-gray-100">
       <div className="container mx-auto px-0 md:px-4 py-0 md:py-6 max-w-7xl">
         <div className="bg-gray-900/80 backdrop-blur-xl md:rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
-          <div className="flex flex-col lg:flex-row h-screen md:h-[85vh]">
+          <div className="h-[100vh] flex flex-col lg:flex-row md:h-[90vh]">
 
             {/* LEFT SIDEBAR: CHAT LIST */}
             <div className={`lg:w-96 border-r border-gray-800 flex flex-col bg-gray-900/50 ${selectedChat ? 'hidden lg:flex' : 'flex'}`}>

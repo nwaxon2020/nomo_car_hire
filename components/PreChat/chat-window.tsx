@@ -460,13 +460,20 @@ export default function ChatWindow({
             const chatDoc = await getDoc(chatRef);
 
             if (chatDoc.exists()) {
-                const participants = chatDoc.data().participants || [];
-                // Clean up unread tags for all users before deleting doc
-                await Promise.all(participants.map((id: string) =>
-                    updateDoc(doc(db, "users", id), { unreadChats: arrayRemove(chatId) })
+                const data = chatDoc.data();
+                const participants = data.participants || [];
+
+                // 1. Clean up unread list for EVERYONE in the chat simultaneously
+                await Promise.all(participants.map((uid: string) =>
+                    updateDoc(doc(db, "users", uid), {
+                        unreadChats: arrayRemove(chatId)
+                    })
                 ));
+
+                // 2. Now delete the actual chat document
                 await deleteDoc(chatRef);
             }
+
             setShowDeleteConfirm(false);
             onClose();
         } catch (error) {
