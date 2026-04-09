@@ -10,13 +10,15 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiMessageSquare, FiSend,
-  FiCheckCircle, FiClock, FiTrash2, FiAlertCircle, FiNavigation, FiLock
+  FiCheckCircle, FiTrash2, FiAlertCircle, FiNavigation, FiLock
 } from 'react-icons/fi';
 import {
-  FaFlag, FaWhatsapp, FaPhone, FaEnvelope, FaUser,
-  FaExclamationTriangle, FaChevronDown, FaIdCard, FaCar, FaInfoCircle
+  FaFlag, FaWhatsapp, FaUser,
+  FaExclamationTriangle, FaChevronDown, FaCar
 } from "react-icons/fa";
 import toast from 'react-hot-toast';
+
+import { triggerNotification } from "@/lib/notifications";
 
 interface Reply {
   text: string;
@@ -27,6 +29,7 @@ interface Reply {
 }
 
 interface Complaint {
+  uid?: string;
   id: string;
   name?: string;
   email?: string;
@@ -103,7 +106,7 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
   const cardBg = isDriverComplaint
     ? "bg-white border-2 border-red-100 hover:border-red-300"
     : isSystemOrGeneric ? "bg-white border-2 border-blue-100 hover:border-blue-300" : "bg-white border-2 border-purple-100 hover:border-purple-300";
-  
+
   const headerBg = isDriverComplaint
     ? "bg-gradient-to-r from-red-600 to-rose-700"
     : isSystemOrGeneric ? "bg-gradient-to-r from-[#0B2A4A] to-blue-800" : "bg-gradient-to-r from-purple-600 to-violet-700";
@@ -116,10 +119,10 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${cardBg} rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative`}
+      className={`${cardBg} rounded-2xl shadow-sm hover:shadow-xl transition-all flex flex-col h-full relative`}
     >
       {complaint.status !== 'read' && (
-        <div 
+        <div
           onClick={async () => {
             try {
               await updateDoc(doc(db, "complains", complaint.id), { status: "read" });
@@ -136,7 +139,7 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
       )}
 
       {/* Card Header */}
-      <div className={`${headerBg} p-4`}>
+      <div className={`rounded-t-2xl ${headerBg} p-4`}>
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
@@ -161,7 +164,7 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
           <span className="text-gray-400 text-[9px] font-bold uppercase tracking-widest">{formatDate(complaint.createdAt)}</span>
           {displayUid && <span className="text-gray-400 text-[9px] font-mono tracking-widest">ID: {displayUid.slice(-6)}</span>}
         </div>
-        
+
         {displayPhone && (
           <div className="flex justify-between items-center bg-white p-2 border border-gray-100 rounded-lg">
             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Phone</span>
@@ -173,7 +176,7 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
             </div>
           </div>
         )}
-        
+
         {displayEmail && (
           <div className="flex justify-between items-center bg-white p-2 border border-gray-100 rounded-lg">
             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Email</span>
@@ -252,12 +255,12 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
                 const tId = complaint.targetId || complaint.targetUid;
                 if (!tId) return toast.error("Missing Target ID");
                 if (pendingFlags > 0 && !flagReason.trim()) return toast.error("Provide a reason");
-                
-                await updateDoc(doc(db, "users", tId), { 
-                  flags: pendingFlags, 
-                  flagReason: pendingFlags > 0 ? flagReason : "" 
+
+                await updateDoc(doc(db, "users", tId), {
+                  flags: pendingFlags,
+                  flagReason: pendingFlags > 0 ? flagReason : ""
                 });
-                
+
                 setDriverData((prev: any) => ({ ...prev, flags: pendingFlags, flagReason: pendingFlags > 0 ? flagReason : "" }));
                 setShowFlagInput(false);
                 setShowPresets(false);
@@ -364,10 +367,25 @@ const AdminComplaintsUi = () => {
     return () => { if (unsubscribe) unsubscribe(); };
   }, [ADMIN_UID]);
 
+  // --- UPDATE YOUR handleSendReply TO THIS ---
   const handleSendReply = async (id: string) => {
     if (!replyText[id]?.trim()) return toast.error("Message required");
     setLoadingId(id);
+
     try {
+      const complaint = complaints.find(c => c.id === id);
+      if (!complaint) throw new Error("Complaint not found");
+
+      // 1. Fetch the Support Email from site_configs
+      const configSnap = await getDoc(doc(db, "site_configs", "general"));
+      const configData = configSnap.data();
+
+      // Accessing generalContact -> email as per your requirement
+      const supportEmail = configData?.generalContact?.email || "nomopoventures@yahoo.com";
+
+      const isMisconduct = complaint.targetType === "driver" || complaint.targetType === "customer";
+      const recipientId = isMisconduct ? complaint.targetUid : complaint.uid;
+
       const reply: Reply = {
         text: replyText[id],
         timestamp: Timestamp.now(),
@@ -375,18 +393,36 @@ const AdminComplaintsUi = () => {
         senderName: 'Nomo Support',
         senderEmail: auth.currentUser?.email || 'Admin'
       };
+
+      // 2. Update the complaint document
       await updateDoc(doc(db, "complains", id), {
         replies: arrayUnion(reply),
         status: 'read'
       });
+
+      // 3. Trigger Notification with "Email Us" button
+      if (recipientId) {
+        await triggerNotification(
+          recipientId,
+          isMisconduct ? "🚨 Misconduct Warning" : "📩 Support Update",
+          replyText[id],
+          isMisconduct ? "warning" : "info",
+          `mailto:${supportEmail}`, // <--- Dynamic Mailto Link
+          null,
+          "Email Us" // <--- Updated Label
+        );
+      }
+
       toast.success("Response dispatched");
       setReplyText(prev => ({ ...prev, [id]: '' }));
-    } catch {
+    } catch (err: any) {
+      console.error(err);
       toast.error("Dispatch failed");
     } finally {
       setLoadingId(null);
     }
   };
+
 
   const handleArchive = async () => {
     if (enteredPassCode !== MASTER_PASS_CODE) {
@@ -483,14 +519,14 @@ const AdminComplaintsUi = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-2 w-full lg:w-auto mt-4 lg:mt-0">
             {(["all", "driver", "customer", "general"] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`flex-1 md:flex-none px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 
-                  ${filter === f 
+                  ${filter === f
                     ? f === "driver" ? "bg-red-50 text-red-700 border-red-500 shadow-sm" : f === "customer" ? "bg-purple-50 text-purple-700 border-purple-500 shadow-sm" : f === "general" ? "bg-blue-50 text-blue-700 border-blue-500 shadow-sm" : "bg-gray-800 border-gray-800 text-white shadow-md"
                     : "bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
                   }`}

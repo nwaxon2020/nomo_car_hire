@@ -10,11 +10,11 @@ export const triggerNotification = async (
     body: string,
     type: string = "info",
     link: string = "/",
-    imageUrl: string | null = null,
+    imageUrl: string | null = null, // Ensure null is accepted
     actionLabel: string = "View Details",
-    message2: string | null = null, // Added
-    link2: string | null = null,     // Added
-    actionLabel2: string | null = null // Added
+    message2: string | null = null,
+    link2: string | null = null,
+    actionLabel2: string | null = null
 ) => {
     try {
         const userRef = doc(db, "users", userId);
