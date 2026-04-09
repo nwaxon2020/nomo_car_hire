@@ -1,5 +1,4 @@
 "use client"
-import React from 'react';
 import Image from 'next/image';
 import { VehicleLog } from '../types';
 import { getVehicleImages } from '../utils';
@@ -12,7 +11,7 @@ interface ModalVehicleGalleryProps {
 
 export default function ModalVehicleGallery({ vehicle, mainImage, onSetMainImage }: ModalVehicleGalleryProps) {
     const images = getVehicleImages(vehicle);
-    
+
     return (
         <div className="mb-4">
             <h3 className="text-lg font-bold text-white mb-3">Vehicle Gallery</h3>
@@ -29,9 +28,8 @@ export default function ModalVehicleGallery({ vehicle, mainImage, onSetMainImage
                     <div
                         key={idx}
                         onClick={() => onSetMainImage(img)}
-                        className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden cursor-pointer border-2 ${
-                            mainImage === img ? "border-blue-500" : "border-gray-700"
-                        }`}
+                        className={`flex-shrink-0 w-12 h-12 md:w-20 md:h-20 rounded-lg overflow-hidden cursor-pointer border-2 ${mainImage === img ? "border-blue-500" : "border-gray-700"
+                            }`}
                     >
                         <Image
                             src={img}

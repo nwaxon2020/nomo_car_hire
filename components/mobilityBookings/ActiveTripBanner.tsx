@@ -10,7 +10,7 @@ interface ActiveTripBannerProps {
     selectedDriver: DriverWithVehicle | null;
     selectedVehicle: VehicleLog | null;
     currentUser: any;
-    updateTripStatus: (tripId: string, status: string) => Promise<void>;
+    updateTripStatus: (tripId: string, status: 'completed' | 'cancelled') => Promise<void>;
 }
 
 export default function ActiveTripBanner({ 

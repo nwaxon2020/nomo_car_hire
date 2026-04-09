@@ -1,6 +1,6 @@
 "use client"
 import React from 'react';
-import { FaUser, FaStar, FaTrash, FaUserCheck } from 'react-icons/fa';
+import { FaUser, FaStar, FaTrash, FaSpinner } from 'react-icons/fa';
 import ListingStars from '../ui/ListingStars';
 import { Driver, Comment } from '../types';
 
@@ -8,6 +8,7 @@ interface ModalReviewsProps {
     driver: Driver;
     currentUser: any;
     hasUserReviewed: boolean;
+    isSubmitting: boolean;
     reviewForm: { rating: number; comment: string };
     hoverRating: number;
     currentUserId: string;
@@ -24,6 +25,7 @@ export default function ModalReviews({
     driver,
     currentUser,
     hasUserReviewed,
+    isSubmitting,
     reviewForm,
     hoverRating,
     currentUserId,
@@ -36,24 +38,24 @@ export default function ModalReviews({
     formatDate
 }: ModalReviewsProps) {
     return (
-        <div id="reviews-section" className="bg-gray-800 rounded-lg md:px-26 p-2 sm:p-4">
-            <h3 className="text-lg font-bold text-white mb-4">Reviews & Ratings</h3>
+        <div id="reviews-section" className="bg-gray-800 rounded-lg p-2 sm:p-4">
+            <h3 className="font-bold text-white mb-4">Reviews & Ratings</h3>
 
             {/* Review Form */}
             {currentUser && (
-                <div className="mb-6 sm:p-4 p-2 bg-gray-900 rounded-lg">
+                <div className="mb-6 p-2 bg-gray-900 rounded-lg">
                     {hasUserReviewed ? (
                         <div className="text-center p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
-                            <FaUser className="mx-auto text-3xl text-blue-400 mb-2" />
-                            <p className="text-white font-medium">You have already reviewed this driver</p>
-                            <p className="text-gray-300 text-sm mt-1">You can delete your existing review to submit a new one</p>
+                            <FaUser className="mx-auto text-2xl text-blue-400 mb-2" />
+                            <p className="text-sm text-white font-black">You have already reviewed this driver</p>
+                            <p className="text-xs text-gray-300 mt-1">You can delete your existing review to submit a new one</p>
                         </div>
                     ) : (
                         <form onSubmit={onReviewSubmit}>
                             {/* Rating Stars */}
-                            <div className="mb-4">
-                                <p className="text-white mb-2">Rate this driver:</p>
-                                <div className="flex items-center gap-1 mb-4">
+                            <div className="flex items-center gap-2 mb-4">
+                                <p className="text-xs md:text-sm text-white">Rate this driver:</p>
+                                <div className="flex items-center gap-1">
                                     {[1, 2, 3, 4, 5].map((star) => (
                                         <button
                                             key={star}
@@ -61,22 +63,22 @@ export default function ModalReviews({
                                             onClick={() => onRatingClick(star)}
                                             onMouseEnter={() => onSetHoverRating(star)}
                                             onMouseLeave={() => onSetHoverRating(0)}
-                                            className="text-2xl focus:outline-none"
+                                            className="focus:outline-none"
                                         >
                                             <FaStar className={`${star <= (hoverRating || reviewForm.rating) ? "text-yellow-400" : "text-gray-400"}`} />
                                         </button>
                                     ))}
-                                    <span className="ml-3 text-white">
-                                        {reviewForm.rating > 0 ? `${reviewForm.rating} star${reviewForm.rating === 1 ? '' : 's'}` : "Click to rate"}
+                                    <span className="text-xs md:text-sm ml-3 text-white">
+                                        {reviewForm.rating > 0 && `${reviewForm.rating} star${reviewForm.rating === 1 ? '' : 's'}`}
                                     </span>
                                 </div>
                             </div>
 
                             <textarea
-                                className="w-full outline-none rounded bg-gray-700 text-white p-3 sm:mb-3"
+                                className="text-sm w-full outline-none rounded bg-gray-700 text-white p-3 sm:mb-3"
                                 name="comment"
                                 rows={3}
-                                maxLength={500}
+                                maxLength={300}
                                 placeholder="Write your review here..."
                                 value={reviewForm.comment}
                                 onChange={onReviewChange}
@@ -86,14 +88,21 @@ export default function ModalReviews({
 
                             <div className="flex flex-col sm:flex-row justify-between items-center">
                                 <span className="my-1 text-sm text-gray-400">
-                                    {reviewForm.comment.length}/500 characters
+                                    {reviewForm.comment.length}/300 characters
                                 </span>
                                 <button
                                     type="submit"
-                                    className={`w-full sm:w-50 px-6 py-2 text-white font-semibold rounded ${hasUserReviewed ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                                    disabled={hasUserReviewed}
+                                    disabled={hasUserReviewed || isSubmitting}
+                                    className={`w-full sm:w-auto px-6 py-2.5 text-sm text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${hasUserReviewed
+                                        ? 'bg-gray-700 cursor-not-allowed'
+                                        : isSubmitting
+                                            ? 'bg-blue-500 cursor-not-allowed opacity-80'
+                                            : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
+                                        }`}
                                 >
-                                    {hasUserReviewed ? 'Already Reviewed' : 'Submit Review'}
+                                    {isSubmitting ? (
+                                        <><FaSpinner className="animate-spin" /> Submitting...</>
+                                    ) : hasUserReviewed ? 'Already Reviewed' : 'Submit Review'}
                                 </button>
                             </div>
                         </form>

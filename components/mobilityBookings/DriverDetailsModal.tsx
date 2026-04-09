@@ -40,7 +40,7 @@ interface DriverDetailsModalProps {
     onSetTripInfo: (val: any) => void;
     onSetDriverInfo: (v: boolean) => void;
     onSetPreChat: (v: boolean) => void;
-    onSetEnhancedWhatsApp: (v: boolean) => void;
+    isSubmittingReview: boolean;
     onPhoneCall: (p: string) => void;
     onWhatsAppMessage: (d: any, v: any) => void;
     getDriverAddress: (d: any) => string;
@@ -56,8 +56,8 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
     const { driver, vehicle, saveMessage, showDeleteConfirm } = props;
 
     return (
-        <div id="contact-driver" className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-2 sm:p-8 z-50 overflow-y-auto">
-            <div className="bg-gray-900 rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div id="contact-driver" className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center sm:p-8 z-60 overflow-y-auto">
+            <div className="bg-gray-900 md:rounded-xl max-w-6xl w-full max-h-[92vh] overflow-y-auto">
                 {/* Header */}
                 <div className="sticky top-0 bg-gray-900 z-10 p-4 border-b border-gray-800 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-white">Driver & Vehicle Details</h2>
@@ -68,11 +68,10 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                 <div className="p-4 md:p-6">
                     {/* Save Message Inside Modal */}
                     {saveMessage.text && (
-                        <div className={`mb-4 p-3 rounded-lg ${
-                            saveMessage.type === "success" ? "bg-green-900 border border-green-700 text-green-300" :
+                        <div className={`mb-4 p-3 rounded-lg ${saveMessage.type === "success" ? "bg-green-900 border border-green-700 text-green-300" :
                             saveMessage.type === "error" ? "bg-red-900 border border-red-700 text-red-300" :
-                            "bg-blue-900 border border-blue-700 text-blue-300"
-                        }`}>
+                                "bg-blue-900 border border-blue-700 text-blue-300"
+                            }`}>
                             <div className="flex items-center">
                                 {saveMessage.type === "success" && <FaCheckCircle className="mr-2" />}
                                 {saveMessage.type === "error" && <FaExclamationTriangle className="mr-2" />}
@@ -101,7 +100,6 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                         vehicle={vehicle}
                         onSetDriverInfo={props.onSetDriverInfo}
                         onSetPreChat={props.onSetPreChat}
-                        onSetEnhancedWhatsApp={props.onSetEnhancedWhatsApp}
                         onPhoneCall={props.onPhoneCall}
                         onWhatsAppMessage={props.onWhatsAppMessage}
                         getDriverAddress={props.getDriverAddress}
@@ -137,15 +135,13 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
 
                             {/* Rating Summary */}
                             {driver.averageRating !== undefined && driver.averageRating !== null && driver.averageRating > 0 && (
-                                <div className="bg-gray-800 rounded-lg p-4 mt-6">
+                                <div className="bg-gray-800 rounded-lg p-2 mt-6">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-3">
-                                            <div className="text-3xl font-bold text-white">{driver.averageRating.toFixed(1)}</div>
-                                            <div>
-                                                <ListingStars rating={driver.averageRating} size="lg" />
-                                                <div className="text-gray-400 text-sm mt-1">
-                                                    {driver.totalRatings || 0} {driver.totalRatings === 1 ? 'review' : 'reviews'}
-                                                </div>
+                                            <div className="text-xl font-bold text-white">{driver.averageRating.toFixed(1)}</div>
+                                            <div><ListingStars rating={driver.averageRating} size="md" /></div>
+                                            <div className="text-gray-400 text-sm">
+                                                {driver.totalRatings || 0} {driver.totalRatings === 1 ? 'review' : 'reviews'}
                                             </div>
                                         </div>
                                         {driver.customersCarried && driver.customersCarried.length > 0 && (
@@ -157,9 +153,29 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                                     </div>
                                 </div>
                             )}
+
+                            {/* ✅ NEW: Compact Reviews on the Left */}
+                            <div className="mt-6 max-h-[30rem] overflow-y-auto scrollbar-hide">
+                                <ModalReviews
+                                    driver={driver}
+                                    currentUser={props.currentUser}
+                                    hasUserReviewed={props.hasUserReviewed}
+                                    isSubmitting={props.isSubmittingReview}
+                                    reviewForm={props.reviewForm}
+                                    hoverRating={props.hoverRating}
+                                    currentUserId={props.currentUserId}
+                                    reviewMessage={props.saveMessage}
+                                    onReviewSubmit={props.onReviewSubmit}
+                                    onRatingClick={props.onRatingClick}
+                                    onSetHoverRating={props.onSetHoverRating}
+                                    onReviewChange={props.onReviewChange}
+                                    onDeleteComment={props.onDeleteComment}
+                                    formatDate={props.formatDate}
+                                />
+                            </div>
                         </div>
 
-                        <div>
+                        <div className="max-h-[50rem] overflow-y-auto scrollbar-hide space-y-4">
                             <ModalVehicleGallery
                                 vehicle={vehicle}
                                 mainImage={props.mainImage}
@@ -174,21 +190,6 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                         </div>
                     </div>
 
-                    <ModalReviews
-                        driver={driver}
-                        currentUser={props.currentUser}
-                        hasUserReviewed={props.hasUserReviewed}
-                        reviewForm={props.reviewForm}
-                        hoverRating={props.hoverRating}
-                        currentUserId={props.currentUserId}
-                        reviewMessage={props.saveMessage} // Map saveMessage to reviewMessage
-                        onReviewSubmit={props.onReviewSubmit}
-                        onRatingClick={props.onRatingClick}
-                        onSetHoverRating={props.onSetHoverRating}
-                        onReviewChange={props.onReviewChange}
-                        onDeleteComment={props.onDeleteComment}
-                        formatDate={props.formatDate}
-                    />
                 </div>
             </div>
         </div>

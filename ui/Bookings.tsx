@@ -1,8 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import Image from "next/image"
-import { motion } from "framer-motion"
+import { useState, useEffect } from "react"
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
     arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc, onSnapshot
@@ -10,44 +8,31 @@ import {
 import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
 import {
-    FaStar, FaStarHalfAlt, FaRegStar, FaCheckCircle, FaTimesCircle, FaPhone, FaMapMarkerAlt,
-    FaUsers, FaPalette, FaSnowflake, FaFlag, FaEye, FaTrash, FaCar, FaSearch, FaWhatsapp, FaEnvelope,
-    FaClock, FaUserCheck, FaExclamationTriangle, FaUser, FaComment, FaShieldAlt, FaCrown, FaGem,
-    FaLocationArrow, FaTimes, FaBolt, FaChevronRight
+    FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes,
 } from 'react-icons/fa'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 // NEW: Imports From components 
 import PreChat from "@/components/PreChat"
-import EnhancedWhatsApp from "@/components/EnhancedWhatsApp"
-import SimpleBookingMap from "@/components/map/SimpleBookingMap"
-import TripTracker from "@/components/map/TripTracker"
-import ShareLocation from "@/components/map/ShareLocation"
-import CustomerLocationToggle from "@/components/map/CustomerLocationToggle"
 import FlagOverlay from "@/components/mobility/FlagOverlay"
+import BookingTrackingMap from "@/components/map/BookingTrackingMap";
 
 
 // Interfaces matching your Firebase data structure
-import { 
-    VehicleLog, Comment, Driver, DriverWithVehicle, TripHistory, 
-    ContactedDriver, HiredCar, Trip, VIP_CONFIG 
+import {
+    VehicleLog, Comment, Driver, DriverWithVehicle, TripHistory,
+    ContactedDriver, HiredCar, Trip, DirectOffer
 } from "@/components/mobilityBookings/types"
-import { 
-    calculateDistance, getVehicleImages, getDriverLocation, 
-    getDriverAddress, formatDate, getDefaultVehicleImage 
+import {
+    getDriverLocation,
+    getDriverAddress, formatDate, getDefaultVehicleImage
 } from "@/components/mobilityBookings/utils"
 
 // NEW: Refactored Components
-import BookingHeader from "@/components/mobilityBookings/BookingHeader"
-import TripNotification from "@/components/mobilityBookings/TripNotification"
-import ActiveTripBanner from "@/components/mobilityBookings/ActiveTripBanner"
 import QuickViewHistory from "@/components/mobilityBookings/QuickViewHistory"
 import SearchFilters from "@/components/mobilityBookings/SearchFilters"
 import BookingGrid from "@/components/mobilityBookings/BookingGrid"
 import DriverDetailsModal from "@/components/mobilityBookings/DriverDetailsModal"
-import WaitingSection from "@/components/mobilityBookings/WaitingSection"
-import ListingStars from "@/components/mobilityBookings/ui/ListingStars"
-import VIPStar from "@/components/mobilityBookings/ui/VIPStar"
 import MyVehiclesSelector from "@/components/mobilityBookings/MyVehiclesSelector"
 
 const SubtleDriverNotice = () => (
@@ -70,17 +55,14 @@ const SubtleDriverNotice = () => (
 
 export default function BookingUi() {
     // activate for parameters
-    const router = useRouter();
     const searchParams = useSearchParams()
-    const search = searchParams.get('search');
 
     // State for contacted drivers and hired cars from Firebase
     const [tripHistory, setTripHistory] = useState<TripHistory[]>([]) // Trip history state
     const [contactedDrivers, setContactedDrivers] = useState<ContactedDriver[]>([])
     const [hiredCars, setHiredCars] = useState<HiredCar[]>([])
 
-    // Pop up driver name before booking
-    const [selectDriver, setSelectDriver] = useState("")
+
 
     // Close driver's information page
     const [driverInfo, setDriverInfo] = useState(false)
@@ -124,7 +106,6 @@ export default function BookingUi() {
         comment: "",
         rating: 0
     })
-    const [reviewMessage, setReviewMessage] = useState<{ type: "success" | "error" | ""; text: string }>({ type: "", text: "" })
     const [hoverRating, setHoverRating] = useState(0)
 
     // State for loading and error
@@ -148,8 +129,13 @@ export default function BookingUi() {
     const [saveCooldown, setSaveCooldown] = useState<{ [key: string]: number }>({})
     const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error" | "info" | ""; text: string }>({ type: "", text: "" })
 
-    // Toggle Booking Request
-    const [showRequestBox, setShowRequestBox] = useState(false);
+    // States for reviewing
+    const [reviewMessage, setReviewMessage] = useState<{ type: "success" | "error" | ""; text: string }>({ type: "", text: "" })
+    const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+
+    // Trip success messages
+    const [showTripSuccess, setShowTripSuccess] = useState(false);
+    const [tripSuccessMessage, setTripSuccessMessage] = useState('');
 
     // State for loading history
     const [loadingHistory, setLoadingHistory] = useState(false)
@@ -160,36 +146,39 @@ export default function BookingUi() {
     // ✅ NEW: State for Pre-Chat Modal
     const [showPreChat, setShowPreChat] = useState(false)
 
-    // ✅ NEW: State for Enhanced WhatsApp Modal
-    const [showEnhancedWhatsApp, setShowEnhancedWhatsApp] = useState(false)
-
     // Flag driver state
     const [flagDriverOverlay, setFlagDriverOverlay] = useState<{
         show: boolean;
         driver: DriverWithVehicle | null;
         vehicle: VehicleLog | null;
     }>({ show: false, driver: null, vehicle: null });
-    const [flagReason, setFlagReason] = useState("");
-    const [flagSubmitting, setFlagSubmitting] = useState(false);
-    const [flagSuccess, setFlagSuccess] = useState("");
+
 
     // Customer geolocation
     const [customerLocation, setCustomerLocation] = useState<{ lat: number; lng: number } | null>(null);
 
     // Check if user has already reviewed
-    const hasUserReviewed = selectedDriver?.comments?.some(comment => comment.userId === currentUserId)
+    const hasUserReviewed = selectedDriver?.comments?.some(comment =>
+        comment.userId === currentUserId ||
+        comment.userEmail === currentUser?.email
+    ) ?? false
+
+    //location settings Panel
+    const [showLocationPanel, setShowLocationPanel] = useState(false);
+
+    // ✅ NEW: Direct Booking & View Mode States
+    const [viewMode, setViewMode] = useState<"customer" | "driver">("customer");
+    const [pendingOffer, setPendingOffer] = useState<DirectOffer | null>(null);
+    const [incomingOffer, setIncomingOffer] = useState<DirectOffer | null>(null);
+    const [showCancelWarning, setShowCancelWarning] = useState(false);
+    const [acceptanceMap, setAcceptanceMap] = useState(false);
+    const [countdown, setCountdown] = useState(0);
+    const [driverResponse, setDriverResponse] = useState<"none" | "cancelled">("none");
 
     // Notifications
     const [notificationCount, setNotificationCount] = useState(0);
     const [notificationType, setNotificationType] = useState<"driver" | "customer">("customer");
     const [isDriver, setIsDriver] = useState(false);
-
-    //location settings Panel
-    const [showLocationPanel, setShowLocationPanel] = useState(false);
-
-    // Trip success message state
-    const [showTripSuccess, setShowTripSuccess] = useState(false);
-    const [tripSuccessMessage, setTripSuccessMessage] = useState('');
 
     // OWN VEHICLE SELECTOR STATE
     const [ownVehicles, setOwnVehicles] = useState<VehicleLog[]>([])
@@ -243,6 +232,9 @@ export default function BookingUi() {
                 const userData = userDoc.data();
                 const driverStatus = userData.isDriver || false;
                 setIsDriver(driverStatus);
+                if (driverStatus) {
+                    setViewMode("driver");
+                }
                 setNotificationType(driverStatus ? "driver" : "customer");
 
                 // Notification counts for drivers
@@ -327,7 +319,7 @@ export default function BookingUi() {
                             // Broaden filter: car should be approved OR simply available (but not rejected/maintenance)
                             const isApproved = vData.status === 'approved' || vData.isApproved === true;
                             const isAvailable = vData.status === 'available';
-                            
+
                             if (isApproved || isAvailable) {
                                 myVehiclesList.push({
                                     id: vDoc.id,
@@ -726,20 +718,35 @@ export default function BookingUi() {
                 return haversineDistance(customerLocation.lat, customerLocation.lng, driver.location.latitude, driver.location.longitude);
             };
 
+            // NEW PRIORITY SORTING:
+            // 1. Verified + VIP (Ranked by Level)
+            // 2. Verified + Star Ratings
+            // 3. Verified
+            // 4. Non-Verified
+            // All buckets sorted by distance within the bucket.
+
+            const getPriorityRank = (driver: DriverWithVehicle): number => {
+                const vipLevel = Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
+                if (driver.verified && vipLevel > 0) return 0; // Top Priority
+                if (driver.verified && (driver.averageRating || 0) > 0) return 1;
+                if (driver.verified) return 2;
+                return 3; // Lowest
+            };
+
             driversWithVehiclesList.sort((a, b) => {
-                const getEffectiveVipLevel = (driver: DriverWithVehicle): number =>
-                    Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
+                const rankA = getPriorityRank(a);
+                const rankB = getPriorityRank(b);
 
-                const aVip = getEffectiveVipLevel(a);
-                const bVip = getEffectiveVipLevel(b);
+                if (rankA !== rankB) return rankA - rankB;
 
-                // 1. Higher VIP first
-                if (aVip !== bVip) return bVip - aVip;
+                // Within same rank, sort by VIP level if applicable
+                if (rankA === 0) {
+                    const vipA = Math.max(a.vipLevel || 0, a.purchasedVipLevel || 0);
+                    const vipB = Math.max(b.vipLevel || 0, b.purchasedVipLevel || 0);
+                    if (vipA !== vipB) return vipB - vipA;
+                }
 
-                // 2. Same VIP: verified first
-                if (a.verified !== b.verified) return a.verified ? -1 : 1;
-
-                // 3. Same VIP + verified: closest first
+                // Finally sort by distance
                 return getDriverDistance(a) - getDriverDistance(b);
             });
 
@@ -836,13 +843,6 @@ export default function BookingUi() {
         setSelectedDriver(driver)
         setSelectedVehicle(vehicle)
         setShowPreChat(true)
-    }
-
-    // ✅ NEW: Handle Enhanced WhatsApp button click
-    const handleEnhancedWhatsAppClick = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
-        setSelectedDriver(driver)
-        setSelectedVehicle(vehicle)
-        setShowEnhancedWhatsApp(true)
     }
 
     // Check if user can save (10-minute cooldown)
@@ -1047,62 +1047,9 @@ export default function BookingUi() {
         setReviewForm(prev => ({ ...prev, rating }))
     }
 
-    // Handle complain button
-    const handleComplain = (driverName: string, vehicle: VehicleLog) => {
-        setSelectDriver(`${driverName} - ${vehicle.carName} ${vehicle.carModel}`)
-        const complainsDiv = document.getElementById('complain');
-        if (complainsDiv) {
-            complainsDiv.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-    }
-
     // Handle flag driver - opens overlay
     const handleFlagDriver = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
         setFlagDriverOverlay({ show: true, driver, vehicle });
-        setFlagReason("");
-        setFlagSuccess("");
-    };
-
-    // Submit flag to Firestore complains collection
-    const submitFlag = async () => {
-        if (!flagReason.trim()) return;
-        if (!flagDriverOverlay.driver || !currentUser) return;
-        setFlagSubmitting(true);
-        try {
-            const driver = flagDriverOverlay.driver;
-            const vehicle = flagDriverOverlay.vehicle;
-            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-            const userData = userDoc.data();
-            await addDoc(collection(db, "complains"), {
-                targetType: "driver",
-                targetId: driver.uid || driver.id,
-                targetUid: driver.uid || driver.id,
-                targetName: driver.fullName || `${driver.firstName} ${driver.lastName}`,
-                targetEmail: driver.email,
-                targetPhone: driver.phoneNumber,
-                reporterUid: currentUser.uid,
-                reporterName: userData?.fullName || currentUser.email || "Customer",
-                reportedBy: "customer",
-                reason: flagReason,
-                vehicleInfo: vehicle ? `${vehicle.carName} ${vehicle.carModel}` : "",
-                message: flagReason,
-                name: userData?.fullName || currentUser.email || "Customer",
-                email: currentUser.email || "",
-                phone: userData?.phoneNumber || "",
-                status: "unread",
-                createdAt: Timestamp.now(),
-            });
-            setFlagSuccess("Flag submitted. Our team will review this report.");
-            setTimeout(() => {
-                setFlagDriverOverlay({ show: false, driver: null, vehicle: null });
-                setFlagReason("");
-                setFlagSuccess("");
-            }, 2500);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setFlagSubmitting(false);
-        }
     };
 
     // Handle delete comment
@@ -1131,7 +1078,7 @@ export default function BookingUi() {
 
         try {
             const commentToDelete = showDeleteConfirm.comment
-            const driverDocRef = doc(db, "users", selectedDriver.id)
+            const driverDocRef = doc(db, "users", selectedDriver.uid)
 
             // Remove the comment from the array
             await updateDoc(driverDocRef, {
@@ -1232,7 +1179,7 @@ export default function BookingUi() {
         if (hasUserReviewed) {
             setReviewMessage({
                 type: "error",
-                text: "You have already reviewed this driver. You can delete your existing review to submit a new one."
+                text: "You have already reviewed this driver."
             })
             return
         }
@@ -1245,8 +1192,19 @@ export default function BookingUi() {
             return
         }
 
+        setIsSubmittingReview(true)
         try {
-            const driverDocRef = doc(db, "users", selectedDriver.id)
+            // CRITICAL FIX: Use the correct driver document ID
+            // The driver document in 'users' collection uses the document ID, not necessarily the uid field
+            const driverDocId = selectedDriver.id || selectedDriver.uid;
+
+            console.log("Attempting to save review for driver:", {
+                driverDocId,
+                driverName: selectedDriver.fullName,
+                currentUserId: currentUser.uid
+            });
+
+            const driverDocRef = doc(db, "users", driverDocId)
 
             // Get user's fullName from Firestore
             const userDocRef = doc(db, "users", currentUser.uid);
@@ -1265,6 +1223,10 @@ export default function BookingUi() {
                     const nameParts = userName.split(' ');
                     firstName = nameParts[0] || "User";
                     lastName = nameParts.slice(1).join(' ') || "";
+                } else if (userData.firstName) {
+                    firstName = userData.firstName;
+                    lastName = userData.lastName || "";
+                    userName = `${firstName} ${lastName}`.trim();
                 }
             }
 
@@ -1279,19 +1241,35 @@ export default function BookingUi() {
                 createdAt: Timestamp.now()
             }
 
+            // Get current driver data to verify the document exists
+            const driverDoc = await getDoc(driverDocRef);
+            if (!driverDoc.exists()) {
+                throw new Error(`Driver document not found for ID: ${driverDocId}`);
+            }
+
+            console.log("Driver document found, current comments:", driverDoc.data().comments);
+
+            // Update the driver document with the new comment
             await updateDoc(driverDocRef, {
                 comments: arrayUnion(newComment),
                 ratings: arrayUnion(reviewForm.rating)
             })
 
-            const updatedRatings = [...(selectedDriver.ratings || []), reviewForm.rating]
-            const newAverageRating = updatedRatings.reduce((a, b) => a + b, 0) / updatedRatings.length
+            // Get updated ratings to calculate new average
+            const driverData = driverDoc.data();
+            const existingRatings = driverData.ratings || [];
+            const updatedRatings = [...existingRatings, reviewForm.rating];
+            const newAverageRating = updatedRatings.reduce((a, b) => a + b, 0) / updatedRatings.length;
 
+            // Update average rating and total ratings count
             await updateDoc(driverDocRef, {
                 averageRating: newAverageRating,
                 totalRatings: updatedRatings.length
             })
 
+            console.log("Review saved successfully. New average rating:", newAverageRating);
+
+            // Update local state for selectedDriver
             setSelectedDriver(prev => {
                 if (!prev) return null
                 return {
@@ -1303,8 +1281,9 @@ export default function BookingUi() {
                 }
             })
 
+            // Update local state for driversWithVehicles
             setDriversWithVehicles(prev => prev.map(driver => {
-                if (driver.id === selectedDriver.id) {
+                if (driver.id === selectedDriver.id || driver.uid === selectedDriver.uid) {
                     return {
                         ...driver,
                         comments: [...(driver.comments || []), newComment],
@@ -1316,6 +1295,7 @@ export default function BookingUi() {
                 return driver
             }))
 
+            // Reset review form
             setReviewForm({
                 comment: "",
                 rating: 0
@@ -1335,15 +1315,15 @@ export default function BookingUi() {
             console.error("Error posting review:", error)
             setReviewMessage({
                 type: "error",
-                text: "Failed to post review. Please try again."
+                text: `Failed to post review: ${error instanceof Error ? error.message : "Please try again."}`
             })
-
             setTimeout(() => {
                 setReviewMessage({ type: "", text: "" })
             }, 5000)
+        } finally {
+            setIsSubmittingReview(false)
         }
     }
-
 
     // Function to re-open driver details from quick view
     const handleQuickViewClick = () => {
@@ -1602,6 +1582,166 @@ export default function BookingUi() {
         }
     };
 
+    // ✅ NEW: Direct Booking Flow Logic (Customer)
+    const handleBookNow = async (driver: DriverWithVehicle, vehicle: VehicleLog) => {
+        if (!currentUser) {
+            setTripSuccessMessage('Please sign in to book a car');
+            setShowTripSuccess(true);
+            setTimeout(() => setShowTripSuccess(false), 3000);
+            return;
+        }
+
+        try {
+            const offerData: any = {
+                customerId: currentUser.uid,
+                customerName: currentUser.displayName || 'Customer',
+                driverId: driver.uid,
+                driverName: driver.fullName || `${driver.firstName} ${driver.lastName}`,
+                vehicleId: vehicle.id,
+                status: 'pending',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                customerLocation: customerLocation ? {
+                    lat: customerLocation.lat,
+                    lng: customerLocation.lng
+                } : null,
+                pickupLocation: '', // Can be enhanced later
+                destination: '',
+            };
+
+            const docRef = await addDoc(collection(db, 'directOffers'), offerData);
+            setPendingOffer({ ...offerData, id: docRef.id });
+            setCountdown(8); // 8 second timeout logic (visual)
+        } catch (error) {
+            console.error('Error creating booking offer:', error);
+        }
+    };
+
+    const cancelOffer = async (offerId: string) => {
+        try {
+            await updateDoc(doc(db, 'directOffers', offerId), {
+                status: 'cancelled',
+                updatedAt: serverTimestamp()
+            });
+            setPendingOffer(null);
+            setShowCancelWarning(false);
+        } catch (error) {
+            console.error('Error cancelling offer:', error);
+        }
+    };
+
+    // ✅ NEW: Direct Booking Flow Logic (Driver)
+    const handleAcceptOffer = async (offer: DirectOffer) => {
+        try {
+            await updateDoc(doc(db, 'directOffers', offer.id), {
+                status: 'accepted',
+                updatedAt: serverTimestamp()
+            });
+            // acceptanceMap will be triggered via snapshot
+        } catch (error) {
+            console.error('Error accepting offer:', error);
+        }
+    };
+
+    const handleRejectOffer = async (offer: DirectOffer) => {
+        try {
+            await updateDoc(doc(db, 'directOffers', offer.id), {
+                status: 'rejected',
+                updatedAt: serverTimestamp()
+            });
+            setIncomingOffer(null);
+        } catch (error) {
+            console.error('Error rejecting offer:', error);
+        }
+    };
+
+    // Listen for Customer's Pending Offers (Persistence & Status)
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const q = query(
+            collection(db, 'directOffers'),
+            where('customerId', '==', currentUser.uid),
+            where('status', 'in', ['pending', 'accepted', 'rejected'])
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                const offer = { ...change.doc.data(), id: change.doc.id } as DirectOffer;
+
+                if (offer.status === 'pending') {
+                    setPendingOffer(offer);
+                    setDriverResponse("none");
+                } else if (offer.status === 'accepted') {
+                    setPendingOffer(offer);
+                    setAcceptanceMap(true);
+                } else if (offer.status === 'rejected' || offer.status === 'timeout') {
+                    setPendingOffer(null);
+                    // Show a briefly Toast or message? 
+                } else if (offer.status === 'cancelled') {
+                    setPendingOffer(null);
+                }
+            });
+
+            // Initial load for persistence
+            if (snapshot.empty) {
+                setPendingOffer(null);
+            } else {
+                const activeOffer = snapshot.docs.find(d => d.data().status === 'pending' || d.data().status === 'accepted');
+                if (activeOffer) {
+                    const data = { ...activeOffer.data(), id: activeOffer.id } as DirectOffer;
+                    setPendingOffer(data);
+                    if (data.status === 'accepted') setAcceptanceMap(true);
+                }
+            }
+        });
+
+        return () => unsubscribe();
+    }, [currentUser]);
+
+    // Listen for Driver's Incoming Offers
+    useEffect(() => {
+        if (!currentUser || !isDriver) return;
+
+        const q = query(
+            collection(db, 'directOffers'),
+            where('driverId', '==', currentUser.uid),
+            where('status', 'in', ['pending', 'cancelled'])
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                const offer = { ...change.doc.data(), id: change.doc.id } as DirectOffer;
+                if (offer.status === 'pending') {
+                    setIncomingOffer(offer);
+                    setDriverResponse("none");
+                } else if (offer.status === 'cancelled') {
+                    setDriverResponse("cancelled");
+                }
+            });
+
+            if (snapshot.empty) {
+                setIncomingOffer(null);
+            } else {
+                const active = snapshot.docs.find(d => d.data().status === 'pending');
+                if (active) setIncomingOffer({ ...active.data(), id: active.id } as DirectOffer);
+            }
+        });
+
+        return () => unsubscribe();
+    }, [currentUser, isDriver]);
+
+    // Countdown Timer logic for Customer
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (pendingOffer && pendingOffer.status === 'pending' && countdown > 0) {
+            timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+        } else if (countdown === 0 && pendingOffer && pendingOffer.status === 'pending') {
+            // Optional: Auto-timeout on Firestore?
+        }
+        return () => clearTimeout(timer);
+    }, [countdown, pendingOffer]);
+
     // Check for active trips on component mount
     useEffect(() => {
         const checkActiveTrips = async () => {
@@ -1666,97 +1806,267 @@ export default function BookingUi() {
     // MAIN RETURN PAGE
     return (
         <>
-            <div className="p-2 px-1 md:p-5 md:pt-0 relative bg-[#F9FAF9]">
-                {/* Select Car Page */}
-                <div className="p-2 md:p-8 mx-auto max-w-6xl bg-white rounded-lg shadow-md">
-
-                    <QuickViewHistory 
-                        quickViewHistory={quickViewHistory}
-                        driverInfo={driverInfo}
-                        handleQuickViewClick={handleQuickViewClick}
-                        handleClearQuickView={handleClearQuickView}
-                        formatDate={formatDate}
-                    />
-
-                    {isDriver && ownVehicles.length > 1 && (
-                        <SubtleDriverNotice />
-                    )}
-
-                    {isDriver && ownVehicles.length > 1 && (
-                        <div className="bg-gray-950 p-1.5 rounded-xl mb-4 shadow-2xl border border-gray-800">
-                            <MyVehiclesSelector 
-                                vehicles={ownVehicles}
-                                selectedVehicleId={activeOwnVehicleId}
-                                onSelect={handleOwnVehicleSelect}
+            {/* ✅ NEW: Full-screen Acceptance Map Overlay */}
+            {acceptanceMap && pendingOffer && (
+                <div className="fixed inset-0 z-[200] bg-black">
+                    <div className="absolute top-6 right-6 z-[210]">
+                        <button
+                            onClick={() => setShowCancelWarning(true)}
+                            className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 shadow-2xl transition-all"
+                        >
+                            Cancel Request
+                        </button>
+                    </div>
+                    {/* Placeholder for the real Map - integrating with existing map tools if possible */}
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900">
+                        <div className="text-center text-white mb-8">
+                            <h2 className="text-2xl font-black uppercase tracking-widest mb-2">Driver En Route</h2>
+                            <p className="text-gray-400">Driver {pendingOffer.driverName} has accepted your request.</p>
+                        </div>
+                        <div className="w-full max-w-4xl h-[60vh] rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative">
+                            <BookingTrackingMap
+                                pickup={{ lat: pendingOffer.customerLocation?.lat || 0, lng: pendingOffer.customerLocation?.lng || 0, address: "Your Location" }}
+                                driver={{ lat: 9.0765, lng: 7.3986, address: "Driver Location" }} // Mock driver loc
                             />
                         </div>
-                    )}
-
-                    <SearchFilters 
-                        searchLocation={searchLocation}
-                        setSearchLocation={setSearchLocation}
-                        selectedCategory={selectedCategory}
-                        setSelectedCategory={setSelectedCategory}
-                        showACOnly={showACOnly}
-                        setShowACOnly={setShowACOnly}
-                        showVerifiedOnly={showVerifiedOnly}
-                        setShowVerifiedOnly={setShowVerifiedOnly}
-                        filteredDriversCount={filteredDrivers.length}
-                    />
-
-                    <BookingGrid 
-                        filteredDrivers={filteredDrivers}
-                        currentUser={currentUser}
-                        customerLocation={customerLocation}
-                        onSelect={handleDriverSelect}
-                        onPreChat={handlePreChatClick}
-                        onWhatsApp={(d, v) => d.whatsappPreferred ? handleEnhancedWhatsAppClick(d, v) : handleWhatsAppMessage(d, v)}
-                        onCall={handlePhoneCall}
-                        onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
-                    />
+                    </div>
                 </div>
-            <DriverDetailsModal 
-                show={driverInfo}
-                driver={selectedDriver as DriverWithVehicle}
-                vehicle={selectedVehicle as VehicleLog}
-                currentUser={currentUser}
-                activeTrip={activeTrip}
-                saveMessage={saveMessage}
-                showDeleteConfirm={showDeleteConfirm}
-                tripInfo={{
-                    showForm: tripInfo.showForm || false,
-                    pickupLocation: tripInfo.pickupLocation,
-                    destination: tripInfo.destination
-                }}
-                reviewForm={reviewForm}
-                hoverRating={hoverRating}
-                hasUserReviewed={hasUserReviewed || false}
-                currentUserId={currentUserId}
-                mainImage={mainImage}
-                onClose={handleCloseDriverInfo}
-                onSaveDriver={handleSaveDriver}
-                onStartTrip={startTrip}
-                onUpdateTripStatus={updateTripStatus}
-                onDeleteComment={handleDeleteComment}
-                onConfirmDeleteComment={confirmDeleteComment}
-                onCancelDeleteComment={cancelDeleteComment}
-                onReviewSubmit={handleReviewSubmit}
-                onReviewChange={handleReviewChange}
-                onRatingClick={handleRatingClick}
-                onSetHoverRating={setHoverRating}
-                onSetMainImage={setMainImage}
-                onSetTripInfo={setTripInfo}
-                onSetDriverInfo={setDriverInfo}
-                onSetPreChat={setShowPreChat}
-                onSetEnhancedWhatsApp={setShowEnhancedWhatsApp}
-                onPhoneCall={handlePhoneCall}
-                onWhatsAppMessage={handleWhatsAppMessage}
-                getDriverAddress={getDriverAddress}
-                getDriverLocation={getDriverLocation}
-                canSaveDriver={canSaveDriver}
-                formatDate={formatDate}
-                onSetVehicle={setSelectedVehicle}
-            />
+            )}
+
+            {/* ✅ NEW: Waiting for Driver Overlay */}
+            {pendingOffer && pendingOffer.status === 'pending' && (
+                <div className="fixed inset-0 z-[180] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 text-center shadow-2xl">
+                        <div className="relative w-32 h-32 mx-auto mb-8">
+                            <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
+                            <div
+                                className="absolute inset-0 border-4 border-blue-500 rounded-full animate-spin border-t-transparent"
+                                style={{ animationDuration: '2s' }}
+                            ></div>
+                            <div className="absolute inset-0 flex items-center justify-center text-4xl font-black text-white">
+                                {countdown}
+                            </div>
+                        </div>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Waiting for Driver</h3>
+                        <p className="text-gray-400 text-sm mb-8">Driver is reviewing your booking request. Please stay on this page.</p>
+                        <button
+                            onClick={() => setShowCancelWarning(true)}
+                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-red-400 font-bold rounded-2xl transition-all border border-red-500/20"
+                        >
+                            Cancel Request
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: Cancel Warning Card Overlay */}
+            {showCancelWarning && (
+                <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="max-w-sm w-full bg-white rounded-[2rem] p-8 text-center shadow-2xl">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FaExclamationTriangle className="text-red-600 text-3xl" />
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900 mb-2">Cancel booking?</h3>
+                        <p className="text-gray-500 text-sm mb-8">Are you sure you want to cancel this booking request? This action cannot be undone.</p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowCancelWarning(false)}
+                                className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+                            >
+                                No, Wait
+                            </button>
+                            <button
+                                onClick={() => pendingOffer && cancelOffer(pendingOffer.id)}
+                                className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-lg shadow-red-500/20"
+                            >
+                                Yes, Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="px-4 pt-3 relative bg-[#F9FAF9]">
+                {/* ✅ NEW: View Mode Toggles */}
+                {isDriver && (
+                    <div className="max-w-6xl mx-auto mb-3 flex flex-col md:flex-row gap-2 md:inline-flex w-full md:w-auto">
+                        <button
+                            onClick={() => setViewMode("driver")}
+                            className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "driver"
+                                ? "bg-amber-500 text-black border-amber-500 shadow-xl"
+                                : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
+                                }`}
+                        >
+                            <FaCar size={14} />
+                            Requests
+                        </button>
+                        <button
+                            onClick={() => setViewMode("customer")}
+                            className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "customer"
+                                ? "bg-gray-900 text-white border-gray-900 shadow-xl"
+                                : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
+                                }`}
+                        >
+                            <FaSearch size={14} />
+                            Bookings
+                        </button>
+                    </div>
+                )}
+
+                {/* Main Content Area */}
+                <div className="pt-0 pb-20 px-0  mx-auto max-w-6xl bg-white shadow-md min-h-[40rem]">
+
+                    {viewMode === 'customer' ? (
+                        <>
+                            <QuickViewHistory
+                                quickViewHistory={quickViewHistory}
+                                driverInfo={driverInfo}
+                                handleQuickViewClick={handleQuickViewClick}
+                                handleClearQuickView={handleClearQuickView}
+                                formatDate={formatDate}
+                            />
+
+
+                            <SearchFilters
+                                searchLocation={searchLocation}
+                                setSearchLocation={setSearchLocation}
+                                selectedCategory={selectedCategory}
+                                setSelectedCategory={setSelectedCategory}
+                                showACOnly={showACOnly}
+                                setShowACOnly={setShowACOnly}
+                                showVerifiedOnly={showVerifiedOnly}
+                                setShowVerifiedOnly={setShowVerifiedOnly}
+                                filteredDriversCount={filteredDrivers.length}
+                            />
+
+                            <div className="px-3">
+                                <BookingGrid
+                                    filteredDrivers={filteredDrivers}
+                                    currentUser={currentUser}
+                                    customerLocation={customerLocation}
+                                    onBook={handleBookNow}
+                                    onSelect={handleDriverSelect}
+                                    onPreChat={handlePreChatClick}
+                                    onWhatsApp={(d, v) => handleWhatsAppMessage(d, v)}
+                                    onCall={handlePhoneCall}
+                                    onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="relative">
+                            {/* Incoming Offer Switch Logic */}
+                            {incomingOffer ? (
+                                <div className="animate-in fade-in zoom-in duration-500">
+                                    {driverResponse === 'cancelled' ? (
+                                        <div className="bg-red-50 border border-red-100 rounded-[2.5rem] p-12 text-center relative overflow-hidden">
+                                            <button
+                                                onClick={() => setIncomingOffer(null)}
+                                                className="absolute top-6 right-6 p-3 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-all"
+                                            >
+                                                <FaTimes />
+                                            </button>
+                                            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                                <FaTimesCircle className="text-red-500 text-3xl" />
+                                            </div>
+                                            <h3 className="text-2xl font-black text-red-900 uppercase">Request Cancelled</h3>
+                                            <p className="text-red-700/70 mt-2">The customer cancelled this request at the last minute.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="p-2 sm:p-3 rounded-[3rem] bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 shadow-2xl animate-pulse min-h-[400px] flex items-center justify-center max-w-4xl mx-auto">
+                                            <div className="bg-white rounded-[2.8rem] p-10 sm:p-16 text-center w-full">
+                                                <p className="text-xs font-black uppercase tracking-[0.4em] text-amber-600 mb-6 drop-shadow-sm">New Booking Offer</p>
+                                                <h3 className="text-4xl sm:text-5xl font-black text-gray-900 mb-4 leading-tight tracking-tighter">
+                                                    {incomingOffer.customerName} <span className="text-amber-500">wants to book you!</span>
+                                                </h3>
+                                                <p className="text-gray-500 text-lg mb-12 font-medium">Review and accept the request below to see the location.</p>
+
+                                                <div className="flex flex-col sm:flex-row gap-4 max-w-2xl mx-auto">
+                                                    <button
+                                                        onClick={() => handleRejectOffer(incomingOffer)}
+                                                        className="flex-1 py-6 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 font-black tracking-widest uppercase rounded-[2rem] transition-all text-sm"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleAcceptOffer(incomingOffer)}
+                                                        className="flex-1 py-6 bg-gray-900 hover:bg-black text-white font-black tracking-widest uppercase rounded-[2rem] transition-all shadow-2xl text-sm"
+                                                    >
+                                                        Accept Offer
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <>
+                                    {ownVehicles.length > 0 ? (
+                                        <div className="p-5 space-y-6">
+                                            <div className="flex items-center justify-between px-2">
+                                                <h2 className="text-xl font-black text-emerald-700 uppercase tracking-tight">Your Active Fleet</h2>
+                                                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{ownVehicles.length} Vehicles</span>
+                                            </div>
+                                            <MyVehiclesSelector
+                                                vehicles={ownVehicles}
+                                                selectedVehicleId={activeOwnVehicleId}
+                                                onSelect={handleOwnVehicleSelect}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-20 bg-gray-50 rounded-[2.5rem] border border-dashed border-gray-200">
+                                            <FaCar className="text-5xl text-gray-200 mx-auto mb-4" />
+                                            <p className="text-gray-400 font-medium">No vehicles registered to your account.</p>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <DriverDetailsModal
+                    show={driverInfo}
+                    driver={selectedDriver as DriverWithVehicle}
+                    vehicle={selectedVehicle as VehicleLog}
+                    currentUser={currentUser}
+                    activeTrip={activeTrip}
+                    saveMessage={saveMessage}
+                    showDeleteConfirm={showDeleteConfirm}
+                    tripInfo={{
+                        showForm: tripInfo.showForm || false,
+                        pickupLocation: tripInfo.pickupLocation,
+                        destination: tripInfo.destination
+                    }}
+                    reviewForm={reviewForm}
+                    hoverRating={hoverRating}
+                    hasUserReviewed={hasUserReviewed || false}
+                    currentUserId={currentUserId}
+                    mainImage={mainImage}
+                    onClose={handleCloseDriverInfo}
+                    onSaveDriver={handleSaveDriver}
+                    onStartTrip={startTrip}
+                    onUpdateTripStatus={updateTripStatus}
+                    onDeleteComment={handleDeleteComment}
+                    onConfirmDeleteComment={confirmDeleteComment}
+                    onCancelDeleteComment={cancelDeleteComment}
+                    onReviewSubmit={handleReviewSubmit}
+                    onReviewChange={handleReviewChange}
+                    onRatingClick={handleRatingClick}
+                    onSetHoverRating={setHoverRating}
+                    onSetMainImage={setMainImage}
+                    onSetTripInfo={setTripInfo}
+                    onSetDriverInfo={setDriverInfo}
+                    onSetPreChat={setShowPreChat}
+                    isSubmittingReview={isSubmittingReview}
+                    onPhoneCall={handlePhoneCall}
+                    onWhatsAppMessage={handleWhatsAppMessage}
+                    getDriverAddress={getDriverAddress}
+                    getDriverLocation={getDriverLocation}
+                    canSaveDriver={canSaveDriver}
+                    formatDate={formatDate}
+                    onSetVehicle={setSelectedVehicle}
+                />
 
                 {/* ✅ NEW: Pre-Chat Modal */}
                 {showPreChat && selectedDriver && selectedVehicle && (
@@ -1775,31 +2085,6 @@ export default function BookingUi() {
                                     phone: selectedDriver.phoneNumber,
                                 }}
                                 onClose={() => setShowPreChat(false)}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* ✅ NEW: Enhanced WhatsApp Modal */}
-                {showEnhancedWhatsApp && selectedDriver && selectedVehicle && (
-                    <div className="fixed inset-0 bg-[rgba(0,0,0,0.75)] bg-opacity-70 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl max-w-[50rem] w-full max-h-[90vh] overflow-y-auto">
-                            <EnhancedWhatsApp
-                                car={{
-                                    id: selectedVehicle.id,
-                                    title: `${selectedVehicle.carName} ${selectedVehicle.carModel}`,
-                                    price: 0,
-                                    model: selectedVehicle.carModel,
-                                    year: "", 
-                                }}
-                                driver={{
-                                    id: selectedDriver.id,
-                                    name: selectedDriver.firstName,
-                                    phone: selectedDriver.phoneNumber,
-                                    rating: selectedDriver.averageRating || 0,
-                                    trips: selectedDriver.customersCarried?.length || 0,
-                                }}
-                                onClose={() => setShowEnhancedWhatsApp(false)}
                             />
                         </div>
                     </div>

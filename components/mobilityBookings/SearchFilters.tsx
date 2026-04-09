@@ -1,6 +1,6 @@
 "use client"
 import React from 'react';
-import { FaSearch, FaSnowflake, FaCheckCircle } from 'react-icons/fa';
+import { FaSearch, FaSnowflake, FaCheckCircle, FaFilter } from 'react-icons/fa';
 
 interface SearchFiltersProps {
     searchLocation: string;
@@ -26,73 +26,76 @@ export default function SearchFilters({
     filteredDriversCount
 }: SearchFiltersProps) {
     return (
-        <div className="mt-8 mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-1 lg:grid-cols-4 md:items-center gap-4">
+        <div className=" mb-6 p-3 sm:p-6 bg-gray-950 border border-white/5 shadow-xl">
+            <div className="flex items-center gap-2 mb-4">
+                <FaFilter className="text-purple-400 text-xs" />
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">Filter Vehicles</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+
                 {/* Search Location */}
                 <div className="relative">
+                    <FaSearch className="absolute top-1/2 left-4 -translate-y-1/2 text-purple-500 text-xs pointer-events-none" />
                     <input
                         type="text"
-                        placeholder="Search by city, state, or location..."
+                        placeholder="City, state or location..."
                         value={searchLocation}
                         onChange={(e) => setSearchLocation(e.target.value)}
-                        className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 placeholder:text-gray-400 placeholder:text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-white/10 rounded-xl text-white text-sm placeholder:text-gray-600 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 outline-none transition-all"
                     />
-                    <FaSearch className="absolute top-5 left-3 text-gray-400" />
                 </div>
 
-                {/* Select Car category */}
+                {/* Car Category */}
                 <div>
                     <select
-                        className="text-gray-700 outline-blue-600 w-full p-3 border-2 border-gray-300 rounded-lg"
-                        name="category"
-                        id="category"
+                        className="w-full px-4 py-3 bg-gray-900 border border-white/10 rounded-xl text-white text-sm focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 outline-none transition-all appearance-none cursor-pointer"
                         value={selectedCategory}
                         onChange={(e) => setSelectedCategory(e.target.value)}
                     >
-                        <option value="all">All Categories</option>
-                        <option value="sedan">Sedan</option>
-                        <option value="bus">Bus</option>
-                        <option value="suv">SUV</option>
-                        <option value="truck">Truck</option>
-                        <option value="van">Van</option>
-                        <option value="keke">Keke</option>
-                        <option value="luxury">Luxury</option>
+                        <option value="all" className="bg-gray-900">All Categories</option>
+                        <option value="sedan" className="bg-gray-900">Sedan</option>
+                        <option value="bus" className="bg-gray-900">Bus</option>
+                        <option value="suv" className="bg-gray-900">SUV</option>
+                        <option value="truck" className="bg-gray-900">Truck</option>
+                        <option value="van" className="bg-gray-900">Van</option>
+                        <option value="keke" className="bg-gray-900">Keke</option>
+                        <option value="luxury" className="bg-gray-900">Luxury</option>
                     </select>
                 </div>
 
-                {/* Filter Checkboxes */}
-                <div className="flex flex-col space-y-2">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={showACOnly}
-                            onChange={(e) => setShowACOnly(e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-gray-700 font-medium flex items-center">
-                            <FaSnowflake className="mr-2 text-blue-500" />
-                            AC Cars Only
-                        </span>
-                    </label>
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={showVerifiedOnly}
-                            onChange={(e) => setShowVerifiedOnly(e.target.checked)}
-                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                        />
-                        <span className="text-gray-700 font-medium flex items-center">
-                            <FaCheckCircle className="mr-2 text-green-500" />
-                            Verified Drivers Only
-                        </span>
-                    </label>
+                {/* Toggle Filters */}
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowACOnly(!showACOnly)}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${showACOnly
+                            ? 'bg-blue-500/20 border-blue-400/50 text-blue-300'
+                            : 'bg-gray-900 border-white/10 text-gray-500 hover:border-white/20 hover:text-gray-300'
+                            }`}
+                    >
+                        <FaSnowflake className={showACOnly ? 'text-blue-400' : 'text-gray-600'} />
+                        AC Only
+                    </button>
+                    <button
+                        onClick={() => setShowVerifiedOnly(!showVerifiedOnly)}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${showVerifiedOnly
+                            ? 'bg-green-500/20 border-green-400/50 text-green-300'
+                            : 'bg-gray-900 border-white/10 text-gray-500 hover:border-white/20 hover:text-gray-300'
+                            }`}
+                    >
+                        <FaCheckCircle className={showVerifiedOnly ? 'text-green-400' : 'text-gray-600'} />
+                        Verified
+                    </button>
                 </div>
 
                 {/* Results Count */}
-                <div className="flex items-center justify-end">
-                    <span className="text-gray-600 font-semibold">
-                        {filteredDriversCount} {filteredDriversCount === 1 ? 'car' : 'cars'} available
-                    </span>
+                <div className="w-full flex items-center justify-end">
+                    <div className="w-full flex items-center justify-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                        <span className="text-purple-300 font-black text-sm">
+                            {filteredDriversCount} <span className="text-[10px] text-purple-400/70 uppercase tracking-widest">{filteredDriversCount === 1 ? 'car' : 'cars'} found</span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

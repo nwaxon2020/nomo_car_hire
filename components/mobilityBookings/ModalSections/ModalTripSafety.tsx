@@ -11,7 +11,7 @@ interface ModalTripSafetyProps {
     tripInfo: { showForm: boolean; pickupLocation: string; destination: string };
     setTripInfo: (val: any) => void;
     startTrip: (d: string, v: string, p: string, dest: string) => Promise<string | null>;
-    updateTripStatus: (id: string, s: string) => Promise<void>;
+    updateTripStatus: (id: string, s: 'completed' | 'cancelled') => Promise<void>;
     handleSaveDriver: () => void;
     canSaveDriver: (dId: string, vId: string) => { canSave: boolean };
     setDriverInfo: (v: boolean) => void;

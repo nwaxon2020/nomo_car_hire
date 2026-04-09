@@ -8,6 +8,7 @@ interface BookingGridProps {
     filteredDrivers: { driver: DriverWithVehicle; vehicle: VehicleLog }[];
     currentUser: any;
     customerLocation: { lat: number; lng: number } | null;
+    onBook: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onSelect: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onPreChat: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onWhatsApp: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
@@ -19,6 +20,7 @@ export default function BookingGrid({
     filteredDrivers,
     currentUser,
     customerLocation,
+    onBook,
     onSelect,
     onPreChat,
     onWhatsApp,
@@ -42,6 +44,7 @@ export default function BookingGrid({
                             vehicle={vehicle}
                             currentUser={currentUser}
                             customerLocation={customerLocation}
+                            onBook={onBook}
                             onSelect={onSelect}
                             onPreChat={onPreChat}
                             onWhatsApp={onWhatsApp}

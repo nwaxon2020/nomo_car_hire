@@ -154,6 +154,26 @@ export interface Trip {
     };
 }
 
+export interface DirectOffer {
+    id: string;
+    customerId: string;
+    customerName: string;
+    driverId: string;
+    driverName: string;
+    vehicleId: string;
+    status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'timeout';
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    customerLocation?: {
+        lat: number;
+        lng: number;
+        address?: string;
+    };
+    fare?: number;
+    pickupLocation?: string;
+    destination?: string;
+}
+
 export const VIP_CONFIG = {
     levels: [
         { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },

@@ -18,16 +18,16 @@ export default function ModalVehicleInfo({
 }: ModalVehicleInfoProps) {
     return (
         <div>
-            <h3 className="text-lg font-bold text-white mb-4">Vehicle Information</h3>
+            <h3 className="text-md md:text-lg font-bold text-white mb-4">Vehicle Information</h3>
             <div className="bg-gray-800 rounded-lg p-5">
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <p className="text-gray-400 text-sm">Car Name</p>
-                        <p className="font-bold text-white">{vehicle.carName}</p>
+                        <p className="text-gray-400 text-xs md:text-sm">Car Name</p>
+                        <p className="font-bold text-white text-xs md:text-sm">{vehicle.carName}</p>
                     </div>
                     <div>
-                        <p className="text-gray-400 text-sm">Model</p>
-                        <p className="font-bold text-white">{vehicle.carModel}</p>
+                        <p className="text-gray-400 text-xs md:text-sm">Model</p>
+                        <p className="font-bold text-white text-xs md:text-sm">{vehicle.carModel}</p>
                     </div>
                     <div>
                         <p className="text-gray-400 text-sm">Type</p>
@@ -50,8 +50,8 @@ export default function ModalVehicleInfo({
                 </div>
 
                 <div className="mt-4">
-                    <p className="text-gray-400 text-sm mb-2">Description</p>
-                    <p className="text-gray-300">{vehicle.description}</p>
+                    <p className="text-gray-400 text-sm">Description</p>
+                    <p className="text-base text-gray-300">{vehicle.description}</p>
                 </div>
 
                 {/* Other Vehicles */}

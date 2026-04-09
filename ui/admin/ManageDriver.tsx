@@ -5,18 +5,14 @@ import Link from "next/link";
 import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/firestore";
 import DriverCard from "@/components/adminManageDrivers/DriverCard";
 import DriverProfileView from "@/components/adminManageDrivers/DriverProfileView";
-import ComplaintsPanel from "@/components/adminManageDrivers/ComplaintsPanel";
-import { FaSearch, FaFlag, FaCalendarAlt, FaExclamationTriangle, FaCommentAlt } from "react-icons/fa";
+import { FaSearch, FaCalendarAlt } from "react-icons/fa";
 import { FiNavigation } from "react-icons/fi"
 
 export default function AdminDriversPage() {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [filterThreeFlags, setFilterThreeFlags] = useState(false);
-  const [filterAnyFlags, setFilterAnyFlags] = useState(false);
   const [filterNewOnly, setFilterNewOnly] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
-  const [showComplaints, setShowComplaints] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "users"), where("isDriver", "==", true));
@@ -37,11 +33,7 @@ export default function AdminDriversPage() {
     // Apply multiple filters
     let passes = matchesSearch;
 
-    // NEW: Filter for any flags (> 0)
-    if (filterAnyFlags) passes = passes && (d.flags > 0);
-
     // Existing filters
-    if (filterThreeFlags) passes = passes && (d.flags === 3);
     if (filterNewOnly) passes = passes && isNew;
 
     return passes;
@@ -87,47 +79,14 @@ export default function AdminDriversPage() {
 
 
           {/* filter buttons */}
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-1 md:gap-2">
+          <div className="flex flex-row gap-2">
             {/* 60-DAY FILTER */}
             <button
               onClick={() => setFilterNewOnly(!filterNewOnly)}
-              className={`px-2 md:px-4 py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
+              className={`px-4 py-3 md:py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border-2 
               ${filterNewOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-500 hover:border-green-400 shadow-sm'}`}
             >
               <FaCalendarAlt /> New (60D)
-            </button>
-
-            {/* NEW: ANY FLAGS FILTER */}
-            <button
-              onClick={() => {
-                setFilterAnyFlags(!filterAnyFlags);
-                if (filterThreeFlags) setFilterThreeFlags(false);
-              }}
-              className={`px-2 md:px-4 py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
-              ${filterAnyFlags ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-white border-gray-100 text-orange-500 hover:border-orange-400 shadow-sm'}`}
-            >
-              <FaExclamationTriangle /> Flagged
-            </button>
-
-            {/* 3-FLAG FILTER */}
-            <button
-              onClick={() => {
-                setFilterThreeFlags(!filterThreeFlags);
-                if (filterAnyFlags) setFilterAnyFlags(false);
-              }}
-              className={`px-2 md:px-4 py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
-              ${filterThreeFlags ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white border-gray-100 text-red-600 shadow-sm'}`}
-            >
-              <FaFlag /> Critical (3)
-            </button>
-
-            {/* COMPLAINTS BUTTON */}
-            <button
-              onClick={() => setShowComplaints(!showComplaints)}
-              className={`px-2 md:px-4 py-3 md:py-2 rounded-md md:rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-2 
-              ${showComplaints ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-gray-100 text-indigo-600 hover:border-indigo-400 shadow-sm'}`}
-            >
-              <FaCommentAlt /> Complaints
             </button>
 
             {/*Navigation Back*/}
@@ -149,15 +108,12 @@ export default function AdminDriversPage() {
         ))}
       </div>
 
-      {filtered.length === 0 && !showComplaints && (
+      {filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 opacity-30">
           <FaSearch size={48} className="mb-4" />
           <p className="font-black uppercase tracking-widest text-sm">No Drivers Match These Filters</p>
         </div>
       )}
-
-      {/* Complaints Panel */}
-      {showComplaints && <ComplaintsPanel />}
 
       {selectedDriver && (
         <DriverProfileView

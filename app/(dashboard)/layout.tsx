@@ -23,7 +23,7 @@ import {
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, collection, query, where, QuerySnapshot } from "firebase/firestore";
 import NotificationPanel from "@/components/notification/Notification";
 import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
 
@@ -39,6 +39,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [hasPendingOffer, setHasPendingOffer] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -130,6 +131,26 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsub();
   }, [router, pathname]);
 
+  // ✅ NEW: Listen for incoming booking offers for sidebar pulse
+  useEffect(() => {
+    if (!userId || !isDriver) {
+      setHasPendingOffer(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, "directOffers"),
+      where("driverId", "==", userId),
+      where("status", "==", "pending")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot: QuerySnapshot) => {
+      setHasPendingOffer(!snapshot.empty);
+    });
+
+    return () => unsubscribe();
+  }, [userId, isDriver]);
+
   const handleOpenNotifs = async () => {
     setNotifOpen(true);
     if (userId) {
@@ -189,6 +210,16 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
   return (
     <>
+      <style jsx global>{`
+        @keyframes pulse-orange {
+          0% { border-color: rgba(249, 115, 22, 0.5); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
+          70% { border-color: rgba(249, 115, 22, 1); box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
+          100% { border-color: rgba(249, 115, 22, 0.5); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+        }
+        .animate-pulse-orange {
+          animation: pulse-orange 2s infinite;
+        }
+      `}</style>
       <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
       <div className="flex min-h-screen md:h-screen bg-gray-100 md:overflow-hidden">
 
@@ -245,7 +276,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                     else if (item.isDropdown) setAboutOpen(!aboutOpen);
                     else if (item.href) { router.push(item.href); setSidebarOpen(false); }
                   }}
-                  className={`flex items-center w-full px-4 py-3.5 rounded-xl hover:bg-green-800 transition-all group relative ${pathname === item.href ? "bg-gray-800 text-green-400 font-semibold" : "text-gray-300 hover:text-white"}`}
+                  className={`flex items-center w-full px-4 py-3.5 rounded-xl hover:bg-green-800 transition-all group relative ${pathname === item.href ? "bg-gray-800 text-green-400 font-semibold" : "text-gray-300 hover:text-white"} ${item.name === "Bookings" && hasPendingOffer ? "border border-orange-500 animate-pulse-orange" : ""}`}
                 >
                   <span className={`mr-3 transition-colors ${pathname === item.href ? "text-green-400" : "text-gray-500 group-hover:text-white"}`}>
                     {item.icon}
@@ -255,6 +286,12 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                   {item.name === "Chat" && Number(unreadCount) > 0 && (
                     <span className="h-5 min-w-[20px] px-1.5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
                       {unreadCount}
+                    </span>
+                  )}
+
+                  {item.name === "Bookings" && hasPendingOffer && (
+                    <span className="absolute right-4 bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">
+                      New
                     </span>
                   )}
 

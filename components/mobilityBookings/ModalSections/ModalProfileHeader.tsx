@@ -1,9 +1,8 @@
 "use client"
-import React from 'react';
 import Image from 'next/image';
-import { 
-    FaMapMarkerAlt, FaPhone, FaWhatsapp, FaEnvelope, 
-    FaCheckCircle, FaTimesCircle, FaComment 
+import {
+    FaMapMarkerAlt, FaPhone, FaWhatsapp, FaEnvelope,
+    FaCheckCircle, FaTimesCircle, FaComment
 } from 'react-icons/fa';
 import VIPStar from '../ui/VIPStar';
 import { Driver, VehicleLog } from '../types';
@@ -13,7 +12,6 @@ interface ModalProfileHeaderProps {
     vehicle: VehicleLog;
     onSetDriverInfo: (v: boolean) => void;
     onSetPreChat: (v: boolean) => void;
-    onSetEnhancedWhatsApp: (v: boolean) => void;
     onPhoneCall: (p: string) => void;
     onWhatsAppMessage: (d: any, v: any) => void;
     getDriverAddress: (d: any) => string;
@@ -24,7 +22,6 @@ export default function ModalProfileHeader({
     vehicle,
     onSetDriverInfo,
     onSetPreChat,
-    onSetEnhancedWhatsApp,
     onPhoneCall,
     onWhatsAppMessage,
     getDriverAddress
@@ -104,27 +101,14 @@ export default function ModalProfileHeader({
                         Chat with Driver
                     </button>
 
-                    {/* Enhanced WhatsApp Button */}
-                    {driver.whatsappPreferred ? (
-                        <button
-                            onClick={() => {
-                                onSetDriverInfo(false);
-                                setTimeout(() => onSetEnhancedWhatsApp(true), 300);
-                            }}
-                            className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
-                        >
-                            <FaWhatsapp className="mr-2" />
-                            Enhanced WhatsApp
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => onPhoneCall(driver.phoneNumber)}
-                            className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
-                        >
-                            <FaPhone className="mr-2" />
-                            Call Driver
-                        </button>
-                    )}
+                    {/* Call Driver Button */}
+                    <button
+                        onClick={() => onPhoneCall(driver.phoneNumber)}
+                        className="py-3 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
+                    >
+                        <FaPhone className="mr-2" />
+                        Call Driver
+                    </button>
 
                     {/* Direct WhatsApp */}
                     {driver.whatsappPreferred && (
