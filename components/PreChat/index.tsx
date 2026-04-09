@@ -451,10 +451,10 @@ export default function PreChat({ car, driver, onClose, chatId: propChatId }: Pr
                 onClick={handleStartOrOpenChat}
                 disabled={loading}
                 className={`w-full px-4 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-3 ${loading
-                        ? 'bg-blue-800/50 text-blue-300 cursor-not-allowed'
-                        : existingChatId
-                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-blue-500/25'
-                            : 'bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white shadow-lg hover:shadow-green-500/25'
+                    ? 'bg-blue-800/50 text-blue-300 cursor-not-allowed'
+                    : existingChatId
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-blue-500/25'
+                        : 'bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white shadow-lg hover:shadow-green-500/25'
                     }`}
             >
                 {loading ? (

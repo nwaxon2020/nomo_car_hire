@@ -79,89 +79,92 @@ export default function BookingCard({
 
     return (
         <div
-            onClick={() => onSelect(driver, vehicle)}
             className={`${cardBg} rounded-2xl overflow-hidden border ${borderColor} hover:shadow-2xl hover:scale-[1.02] transition-all duration-500 transform group cursor-pointer`}
         >
-            {/* Car Image Section */}
-            <div className="relative h-52 sm:h-60 w-full overflow-hidden">
-                <Image
-                    src={vehicleImages[0]}
-                    alt={`${vehicle.carName} ${vehicle.carModel}`}
-                    fill
-                    className="object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                {/* VIP and Verified Badges */}
-                <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
-                    {driver.verified && (
-                        <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center shadow-lg border border-white/20">
-                            <FaCheckCircle className="mr-1.5" /> Verified
+            <div onClick={() => onSelect(driver, vehicle)}>
+                {/* Car Image Section */}
+                <div className="relative h-52 sm:h-60 w-full overflow-hidden">
+                    <Image
+                        src={vehicleImages[0]}
+                        alt={`${vehicle.carName} ${vehicle.carModel}`}
+                        fill
+                        className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                    {/* VIP and Verified Badges */}
+                    <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
+                        {driver.verified && (
+                            <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center shadow-lg border border-white/20">
+                                <FaCheckCircle className="mr-1.5" /> Verified
+                            </div>
+                        )}
+                        {isBlackVip && (
+                            <div className="bg-gradient-to-r from-amber-400 to-amber-600 text-black text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-full flex items-center shadow-lg border border-amber-300/50">
+                                <FaCrown className="mr-1.5" /> Premium Black VIP
+                            </div>
+                        )}
+                        {isGoldVip && (
+                            <div className="bg-gradient-to-r from-yellow-300 to-amber-500 text-white text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-full flex items-center shadow-lg border border-amber-300/50">
+                                <FaCrown className="mr-1.5" /> Gold VIP
+                            </div>
+                        )}
+                        <div className="bg-green-600/90 backdrop-blur-sm text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-lg border border-white/20">
+                            View Details
                         </div>
-                    )}
-                    {isBlackVip && (
-                        <div className="bg-gradient-to-r from-amber-400 to-amber-600 text-black text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-full flex items-center shadow-lg border border-amber-300/50">
-                            <FaCrown className="mr-1.5" /> Premium Black VIP
-                        </div>
-                    )}
-                    {isGoldVip && (
-                        <div className="bg-gradient-to-r from-yellow-300 to-amber-500 text-white text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-full flex items-center shadow-lg border border-amber-300/50">
-                            <FaCrown className="mr-1.5" /> Gold VIP
-                        </div>
-                    )}
-                    <div className="bg-green-600/90 backdrop-blur-sm text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-lg border border-white/20">
-                        View Details
                     </div>
+
+                    {/* Proximity Badge */}
+                    {distance !== null && (
+                        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5">
+                            <FaLocationArrow className="text-blue-400 text-[8px]" />
+                            {distance.toFixed(1)} km away
+                        </div>
+                    )}
                 </div>
 
-                {/* Proximity Badge */}
-                {distance !== null && (
-                    <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5">
-                        <FaLocationArrow className="text-blue-400 text-[8px]" />
-                        {distance.toFixed(1)} km away
+                {/* Info Section */}
+                <div className="px-3 pt-3">
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <h3 className={`font-black uppercase tracking-tight text-base leading-tight ${textColor}`}>
+                                {vehicle.carName} {vehicle.carModel}
+                            </h3>
+                            <div className="flex items-center gap-0.5 mt-1">
+                                {[1, 2, 3, 4, 5].map((star) => {
+                                    const rating = Math.round(driver.averageRating || 0);
+                                    return (
+                                        <FaStar
+                                            key={star}
+                                            size={10}
+                                            className={star <= rating ? "text-amber-400" : "text-gray-500"}
+                                        />
+                                    );
+                                })}
+                            </div>
+                            <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${subTextColor}`}>
+                                {vehicle.carType} • {vehicle.exteriorColor}
+                            </p>
+                        </div>
                     </div>
-                )}
+
+                    <div className={`grid grid-cols-2 gap-2 mb-4 p-2 rounded-xl border ${gridBg}`}>
+                        <div className="flex items-center gap-2">
+                            <div className={`p-1 rounded-lg ${iconBg}`}>
+                                <FaUsers className={iconColor} size={10} />
+                            </div>
+                            <span className={`text-[10px] font-bold ${textColor}`}>{vehicle.passengers} Seats</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className={`p-1 rounded-lg ${iconBg}`}>
+                                <FaSnowflake className={vehicle.ac ? 'text-green-400' : 'text-red-400'} size={10} />
+                            </div>
+                            <span className={`text-[10px] font-bold ${textColor}`}>{vehicle.ac ? 'AC' : 'No AC'}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            {/* Info Section */}
-            <div className="p-3 ">
-                <div className="flex justify-between items-start mb-2">
-                    <div>
-                        <h3 className={`font-black uppercase tracking-tight text-base leading-tight ${textColor}`}>
-                            {vehicle.carName} {vehicle.carModel}
-                        </h3>
-                        <div className="flex items-center gap-0.5 mt-1">
-                            {[1, 2, 3, 4, 5].map((star) => {
-                                const rating = Math.round(driver.averageRating || 0);
-                                return (
-                                    <FaStar
-                                        key={star}
-                                        size={10}
-                                        className={star <= rating ? "text-amber-400" : "text-gray-500"}
-                                    />
-                                );
-                            })}
-                        </div>
-                        <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${subTextColor}`}>
-                            {vehicle.carType} • {vehicle.exteriorColor}
-                        </p>
-                    </div>
-                </div>
-
-                <div className={`grid grid-cols-2 gap-2 mb-4 p-2 rounded-xl border ${gridBg}`}>
-                    <div className="flex items-center gap-2">
-                        <div className={`p-1 rounded-lg ${iconBg}`}>
-                            <FaUsers className={iconColor} size={10} />
-                        </div>
-                        <span className={`text-[10px] font-bold ${textColor}`}>{vehicle.passengers} Seats</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className={`p-1 rounded-lg ${iconBg}`}>
-                            <FaSnowflake className={vehicle.ac ? 'text-green-400' : 'text-red-400'} size={10} />
-                        </div>
-                        <span className={`text-[10px] font-bold ${textColor}`}>{vehicle.ac ? 'AC' : 'No AC'}</span>
-                    </div>
-                </div>
-
-                {/* Action Buttons */}
+            {/* Action Buttons */}
+            <div className='px-3 pb-3'>
                 <div className="space-y-2">
                     <button
                         onClick={(e) => {

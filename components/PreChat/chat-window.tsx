@@ -13,14 +13,14 @@ import {
     arrayRemove,
 } from "firebase/firestore";
 import EnhancedWhatsApp from "../EnhancedWhatsApp";
-import { 
-    Send, 
-    X, 
-    AlertCircle, 
-    Check, 
-    CheckCheck, 
-    User, 
-    Car, 
+import {
+    Send,
+    X,
+    AlertCircle,
+    Check,
+    CheckCheck,
+    User,
+    Car,
     Trash2,
     MoreVertical,
     Phone,
@@ -29,7 +29,7 @@ import {
     Clock,
     DollarSign,
     MapPin,
-    Fuel,
+    AlertTriangle,
     CreditCard
 } from "lucide-react";
 
@@ -83,7 +83,7 @@ export default function ChatWindow({
     const [timeRemaining, setTimeRemaining] = useState<string>("Calculating...");
     const [showExpiredModal, setShowExpiredModal] = useState<boolean>(false);
     const [autoDeleteInitiated, setAutoDeleteInitiated] = useState<boolean>(false);
-    
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -94,13 +94,13 @@ export default function ChatWindow({
             try {
                 const chatRef = doc(db, "preChats", chatId);
                 const chatDoc = await getDoc(chatRef);
-                
+
                 if (chatDoc.exists()) {
                     const data = chatDoc.data();
-                    
+
                     // Get the creation time - handle both Firestore Timestamp and string
                     let creationTime;
-                    
+
                     if (data.createdAt) {
                         // If it's a Firestore Timestamp
                         if (data.createdAt.toDate) {
@@ -125,12 +125,12 @@ export default function ChatWindow({
                         // If neither exists, use current time
                         creationTime = Date.now();
                     }
-                    
+
                     // Calculate expiration time (7 days from creation)
                     const expirationTimeMs = creationTime + (7 * 24 * 60 * 60 * 1000); // 7 days
-                    
+
                     setExpirationTime(expirationTimeMs);
-                    
+
                     // If chat is already expired, show modal
                     if (Date.now() > expirationTimeMs) {
                         setShowExpiredModal(true);
@@ -158,19 +158,19 @@ export default function ChatWindow({
         const updateTimer = () => {
             const now = Date.now();
             const remaining = expirationTime - now;
-            
+
             if (remaining <= 0) {
                 // Chat has expired
                 setTimeRemaining("Expired");
                 setShowExpiredModal(true);
                 return;
             }
-            
+
             // Convert milliseconds to days, hours, minutes
             const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
             const hours = Math.floor((remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-            
+
             // Format with only relevant units
             if (days > 0) {
                 setTimeRemaining(`${days}d ${hours}h`);
@@ -183,30 +183,30 @@ export default function ChatWindow({
 
         // Update immediately
         updateTimer();
-        
+
         // Update every minute instead of every second for better performance
         const timer = setInterval(updateTimer, 60000); // Update every minute
-        
+
         return () => clearInterval(timer);
     }, [expirationTime]);
 
     // Auto-delete chat when expired - MODIFIED to show modal first
     const autoDeleteChat = async () => {
         if (autoDeleteInitiated) return;
-        
+
         try {
             setAutoDeleteInitiated(true);
             const chatRef = doc(db, "preChats", chatId);
             const chatDoc = await getDoc(chatRef);
-            
+
             // Check if chat still exists before deleting
             if (chatDoc.exists()) {
                 await deleteDoc(chatRef);
-                
+
                 // Also remove from all users' unreadChats
                 const chatData = chatDoc.data();
                 const participants = chatData.participants || [];
-                
+
                 // Remove chat from all participants' unreadChats
                 await Promise.all(
                     participants.map(async (participantId: string) => {
@@ -251,12 +251,12 @@ export default function ChatWindow({
 
             const chatRef = doc(db, "preChats", chatId);
             const chatDoc = await getDoc(chatRef);
-            
+
             if (!chatDoc.exists()) return;
 
             const chatData = chatDoc.data();
             const messages = chatData.messages || [];
-            
+
             // Check if there are any unread messages from other participants
             const hasUnreadMessages = messages.some(
                 (msg: MessageType) => msg.senderId !== currentUserId && !msg.read
@@ -269,7 +269,7 @@ export default function ChatWindow({
                 ...msg,
                 read: msg.senderId === currentUserId ? msg.read : true
             }));
-            
+
             await updateDoc(chatRef, {
                 messages: updatedMessages
             });
@@ -302,16 +302,16 @@ export default function ChatWindow({
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const newMessages = data.messages || [];
-                
+
                 // Check if new message received
                 if (newMessages.length > previousLength) {
                     const lastMessage = newMessages[newMessages.length - 1];
                     const currentUserId = auth.currentUser?.uid;
-                    
+
                     if (lastMessage.senderId !== currentUserId) {
                         setReceivingMessage(true);
                         setTimeout(() => setReceivingMessage(false), 1000);
-                        
+
                         // Add this chat to current user's unreadChats if they're not the sender
                         if (currentUserId) {
                             try {
@@ -324,7 +324,7 @@ export default function ChatWindow({
                         }
                     }
                 }
-                
+
                 previousLength = newMessages.length;
                 setMessages(newMessages as MessageType[]);
                 setLoading(false);
@@ -411,10 +411,10 @@ export default function ChatWindow({
                     console.error("Error adding chat to recipient's unreadChats:", error);
                 }
             }
-            
+
             // Simulate sending delay
             setTimeout(() => setSendingMessage(false), 500);
-            
+
         } catch (error) {
             console.error("Error sending message:", error);
             // REVERT on error
@@ -438,7 +438,7 @@ export default function ChatWindow({
         await updateDoc(doc(db, "preChats", chatId), {
             messages: updatedMessages as DocumentData[],
         });
-        
+
         // Then remove from current user's unreadChats
         try {
             await updateDoc(doc(db, "users", currentUserId), {
@@ -447,44 +447,30 @@ export default function ChatWindow({
         } catch (error) {
             console.error("Error removing chat from unreadChats:", error);
         }
-        
+
         if (onReadUpdate) {
             onReadUpdate(chatId);
         }
     };
 
     // 🗑️ Delete chat
-    const deleteChat = async () => {
+    const handleDeleteChat = async () => {
         try {
             const chatRef = doc(db, "preChats", chatId);
             const chatDoc = await getDoc(chatRef);
-            
+
             if (chatDoc.exists()) {
-                // Get participants before deleting
-                const chatData = chatDoc.data();
-                const participants = chatData.participants || [];
-                
-                // Remove chat from all participants' unreadChats
-                await Promise.all(
-                    participants.map(async (participantId: string) => {
-                        try {
-                            await updateDoc(doc(db, "users", participantId), {
-                                unreadChats: arrayRemove(chatId)
-                            });
-                        } catch (error) {
-                            console.error(`Error removing chat from user ${participantId}:`, error);
-                        }
-                    })
-                );
-                
-                // Delete the chat
+                const participants = chatDoc.data().participants || [];
+                // Clean up unread tags for all users before deleting doc
+                await Promise.all(participants.map((id: string) =>
+                    updateDoc(doc(db, "users", id), { unreadChats: arrayRemove(chatId) })
+                ));
                 await deleteDoc(chatRef);
             }
-            
             setShowDeleteConfirm(false);
             onClose();
         } catch (error) {
-            console.error("Error deleting chat:", error);
+            console.error("Delete failed:", error);
         }
     };
 
@@ -495,7 +481,7 @@ export default function ChatWindow({
             setShowExpiredModal(true);
             return;
         }
-        
+
         setNewMessage(text);
         // Auto-focus the input field
         setTimeout(() => {
@@ -564,7 +550,7 @@ export default function ChatWindow({
             <div className="fixed inset-0 bg-[rgba(0,0,0,0.5)] flex items-center justify-center z-50 p-2 md:p-4 backdrop-blur-sm">
                 {/* Main Chat Window - Responsive sizing */}
                 <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md md:max-w-lg lg:max-w-xl flex flex-col h-[85vh] max-h-[650px] border border-gray-700">
-                    
+
                     {/* Header */}
                     <div className="p-4 border-b border-gray-700 bg-gradient-to-r from-gray-900 to-gray-800 rounded-t-xl">
                         <div className="flex justify-between items-center">
@@ -590,16 +576,16 @@ export default function ChatWindow({
                                     >
                                         <MoreVertical className="h-5 w-5 text-gray-300" />
                                     </button>
-                                    
+
                                     {/* Dropdown Menu */}
                                     {showMenu && (
-                                        <div className="z-60 absolute right-0 top-10 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10">
+                                        <div className="absolute right-0 top-10 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
                                             <button
                                                 onClick={() => {
-                                                    setShowDeleteConfirm(true);
-                                                    setShowMenu(false);
+                                                    setShowDeleteConfirm(true); // This triggers the card, not the alert
+                                                    setShowMenu(false);         // Closes the little menu
                                                 }}
-                                                className="w-full px-4 py-3 text-left hover:bg-red-900/30 text-red-400 hover:text-red-300 flex items-center space-x-2 rounded-t-lg"
+                                                className="w-full px-4 py-3 text-left hover:bg-red-900/30 text-red-400 flex items-center space-x-2 rounded-t-lg"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                                 <span>Delete Chat</span>
@@ -645,7 +631,7 @@ export default function ChatWindow({
                     </div>
 
                     {/* Messages Container */}
-                    <div 
+                    <div
                         ref={chatContainerRef}
                         className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-900 to-gray-950"
                     >
@@ -662,7 +648,7 @@ export default function ChatWindow({
                                         Ask about availability, pricing, pickup locations, or rental terms
                                     </p>
                                 </div>
-                                
+
                                 {/* Quick Replies for Car Rental */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
                                     {quickReplies.map((reply, idx) => {
@@ -709,7 +695,7 @@ export default function ChatWindow({
                                                     <div className={`absolute bottom-0 ${isCurrentUser ? 'right-0 translate-x-1' : 'left-0 -translate-x-1'}`}>
                                                         <div className={`h-4 w-4 ${isCurrentUser ? 'bg-blue-600' : 'bg-gray-800'} transform rotate-45`}></div>
                                                     </div>
-                                                    
+
                                                     <p className="break-words relative z-10">{msg.text}</p>
                                                 </div>
                                                 <div className={`flex items-center space-x-1 mt-1 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
@@ -733,16 +719,16 @@ export default function ChatWindow({
                                         </div>
                                     );
                                 })}
-                                
+
                                 {/* Sending Animation */}
                                 {sendingMessage && (
                                     <div className="flex justify-end animate-messageSlide">
                                         <div className="max-w-[85%] ml-auto">
                                             <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-600/50 to-blue-500/50 text-gray-300 rounded-br-md relative overflow-hidden">
                                                 <div className="flex space-x-1">
-                                                    <div className="h-2 w-2 bg-white/30 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
-                                                    <div className="h-2 w-2 bg-white/30 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
-                                                    <div className="h-2 w-2 bg-white/30 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
+                                                    <div className="h-2 w-2 bg-white/30 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                                                    <div className="h-2 w-2 bg-white/30 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                                                    <div className="h-2 w-2 bg-white/30 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
                                                 </div>
                                                 <div className="absolute bottom-0 right-0 translate-x-1">
                                                     <div className="h-4 w-4 bg-blue-600/50 transform rotate-45"></div>
@@ -751,7 +737,7 @@ export default function ChatWindow({
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {/* Receiving Animation */}
                                 {receivingMessage && (
                                     <div className="flex justify-start animate-messageSlide">
@@ -761,9 +747,9 @@ export default function ChatWindow({
                                             </p>
                                             <div className="p-3 rounded-2xl bg-gray-800/50 border border-gray-700/50 text-gray-400 rounded-bl-md relative overflow-hidden">
                                                 <div className="flex space-x-1">
-                                                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
-                                                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-pulse" style={{animationDelay: '200ms'}}></div>
-                                                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-pulse" style={{animationDelay: '400ms'}}></div>
+                                                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                                                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></div>
+                                                    <div className="h-2 w-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></div>
                                                 </div>
                                                 <div className="absolute bottom-0 left-0 -translate-x-1">
                                                     <div className="h-4 w-4 bg-gray-800/50 transform rotate-45"></div>
@@ -772,7 +758,7 @@ export default function ChatWindow({
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 <div ref={messagesEndRef} />
                             </div>
                         )}
@@ -788,20 +774,18 @@ export default function ChatWindow({
                                 onFocus={markAsRead}
                                 placeholder="Ask about rental dates, pricing, or terms..."
                                 disabled={timeRemaining === "Expired"}
-                                className={`w-full flex-1 px-4 py-3 bg-gray-800 border ${
-                                    timeRemaining === "Expired" 
-                                    ? 'border-red-700/50 text-gray-400 cursor-not-allowed' 
+                                className={`w-full flex-1 px-4 py-3 bg-gray-800 border ${timeRemaining === "Expired"
+                                    ? 'border-red-700/50 text-gray-400 cursor-not-allowed'
                                     : 'border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                                } rounded-xl outline-none transition-all text-gray-100 placeholder-gray-500`}
+                                    } rounded-xl outline-none transition-all text-gray-100 placeholder-gray-500`}
                             />
                             <button
                                 type="submit"
                                 disabled={!newMessage.trim() || sendingMessage || timeRemaining === "Expired"}
-                                className={`px-4 rounded-xl flex items-center justify-center transition-all duration-300 ${
-                                    !newMessage.trim() || sendingMessage || timeRemaining === "Expired"
+                                className={`px-4 rounded-xl flex items-center justify-center transition-all duration-300 ${!newMessage.trim() || sendingMessage || timeRemaining === "Expired"
                                     ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-blue-500/25'
-                                }`}
+                                    }`}
                             >
                                 {sendingMessage ? (
                                     <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -814,7 +798,7 @@ export default function ChatWindow({
                         </div>
                         <p className="text-xs text-gray-500 mt-2 flex items-center">
                             <Shield className="h-3 w-3 mr-1" />
-                            {timeRemaining === "Expired" 
+                            {timeRemaining === "Expired"
                                 ? "Chat expired. Please close and start a new conversation."
                                 : "Press Enter to send • Messages are encrypted"}
                         </p>
@@ -823,30 +807,30 @@ export default function ChatWindow({
 
                 {/* Delete Confirmation Modal */}
                 {showDeleteConfirm && (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] backdrop-blur-sm">
-                        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalSlide">
-                            <div className="text-center">
-                                <div className="h-12 w-12 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Trash2 className="h-6 w-6 text-red-400" />
-                                </div>
-                                <h3 className="text-xl font-semibold text-white mb-2">Delete Chat?</h3>
-                                <p className="text-gray-400 mb-6">
-                                    This will permanently delete all messages. This action cannot be undone.
-                                </p>
-                                <div className="flex space-x-3">
-                                    <button
-                                        onClick={() => setShowDeleteConfirm(false)}
-                                        className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={deleteChat}
-                                        className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-lg transition-all duration-300"
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
+                    <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-[100] p-4">
+                        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+                            <div className="flex items-center justify-center w-12 h-12 bg-red-900/30 rounded-full mb-4 mx-auto">
+                                <AlertCircle className="text-red-500" size={24} />
+                            </div>
+
+                            <h4 className="text-xl font-bold text-white text-center mb-2">Delete Chat?</h4>
+                            <p className="text-gray-400 text-center text-sm mb-6">
+                                Are you sure? This will permanently remove the conversation for everyone.
+                            </p>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={handleDeleteChat}
+                                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors"
+                                >
+                                    Yes, Delete
+                                </button>
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)} // ✅ Closes the card
+                                    className="w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     </div>

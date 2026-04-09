@@ -61,6 +61,7 @@ export default function ChatPageUi() {
   const [loadingChat, setLoadingChat] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null); // Store user from auth listener
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Check authentication state FIRST
   useEffect(() => {
@@ -261,24 +262,22 @@ export default function ChatPageUi() {
   // Delete a specific chat
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setDeleteConfirmId(chatId); // Open the custom modal instead of window.confirm
+  };
 
-    if (!window.confirm("Are you sure you want to delete this chat? All messages will be lost.")) {
-      return;
-    }
-
+  // Add this new function to actually do the work
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
     try {
-      await deleteDoc(doc(db, "preChats", chatId));
-
-      setChats(prevChats => prevChats.filter(chat => chat.chatId !== chatId));
-
-      if (selectedChat?.chatId === chatId) {
+      await deleteDoc(doc(db, "preChats", deleteConfirmId));
+      setChats(prevChats => prevChats.filter(chat => chat.chatId !== deleteConfirmId));
+      if (selectedChat?.chatId === deleteConfirmId) {
         setSelectedChat(null);
       }
-
-      console.log("Chat deleted successfully");
+      setDeleteConfirmId(null);
     } catch (error) {
       console.error("Error deleting chat:", error);
-      alert("Failed to delete chat. Please try again.");
+      setDeleteConfirmId(null);
     }
   };
 
@@ -528,8 +527,8 @@ export default function ChatPageUi() {
                       key={filter}
                       onClick={() => setActiveFilter(filter)}
                       className={`flex-1 py-1.5 text-xs font-semibold rounded-md capitalize transition-all ${activeFilter === filter
-                          ? 'bg-gray-800 text-white shadow-sm'
-                          : 'text-gray-500 hover:text-gray-300'
+                        ? 'bg-gray-800 text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-300'
                         }`}
                     >
                       {filter}
@@ -556,16 +555,16 @@ export default function ChatPageUi() {
                           key={chat.chatId}
                           onClick={() => handleChatClick(chat)}
                           className={`group p-4 cursor-pointer transition-all relative border-l-4 ${isActive
-                              ? 'bg-blue-600/5 border-blue-500'
-                              : 'border-transparent hover:bg-gray-800/40'
+                            ? 'bg-blue-600/5 border-blue-500'
+                            : 'border-transparent hover:bg-gray-800/40'
                             } ${isExpired ? 'grayscale opacity-60' : ''}`}
                         >
                           <div className="flex gap-3">
                             {/* Avatar Logic */}
                             <div className="relative flex-shrink-0">
                               <div className={`h-12 w-12 rounded-2xl flex items-center justify-center border-2 ${chat.isDriver
-                                  ? 'bg-orange-500/10 border-orange-500/20 text-orange-500'
-                                  : 'bg-blue-500/10 border-blue-500/20 text-blue-500'
+                                ? 'bg-orange-500/10 border-orange-500/20 text-orange-500'
+                                : 'bg-blue-500/10 border-blue-500/20 text-blue-500'
                                 }`}>
                                 {chat.isDriver ? <span className="font-black">D</span> : <User className="h-5 w-5" />}
                               </div>
@@ -655,6 +654,28 @@ export default function ChatPageUi() {
           </div>
         </div>
       </div>
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-[200] p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="h-12 w-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="h-6 w-6 text-red-500" />
+            </div>
+            <h4 className="text-xl font-bold text-white text-center mb-2">Delete Chat?</h4>
+            <p className="text-gray-400 text-center text-sm mb-6">
+              This will permanently remove all messages for this conversation.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button onClick={confirmDelete} className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors">
+                Yes, Delete
+              </button>
+              <button onClick={() => setDeleteConfirmId(null)} className="w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
