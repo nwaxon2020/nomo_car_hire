@@ -9,12 +9,15 @@ import RegistrationForm from '@/components/transportHub/RegistrationForm';
 import CompanyDashboard from '@/components/transportHub/CompanyDashboard';
 import LoadingRound from '@/components/re-useable-loading';
 
+import { Timestamp } from "firebase/firestore";
+
 interface TransportListing {
     id: string;
     from: string;
     to: string;
     amount: number;
     company: string;
+    companyId: string; // Added companyId to listings
     time: string;
     discount: string;
     type: 'scraped' | 'registered';
@@ -26,7 +29,7 @@ interface TransportCompany {
     companyName: string;
     ownerId: string;
     status: string;
-    // ... add more if needed
+    expiryDate: Timestamp; // Added expiryDate
 }
 
 const TransportHubUi = () => {
@@ -41,14 +44,34 @@ const TransportHubUi = () => {
     // Filters
     const [searchFrom, setSearchFrom] = useState("");
     const [searchTo, setSearchTo] = useState("");
+    const [hiddenCompanies, setHiddenCompanies] = useState<Set<string>>(new Set());
 
     useEffect(() => {
+        // Fetch statuses of all companies to filter listings
+        const fetchCompanyStatuses = async () => {
+            const snap = await getDocs(collection(db, "transportCompanies"));
+            const hidden = new Set<string>();
+            const now = new Date();
+            snap.docs.forEach(doc => {
+                const data = doc.data();
+                const isExpired = data.expiryDate && data.expiryDate.toDate() < now;
+                const isNotApproved = data.status !== "approved";
+                
+                if (isExpired || isNotApproved) {
+                    hidden.add(doc.id);
+                }
+            });
+            setHiddenCompanies(hidden);
+        };
+        fetchCompanyStatuses();
+
         // 1. Fetch user's company status
         const unsubUser = auth.onAuthStateChanged(async (user) => {
             if (user) {
                 const userDoc = await getDocs(query(collection(db, "transportCompanies"), where("ownerId", "==", user.uid)));
                 if (!userDoc.empty) {
-                    setUserCompany({ id: userDoc.docs[0].id, ...userDoc.docs[0].data() } as TransportCompany);
+                    setUserCompany({ ...userDoc.docs[0].data(), id: userDoc.docs[0].id } as TransportCompany);
+                    setView('dashboard');
                 }
             } else {
                 setUserCompany(null);
@@ -67,9 +90,9 @@ const TransportHubUi = () => {
                 } else {
                     // Mock data if API is not yet ready
                     setScrapedListings([
-                        { id: "s1", from: "Lagos", to: "Abuja", amount: 25000, company: "Peace Mass Transit", time: "06:30 AM", discount: "5%", type: "scraped", website: "https://pmt.ng" },
-                        { id: "s2", from: "Lagos", to: "Benin", amount: 15000, company: "GIGM", time: "06:00 AM", discount: "10%", type: "scraped", website: "https://gigm.com" },
-                        { id: "s3", from: "Lagos", to: "Onitsha", amount: 22000, company: "GUO Motors", time: "07:30 AM", discount: "5%", type: "scraped", website: "https://guotransport.com" },
+                        { id: "s1", from: "Lagos", to: "Abuja", amount: 25000, company: "Peace Mass Transit", companyId: "pmt", time: "06:30 AM", discount: "5%", type: "scraped", website: "https://pmt.ng" },
+                        { id: "s2", from: "Lagos", to: "Benin", amount: 15000, company: "GIGM", companyId: "gigm", time: "06:00 AM", discount: "10%", type: "scraped", website: "https://gigm.com" },
+                        { id: "s3", from: "Lagos", to: "Onitsha", amount: 22000, company: "GUO Motors", companyId: "guo", time: "07:30 AM", discount: "5%", type: "scraped", website: "https://guotransport.com" },
                     ]);
                 }
             } catch (err) {
@@ -92,6 +115,11 @@ const TransportHubUi = () => {
     }, []);
 
     const allListings = [...scrapedListings, ...listings].filter(item => {
+        // Filter out registered listings from expired or unapproved companies
+        if (item.type === 'registered' && item.companyId && hiddenCompanies.has(item.companyId)) {
+            return false;
+        }
+
         const fromMatch = item.from.toLowerCase().includes(searchFrom.toLowerCase());
         const toMatch = item.to.toLowerCase().includes(searchTo.toLowerCase());
         return fromMatch && toMatch;
@@ -141,7 +169,7 @@ const TransportHubUi = () => {
                                 className="w-full bg-transparent border-none py-4 pl-12 pr-4 text-white focus:outline-none placeholder:text-slate-600"
                             />
                         </div>
-                        <button 
+                        <button
                             onClick={() => listingsRef.current?.scrollIntoView({ behavior: 'smooth' })}
                             className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-xl md:rounded-full font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-95 flex items-center justify-center gap-2"
                         >
@@ -152,7 +180,7 @@ const TransportHubUi = () => {
             </div>
 
             {/* Main Content */}
-            <div ref={listingsRef} className="max-w-6xl mx-auto px-6 pt-5 md:pt-8 pb-30">
+            <div ref={listingsRef} className="max-w-6xl mx-auto px-6 pt-5 md:pt-8 md:px-10 pb-30">
                 <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6 mb-10">
                     <div>
                         <h2 className="text-2xl font-black text-white">Popular Routes</h2>

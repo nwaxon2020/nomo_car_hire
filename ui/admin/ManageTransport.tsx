@@ -51,9 +51,9 @@ export default function ManageTransport() {
         }
     };
 
-    const handleUnapprove = async (id: string) => {
+    const handleAuthorize = async () => {
         if (!isCEO) {
-            toast.error("Only CEO can unapprove companies");
+            toast.error(`Only CEO can ${showPasskeyModal.action} companies`);
             return;
         }
         if (passkey !== process.env.NEXT_PUBLIC_ADMIN_PASS_CODE) {
@@ -62,8 +62,13 @@ export default function ManageTransport() {
         }
 
         try {
-            await updateDoc(doc(db, "transportCompanies", id), { status: "pending" });
-            toast.success("Company Unapproved");
+            if (showPasskeyModal.action === 'unapprove') {
+                await updateDoc(doc(db, "transportCompanies", showPasskeyModal.id), { status: "pending" });
+                toast.success("Company Unapproved");
+            } else if (showPasskeyModal.action === 'delete') {
+                await deleteDoc(doc(db, "transportCompanies", showPasskeyModal.id));
+                toast.success("Company Deleted Forever");
+            }
             setShowPasskeyModal(null);
             setPasskey("");
         } catch (err) {
@@ -99,14 +104,7 @@ export default function ManageTransport() {
             toast.error("Only CEO can delete companies");
             return;
         }
-        if (!confirm("Are you sure? This is irreversible!")) return;
-
-        try {
-            await deleteDoc(doc(db, "transportCompanies", id));
-            toast.success("Company Deleted Forever");
-        } catch (err) {
-            toast.error("Deletion failed");
-        }
+        setShowPasskeyModal({ id, action: 'delete' });
     };
 
     const handleNotify = async (ownerId: string, companyName: string) => {
@@ -275,31 +273,35 @@ export default function ManageTransport() {
                             animate={{ scale: 1, opacity: 1 }}
                             className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-sm shadow-2xl"
                         >
-                            <div className="flex items-center gap-3 mb-6 text-amber-500">
+                            <div className={`flex items-center gap-3 mb-6 ${showPasskeyModal.action === 'delete' ? 'text-red-500' : 'text-amber-500'}`}>
                                 <FiLock size={24} />
-                                <h3 className="text-xl font-bold">CEO Authorization</h3>
+                                <h3 className="text-xl font-bold uppercase tracking-tight">CEO Authorization</h3>
                             </div>
-                            <p className="text-slate-400 text-sm mb-4">Please enter the admin passkey to unapprove this company.</p>
+                            <p className="text-slate-400 text-sm mb-4">
+                                {showPasskeyModal.action === 'delete' ? 
+                                    "ARE YOU SURE? This action is irreversible. Enter passkey to DELETE FOREVER." : 
+                                    "Please enter the admin passkey to unapprove this company."}
+                            </p>
                             <input 
                                 type="password" 
                                 value={passkey}
                                 onChange={(e) => setPasskey(e.target.value)}
-                                className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-amber-500"
+                                className={`w-full bg-black border rounded-xl py-3 px-4 text-white focus:outline-none ${showPasskeyModal.action === 'delete' ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-amber-500'}`}
                                 placeholder="Enter Passkey"
                                 autoFocus
                             />
                             <div className="flex gap-3 mt-6">
                                 <button 
                                     onClick={() => { setShowPasskeyModal(null); setPasskey(""); }}
-                                    className="flex-1 py-3 bg-white/5 rounded-xl text-slate-400 font-bold"
+                                    className="flex-1 py-3 bg-white/5 rounded-xl text-slate-400 font-bold hover:bg-white/10 transition-all text-sm"
                                 >
                                     Cancel
                                 </button>
                                 <button 
-                                    onClick={() => handleUnapprove(showPasskeyModal.id)}
-                                    className="flex-1 py-3 bg-amber-500 text-black font-black rounded-xl"
+                                    onClick={handleAuthorize}
+                                    className={`flex-1 py-3 font-black rounded-xl transition-all shadow-lg text-sm ${showPasskeyModal.action === 'delete' ? 'bg-red-600 text-white hover:bg-red-500 shadow-red-600/20' : 'bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20'}`}
                                 >
-                                    Authorize
+                                    {showPasskeyModal.action === 'delete' ? 'DELETE' : 'Authorize'}
                                 </button>
                             </div>
                         </motion.div>

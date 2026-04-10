@@ -11,9 +11,11 @@ import LoadingRound from "@/components/re-useable-loading";
 interface RegistrationFormProps {
     onClose: () => void;
     onSuccess: () => void;
+    isRenewal?: boolean;
+    companyId?: string;
 }
 
-export default function RegistrationForm({ onClose, onSuccess }: RegistrationFormProps) {
+export default function RegistrationForm({ onClose, onSuccess, isRenewal = false, companyId: existingCompanyId }: RegistrationFormProps) {
     const [loading, setLoading] = useState(false);
     const [adminConfig, setAdminConfig] = useState<{ transportRegistrationFee?: number; transportRegistrationDuration?: number } | null>(null);
     const [formData, setFormData] = useState({
@@ -67,36 +69,48 @@ export default function RegistrationForm({ onClose, onSuccess }: RegistrationFor
                 return;
             }
 
-            const companyId = `${user.uid}_${Date.now()}`;
             const durationYears = adminConfig?.transportRegistrationDuration || 1;
             const expiryDate = new Date();
             expiryDate.setFullYear(expiryDate.getFullYear() + durationYears);
 
-            const companyData = {
-                ...formData,
-                id: companyId,
-                ownerId: user.uid,
-                status: "active",
-                registrationDate: Timestamp.now(),
-                expiryDate: Timestamp.fromDate(expiryDate),
-                paymentAmount: registrationFee,
-                paymentStatus: "paid",
-            };
+            if (isRenewal && existingCompanyId) {
+                // Renewal logic: only update expiry and status
+                await updateDoc(doc(db, "transportCompanies", existingCompanyId), {
+                    expiryDate: Timestamp.fromDate(expiryDate),
+                    status: "approved",
+                    lastPaymentDate: Timestamp.now(),
+                    paymentAmount: registrationFee,
+                });
+                toast.success("Registration Renewed Successfully! 🎉");
+            } else {
+                // New registration logic
+                const companyId = `${user.uid}_${Date.now()}`;
+                const companyData = {
+                    ...formData,
+                    id: companyId,
+                    ownerId: user.uid,
+                    status: "pending",
+                    registrationDate: Timestamp.now(),
+                    expiryDate: Timestamp.fromDate(expiryDate),
+                    paymentAmount: registrationFee,
+                    paymentStatus: "paid",
+                };
 
-            // Save company data
-            await setDoc(doc(db, "transportCompanies", companyId), companyData);
+                // Save company data
+                await setDoc(doc(db, "transportCompanies", companyId), companyData);
 
-            // Update user profile to mark them as a company owner
-            await updateDoc(doc(db, "users", user.uid), {
-                hasCompany: true,
-                ownedCompanies: arrayUnion(companyId)
-            });
+                // Update user profile to mark them as a company owner
+                await updateDoc(doc(db, "users", user.uid), {
+                    hasCompany: true,
+                    ownedCompanies: arrayUnion(companyId)
+                });
+                toast.success("Company Registered Successfully! 🎉");
+            }
 
-            toast.success("Company Registered Successfully! 🎉");
             onSuccess();
         } catch (error) {
             console.error("Registration error:", error);
-            toast.error("Failed to register company. Please try again.");
+            toast.error(isRenewal ? "Failed to renew registration." : "Failed to register company.");
         } finally {
             setLoading(false);
         }
@@ -113,8 +127,8 @@ export default function RegistrationForm({ onClose, onSuccess }: RegistrationFor
                     <form onSubmit={handleSubmit} className="py-15 p-5 md:p-8 space-y-4 md:space-y-6">
                         <div className="flex justify-between items-center mb-4">
                             <div>
-                                <h2 className="text-xl md:text-2xl font-black text-white">Register Your Company</h2>
-                                <p className="text-slate-400 text-xs md:text-sm">Join the Transport Hub and grow your reach.</p>
+                                <h2 className="text-xl md:text-2xl font-black text-white">{isRenewal ? 'Renew Registration' : 'Register Your Company'}</h2>
+                                <p className="text-slate-400 text-xs md:text-sm">{isRenewal ? 'Extend your partnership with Transport Hub.' : 'Join the Transport Hub and grow your reach.'}</p>
                             </div>
                             <button type="button" onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-400">
                                 <FiX size={24} />
@@ -154,7 +168,7 @@ export default function RegistrationForm({ onClose, onSuccess }: RegistrationFor
                             type="submit"
                             className="text-sm w-full px-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black uppercase tracking-widest hover:shadow-lg hover:shadow-emerald-500/20 transition-all active:scale-[0.98]"
                         >
-                            Continue to Payment (₦{registrationFee.toLocaleString()})
+                            {isRenewal ? 'Proceed to Renew' : 'Continue to Payment'} (₦{registrationFee.toLocaleString()})
                         </button>
                     </form>
                 ) : (
@@ -163,8 +177,8 @@ export default function RegistrationForm({ onClose, onSuccess }: RegistrationFor
                             <FiCheckCircle size={48} />
                         </div>
                         <div>
-                            <h2 className="text-3xl font-black text-white">Payment Secure</h2>
-                            <p className="text-slate-400">Complete your registration payment to activate your dashboard.</p>
+                            <h2 className="text-3xl font-black text-white">{isRenewal ? 'Renew Now' : 'Payment Secure'}</h2>
+                            <p className="text-slate-400">{isRenewal ? 'Pay the registration fee to reactivate your dashboard.' : 'Complete your registration payment to activate your dashboard.'}</p>
                         </div>
 
                         <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-left">
@@ -173,7 +187,7 @@ export default function RegistrationForm({ onClose, onSuccess }: RegistrationFor
                                 <span className="text-white font-bold">{formData.companyName}</span>
                             </div>
                             <div className="flex justify-between mb-4 border-t border-white/5 pt-4">
-                                <span className="text-slate-400">Fee</span>
+                                <span className="text-slate-400">{isRenewal ? 'Renewal Fee' : 'Fee'}</span>
                                 <span className="text-emerald-400 font-black text-2xl">₦{registrationFee.toLocaleString()}</span>
                             </div>
                         </div>

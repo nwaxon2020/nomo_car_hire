@@ -33,7 +33,7 @@ export default function AdminStatistics({
       </div>
 
       {/* Stat Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-stretch">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-4 items-stretch">
         <MiniStat
           label="Total Revenue"
           value={isCEO ? `₦${stats.totalRevenue.toLocaleString()}` : "CEO Access Only"}
@@ -84,7 +84,7 @@ export default function AdminStatistics({
       </div>
 
       {/* VIP Level Tiers */}
-      <div className={`${isExpanded ? 'grid' : 'hidden'} md:grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 md:mb-0`}>
+      <div className={`${isExpanded ? 'grid' : 'hidden'} md:grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 mb-4 md:mb-0`}>
         {vipLevels.map((v) => (
           <div key={v.lvl} className="bg-white/5 border border-white/10 px-3 py-2 rounded flex items-center justify-between group hover:bg-white/10 transition-all">
             <div>
