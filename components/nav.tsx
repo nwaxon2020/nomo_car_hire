@@ -5,8 +5,9 @@ import { useRouter, usePathname } from "next/navigation";
 import { auth, db } from "@/lib/firebaseConfig";
 import { signOut } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from "firebase/firestore";
-import { FiHeadphones, FiGrid, FiChevronUp, FiLogOut, FiLogIn, FiUser, FiChevronDown } from "react-icons/fi";
+import { FiHeadphones, FiGrid, FiChevronUp, FiLogOut, FiLogIn, FiUser, FiChevronDown, FiMapPin } from "react-icons/fi";
 import { FaUsers, FaUserShield, FaHome } from "react-icons/fa";
+import { Navigation } from "lucide-react";
 
 export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -230,6 +231,14 @@ export default function Nav() {
                     <FaUserShield size={18} /> Admin Panel
                   </Link>
                 )}
+
+                <div className="py-2 border-t border-gray-800 space-y-4">
+                  <p className="text-left text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Mobility Services</p>
+
+                  <Link href="/user/mobility" className="pb-2 flex items-center gap-3 text-white text-[11px] font-bold uppercase tracking-widest" onClick={() => setMenuOpen(false)}>
+                    <FiGrid size={18} className="text-blue-500" /> My Bookings
+                  </Link>
+                </div>
 
                 <Link href="/join-us" className="my-2 md:my-0 flex items-center gap-3 text-white text-[11px] font-bold uppercase tracking-widest" onClick={() => setMenuOpen(false)}>
                   <FaUsers size={18} className="text-yellow-500" /> Join Our Team

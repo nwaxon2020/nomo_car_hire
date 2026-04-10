@@ -25,8 +25,9 @@ export default function AdminDashboardUi() {
     totalCustomers: 0,
     totalRevenue: 0,
     vipRevenueOnly: 0,
-    ticketRevenueOnly: 0, // Added for your logic
-    ticketCount: 0,        // Count of valid ticket holders
+    ticketRevenueOnly: 0, 
+    transportRevenueOnly: 0,
+    ticketCount: 0,        
     siteRating: 0,
     totalReviews: 0,
     vipCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
@@ -94,8 +95,8 @@ export default function AdminDashboardUi() {
 
         // Calculate VIP Revenue
         if (data.vipHistory && Array.isArray(data.vipHistory)) {
-          data.vipHistory.forEach((item: any) => {
-            vipRevenue += (item.price || 0);
+          data.vipHistory.forEach((item: { price: number }) => {
+            if (item.price) vipRevenue += Number(item.price);
           });
         }
 
@@ -103,7 +104,7 @@ export default function AdminDashboardUi() {
         if (data.tickets && Array.isArray(data.tickets)) {
           let userHasActiveTicket = false;
 
-          data.tickets.forEach((ticket: any) => {
+          data.tickets.forEach((ticket: { amount?: number; expired?: boolean }) => {
             // Add all money ever spent on tickets to revenue
             ticketRevenue += (ticket.amount || 0);
 
@@ -118,14 +119,14 @@ export default function AdminDashboardUi() {
 
         let calculatedVipLevel = data.vipLevel || 0;
         if (data.vipHistory && Array.isArray(data.vipHistory)) {
-          const activeVips = data.vipHistory.filter((v: any) => {
+          const activeVips = data.vipHistory.filter((v: { expired?: boolean; expiryDate?: { toDate?: () => Date; seconds?: number | string }; level?: number }) => {
             if (v.expired) return false;
             if (!v.expiryDate) return false;
-            const expDate = v.expiryDate.toDate ? v.expiryDate.toDate() : new Date(v.expiryDate.seconds * 1000);
+            const expDate = v.expiryDate.toDate ? v.expiryDate.toDate() : new Date(Number(v.expiryDate.seconds) * 1000);
             return expDate > new Date();
           });
           if (activeVips.length > 0) {
-            const purchasedLvl = Math.max(...activeVips.map((v: any) => v.level || 0));
+            const purchasedLvl = Math.max(...activeVips.map((v: { level?: number }) => v.level || 0));
             calculatedVipLevel = Math.max(calculatedVipLevel, purchasedLvl);
           }
         }
@@ -142,8 +143,20 @@ export default function AdminDashboardUi() {
         vipRevenueOnly: vipRevenue,
         ticketRevenueOnly: ticketRevenue,
         ticketCount: validTicketUserCount,
-        totalRevenue: vipRevenue + ticketRevenue,
+        totalRevenue: vipRevenue + ticketRevenue + prev.transportRevenueOnly,
         vipCounts: vips
+      }));
+    });
+
+    const unsubTransport = onSnapshot(collection(db, "transportCompanies"), (snap) => {
+      let transportRevenue = 0;
+      snap.docs.forEach(d => {
+        transportRevenue += (d.data().paymentAmount || 0);
+      });
+      setStats(prev => ({
+        ...prev,
+        transportRevenueOnly: transportRevenue,
+        totalRevenue: prev.vipRevenueOnly + prev.ticketRevenueOnly + transportRevenue
       }));
     });
 
@@ -153,6 +166,7 @@ export default function AdminDashboardUi() {
       unsubUsers();
       unsubReviews();
       unsubNewDrivers();
+      unsubTransport();
     };
   }, []);
 
@@ -167,6 +181,7 @@ export default function AdminDashboardUi() {
 
   const allCards = [
     { title: "Manage Drivers", icon: <FaCar />, link: "/admin/manage-driver", badge: driverBadgeCount },
+    { title: "Manage Transport Hub", icon: <FiBriefcase />, link: "/admin/manage-transport", badge: 0 },
     { title: "Applicants", icon: <FiBriefcase />, link: "/admin/applicants", badge: unreadCounts.applicants },
     { title: "Broadcast", icon: <FiBriefcase />, link: "/admin/broadcast", badge: 0 },
     { title: "Complaints", icon: <FiUserPlus />, link: "/admin/complaints", badge: unreadCounts.complaints },
@@ -187,7 +202,7 @@ export default function AdminDashboardUi() {
 
       <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
         {allCards.map((card) => {
-          const canSee = isCEO || (allowedRoutes.includes(card.link) && !(card as any).ceoOnly);
+          const canSee = isCEO || (allowedRoutes.includes(card.link) && !((card as { ceoOnly?: boolean }).ceoOnly));
           if (!canSee) return null;
 
           return (

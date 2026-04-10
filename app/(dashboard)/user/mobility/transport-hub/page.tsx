@@ -7,6 +7,7 @@ export default function TransportHubPage() {
     return (
         <LocationGuard>
             <TransportHubUi />
+            {/* <Waiting /> */}
         </LocationGuard>
     );
 }

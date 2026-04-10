@@ -1,0 +1,78 @@
+{
+    "last_updated": "2026-04-10T11:03:26.025848",
+    "count": 8,
+    "listings": [
+        {
+            "from": "Lagos",
+            "to": "Abuja",
+            "amount": 32000,
+            "company": "Peace Mass Transit",
+            "time": "06:30 AM",
+            "discount": "5%",
+            "website": "https://pmt.ng"
+        },
+        {
+            "from": "Enugu",
+            "to": "Lagos",
+            "amount": 19500,
+            "company": "Peace Mass Transit",
+            "time": "07:00 AM",
+            "discount": "0%",
+            "website": "https://pmt.ng"
+        },
+        {
+            "from": "Lagos",
+            "to": "Benin",
+            "amount": 18500,
+            "company": "GIGM",
+            "time": "06:00 AM",
+            "discount": "10%",
+            "website": "https://gigm.com"
+        },
+        {
+            "from": "Abuja",
+            "to": "Lagos",
+            "amount": 34500,
+            "company": "GIGM",
+            "time": "05:30 AM",
+            "discount": "0%",
+            "website": "https://gigm.com"
+        },
+        {
+            "from": "Lagos",
+            "to": "Onitsha",
+            "amount": 26000,
+            "company": "GUO Motors",
+            "time": "07:30 AM",
+            "discount": "5%",
+            "website": "https://guotransport.com"
+        },
+        {
+            "from": "Port Harcourt",
+            "to": "Lagos",
+            "amount": 24000,
+            "company": "GUO Motors",
+            "time": "06:45 AM",
+            "discount": "0%",
+            "website": "https://guotransport.com"
+        },
+        {
+            "from": "Lagos",
+            "to": "Accra",
+            "amount": 55000,
+            "company": "ABC Transport",
+            "time": "06:00 AM",
+            "discount": "5%",
+            "website": "https://abctransport.com"
+        },
+        {
+            "from": "Lagos",
+            "to": "Owerri",
+            "amount": 28000,
+            "company": "ABC Transport",
+            "time": "07:15 AM",
+            "discount": "0%",
+            "website": "https://abctransport.com"
+        }
+    ]
+}

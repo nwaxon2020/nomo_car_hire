@@ -23,23 +23,35 @@ const TICKET_LABELS: Record<string, { label: string; icon: string }> = {
   monthly: { label: "Monthly Ticket", icon: "💎" },
 }
 
+interface AdminFinancePricing {
+  vip: { validityDays: number; warningDays: number; prices: Record<string, number> };
+  tickets: Record<string, Record<string, number>>;
+  newDriver: { freeTrialDays: number; warningDays: number };
+  startTicketCollect: boolean;
+  transportRegistrationFee: number;
+  transportRegistrationDuration: number;
+  [key: string]: any;
+}
+
 export default function FinanceManagement() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState<any>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [updatedBy, setUpdatedBy] = useState<string>("")
 
   // Source of truth from Firestore
-  const [serverData, setServerData] = useState<any>(null)
+  const [serverData, setServerData] = useState<AdminFinancePricing | null>(null)
 
   // Working copies of the config
   const [vipValidityDays, setVipValidityDays] = useState<number>(0)
   const [vipWarningDays, setVipWarningDays] = useState<number>(0)
   const [vipPrices, setVipPrices] = useState<Record<number, number>>({})
-  const [tickets, setTickets] = useState<any>(null)
+  const [tickets, setTickets] = useState<Record<string, Record<string, number>> | null>(null)
   const [newDriverDays, setNewDriverDays] = useState<number>(60)
   const [newDriverWarningDays, setNewDriverWarningDays] = useState<number>(5)
   const [startTicketCollect, setStartTicketCollect] = useState<boolean>(false)
+  const [transportRegistrationFee, setTransportRegistrationFee] = useState<number>(20000)
+  const [transportRegistrationDuration, setTransportRegistrationDuration] = useState<number>(1)
 
   // ─── Load from Firestore ──────────────────────────────────────────────────
   useEffect(() => {
@@ -69,9 +81,15 @@ export default function FinanceManagement() {
           if (d.startTicketCollect !== undefined) {
             setStartTicketCollect(d.startTicketCollect)
           }
+          if (d.transportRegistrationFee !== undefined) {
+            setTransportRegistrationFee(d.transportRegistrationFee)
+          }
+          if (d.transportRegistrationDuration !== undefined) {
+            setTransportRegistrationDuration(d.transportRegistrationDuration)
+          }
 
           // 2. Set serverData last to ensure comparison is clean
-          setServerData(d)
+          setServerData(d as AdminFinancePricing)
         }
       } catch (err) {
         console.error("Failed to load pricing config:", err)
@@ -110,9 +128,11 @@ export default function FinanceManagement() {
     const isTicketsDifferent = JSON.stringify(currentData.tickets) !== JSON.stringify(serverData.tickets);
     const isNewDriverDifferent = JSON.stringify(currentData.newDriver) !== JSON.stringify(serverData.newDriver);
     const isTicketCollectDifferent = startTicketCollect !== serverData.startTicketCollect;
+    const isTransportFeeDifferent = transportRegistrationFee !== (serverData.transportRegistrationFee || 20000);
+    const isTransportDurationDifferent = transportRegistrationDuration !== (serverData.transportRegistrationDuration || 1);
 
-    return isVipDifferent || isTicketsDifferent || isNewDriverDifferent || isTicketCollectDifferent;
-  }, [vipValidityDays, vipWarningDays, vipPrices, tickets, newDriverDays, newDriverWarningDays, startTicketCollect, serverData, loading]);
+    return isVipDifferent || isTicketsDifferent || isNewDriverDifferent || isTicketCollectDifferent || isTransportFeeDifferent || isTransportDurationDifferent;
+  }, [vipValidityDays, vipWarningDays, vipPrices, tickets, newDriverDays, newDriverWarningDays, startTicketCollect, transportRegistrationFee, transportRegistrationDuration, serverData, loading]);
 
   const handleCancel = () => {
     if (serverData) {
@@ -124,12 +144,15 @@ export default function FinanceManagement() {
       setNewDriverWarningDays(serverData.newDriver?.freeTrialDays || 60)
       setNewDriverWarningDays(serverData.newDriver?.warningDays || 5)
       setStartTicketCollect(serverData.startTicketCollect || false)
+      setTransportRegistrationFee(serverData.transportRegistrationFee || 20000)
+      setTransportRegistrationDuration(serverData.transportRegistrationDuration || 1)
       toast.success("Changes reverted to saved state")
     }
   }
 
   // ─── Save to Firestore ────────────────────────────────────────────────────
   const handleSave = async () => {
+    if (!tickets) return
     setSaving(true)
     try {
       const adminUser = auth.currentUser
@@ -151,6 +174,8 @@ export default function FinanceManagement() {
           warningDays: Number(newDriverWarningDays),
         },
         startTicketCollect: startTicketCollect,
+        transportRegistrationFee: Number(transportRegistrationFee),
+        transportRegistrationDuration: Number(transportRegistrationDuration),
         lastUpdated: Timestamp.now(),
         updatedBy: adminUser?.email || adminUser?.uid || "Unknown",
       }
@@ -168,10 +193,13 @@ export default function FinanceManagement() {
   }
 
   const updateTicket = (type: string, field: string, value: number) => {
-    setTickets((prev: any) => ({
-      ...prev,
-      [type]: { ...prev[type], [field]: value }
-    }))
+    setTickets((prev: Record<string, Record<string, number>> | null) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        [type]: { ...prev[type], [field]: value }
+      };
+    })
   }
 
   if (loading || !tickets) return (
@@ -335,6 +363,42 @@ export default function FinanceManagement() {
                 className="w-full bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-400/60"
               />
               <p className="text-[10px] text-slate-500 mt-2">Show purchase option {newDriverWarningDays} days before trial ends</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white/4 border border-white/10 rounded-2xl p-3 md:p-6 mb-8 backdrop-blur-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-xl">🚛</div>
+            <h2 className="text-lg font-black text-white">Transport Hub Settings</h2>
+          </div>
+          <p className="text-slate-300 text-sm mb-6">Configure the registration fee for transport companies.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Registration Fee (₦)</label>
+              <div className="flex items-center gap-3">
+                <span className="text-slate-400 font-bold text-2xl">₦</span>
+                <input
+                  type="number"
+                  value={transportRegistrationFee}
+                  onChange={(e) => setTransportRegistrationFee(Number(e.target.value))}
+                  className="flex-1 bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-emerald-400/60 transition-all"
+                />
+              </div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Registration Duration (Years)</label>
+              <div className="flex items-center gap-3">
+                <span className="text-slate-400 font-bold text-2xl">📅</span>
+                <input
+                  type="number"
+                  value={transportRegistrationDuration}
+                  onChange={(e) => setTransportRegistrationDuration(Number(e.target.value))}
+                  min={1}
+                  className="flex-1 bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-emerald-400/60 transition-all"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 mt-2">Partners will remain active for {transportRegistrationDuration} year(s) after payment.</p>
             </div>
           </div>
         </section>

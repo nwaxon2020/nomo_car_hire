@@ -48,7 +48,7 @@ export default function AdminStatistics({
               <span className="flex items-center gap-2">
                 ₦{stats.ticketRevenueOnly.toLocaleString()}
                 <span className="absolute top-2 right-2 text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-semibold">
-                  {stats.ticketCount} Ticket
+                  {stats.ticketCount}
                 </span>
               </span>
             ) : `${stats.ticketCount}`}
@@ -58,7 +58,16 @@ export default function AdminStatistics({
         </div>
 
         <div className={`${isExpanded ? 'block' : 'hidden'} md:block`}>
-          <MiniStat label="Drivers" value={stats.totalDrivers} icon={<FiTruck />} color="text-emerald-400" />
+          <MiniStat
+            label="Transport"
+            value={isCEO ? `₦${stats.transportRevenueOnly.toLocaleString()}` : "CEO Only"}
+            icon={<FiTruck className="rotate-12" />}
+            color="text-emerald-400"
+          />
+        </div>
+
+        <div className={`${isExpanded ? 'block' : 'hidden'} md:block`}>
+          <MiniStat label="Drivers" value={stats.totalDrivers} icon={<FiTruck />} color="text-amber-400" />
         </div>
 
         <div className={`${isExpanded ? 'block' : 'hidden'} md:block`}>
