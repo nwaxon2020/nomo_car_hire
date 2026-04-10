@@ -34,13 +34,13 @@ export default function ManageTransport() {
         try {
             await updateDoc(doc(db, "transportCompanies", id), { status: "approved" });
             toast.success("Company Approved!");
-            
+
             // Notify owner
             const company = companies.find(c => c.id === id);
             if (company?.ownerId) {
                 await triggerNotification(
-                    company.ownerId, 
-                    "Company Approved! 🎉", 
+                    company.ownerId,
+                    "Company Approved! 🎉",
                     `Your company "${company.companyName}" has been approved by the admin. You can now list trips.`,
                     "success",
                     "/user/mobility/transport-hub"
@@ -88,8 +88,8 @@ export default function ManageTransport() {
             const company = companies.find(c => c.id === id);
             if (company?.ownerId) {
                 await triggerNotification(
-                    company.ownerId, 
-                    "Company Flagged! 🚩", 
+                    company.ownerId,
+                    "Company Flagged! 🚩",
                     `Your company "${company.companyName}" has been flagged for review. Reason: ${reason}`,
                     "warning"
                 );
@@ -132,12 +132,12 @@ export default function ManageTransport() {
 
             <div className="grid grid-cols-1 gap-4">
                 {companies.map((company) => (
-                    <div key={company.id} className="bg-slate-900 border border-white/10 rounded-2xl p-6 flex flex-col md:flex-row gap-6">
+                    <div key={company.id} className="bg-slate-900 border border-white/10 rounded-2xl p-3 md:p-6 flex flex-col md:flex-row gap-6">
                         {/* Company Visuals */}
                         <div className="flex gap-4">
-                            <div 
+                            <div
                                 onClick={() => setOverlayImage(company.garageImageUrl)}
-                                className="w-24 h-24 rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                className="w-24 h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
                                 title="Garage Image"
                             >
                                 <img src={company.garageImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="Garage" />
@@ -145,7 +145,7 @@ export default function ManageTransport() {
                                     <FiEye className="text-white" />
                                 </div>
                             </div>
-                            <div 
+                            <div
                                 onClick={() => setOverlayImage(company.idImageUrl)}
                                 className="w-24 h-24 rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
                                 title="CAC/ID Image"
@@ -161,10 +161,9 @@ export default function ManageTransport() {
                         <div className="flex-1 space-y-2">
                             <div className="flex items-center gap-3">
                                 <h3 className="text-lg font-bold text-white">{company.companyName}</h3>
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${
-                                    company.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${company.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' :
                                     company.status === 'flagged' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'
-                                }`}>
+                                    }`}>
                                     {company.status}
                                 </span>
                             </div>
@@ -189,9 +188,9 @@ export default function ManageTransport() {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
+                        <div className="flex flex-wrap md:flex-nowrap gap-6 md:gap-2 justify-center items-center">
                             {company.status !== 'approved' ? (
-                                <button 
+                                <button
                                     onClick={() => handleApprove(company.id)}
                                     className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all"
                                     title="Approve"
@@ -200,7 +199,7 @@ export default function ManageTransport() {
                                 </button>
                             ) : (
                                 isCEO && (
-                                    <button 
+                                    <button
                                         onClick={() => setShowPasskeyModal({ id: company.id, action: 'unapprove' })}
                                         className="p-3 bg-slate-800 text-slate-400 rounded-xl hover:bg-slate-700 transition-all"
                                         title="Unapprove"
@@ -209,8 +208,8 @@ export default function ManageTransport() {
                                     </button>
                                 )
                             )}
-                            
-                            <button 
+
+                            <button
                                 onClick={() => handleFlag(company.id)}
                                 className="p-3 bg-amber-500/10 text-amber-500 rounded-xl hover:bg-amber-500 hover:text-white transition-all"
                                 title="Flag"
@@ -218,7 +217,7 @@ export default function ManageTransport() {
                                 <FiFlag size={20} />
                             </button>
 
-                            <button 
+                            <button
                                 onClick={() => handleNotify(company.ownerId, company.companyName)}
                                 className="p-3 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all"
                                 title="Send Message"
@@ -227,7 +226,7 @@ export default function ManageTransport() {
                             </button>
 
                             {isCEO && (
-                                <button 
+                                <button
                                     onClick={() => handleDelete(company.id)}
                                     className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
                                     title="Delete Forever"
@@ -243,19 +242,19 @@ export default function ManageTransport() {
             {/* Image Overlay */}
             <AnimatePresence>
                 {overlayImage && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={() => setOverlayImage(null)}
                         className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-8 cursor-zoom-out"
                     >
-                        <motion.img 
+                        <motion.img
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            src={overlayImage} 
-                            className="max-w-full max-h-full rounded-2xl shadow-2xl" 
-                            alt="Full View" 
+                            src={overlayImage}
+                            className="max-w-full max-h-full rounded-2xl shadow-2xl"
+                            alt="Full View"
                         />
                         <button className="absolute top-10 right-10 text-white/50 hover:text-white">
                             <FiX size={40} />
@@ -268,7 +267,7 @@ export default function ManageTransport() {
             <AnimatePresence>
                 {showPasskeyModal && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-sm shadow-2xl"
@@ -278,12 +277,12 @@ export default function ManageTransport() {
                                 <h3 className="text-xl font-bold uppercase tracking-tight">CEO Authorization</h3>
                             </div>
                             <p className="text-slate-400 text-sm mb-4">
-                                {showPasskeyModal.action === 'delete' ? 
-                                    "ARE YOU SURE? This action is irreversible. Enter passkey to DELETE FOREVER." : 
+                                {showPasskeyModal.action === 'delete' ?
+                                    "ARE YOU SURE? This action is irreversible. Enter passkey to DELETE FOREVER." :
                                     "Please enter the admin passkey to unapprove this company."}
                             </p>
-                            <input 
-                                type="password" 
+                            <input
+                                type="password"
                                 value={passkey}
                                 onChange={(e) => setPasskey(e.target.value)}
                                 className={`w-full bg-black border rounded-xl py-3 px-4 text-white focus:outline-none ${showPasskeyModal.action === 'delete' ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-amber-500'}`}
@@ -291,13 +290,13 @@ export default function ManageTransport() {
                                 autoFocus
                             />
                             <div className="flex gap-3 mt-6">
-                                <button 
+                                <button
                                     onClick={() => { setShowPasskeyModal(null); setPasskey(""); }}
                                     className="flex-1 py-3 bg-white/5 rounded-xl text-slate-400 font-bold hover:bg-white/10 transition-all text-sm"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleAuthorize}
                                     className={`flex-1 py-3 font-black rounded-xl transition-all shadow-lg text-sm ${showPasskeyModal.action === 'delete' ? 'bg-red-600 text-white hover:bg-red-500 shadow-red-600/20' : 'bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20'}`}
                                 >
