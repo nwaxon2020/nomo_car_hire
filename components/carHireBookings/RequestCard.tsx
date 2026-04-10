@@ -4,6 +4,7 @@ import { useState } from "react";
 import { auth, db } from "@/lib/firebaseConfig";
 import { doc, updateDoc, arrayUnion, increment, Timestamp } from "firebase/firestore";
 import EnhancedWhatsApp from "../EnhancedWhatsApp";
+import { AlertCircle } from "lucide-react";
 
 interface Request {
   id: string;
@@ -28,9 +29,10 @@ interface Request {
 interface RequestCardProps {
   request: Request;
   userId?: string;
+  onFlagCustomer?: (customer: { uid: string; fullName: string }) => void;
 }
 
-export default function RequestCard({ request, userId }: RequestCardProps) {
+export default function RequestCard({ request, userId, onFlagCustomer }: RequestCardProps) {
   const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -150,6 +152,15 @@ export default function RequestCard({ request, userId }: RequestCardProps) {
             <span>👁️ {request.views || 0} views</span>
             <span>💬 {request.offers?.length || 0} offers</span>
             <span>Posted {createdAtDate.toLocaleDateString()}</span>
+            {onFlagCustomer && request.userId !== userId && (
+              <button
+                onClick={() => onFlagCustomer({ uid: request.userId, fullName: request.userName })}
+                className="flex items-center gap-1 text-red-500 hover:text-red-400 font-bold transition-colors"
+              >
+                <AlertCircle className="w-3.5 h-3.5" />
+                Flag
+              </button>
+            )}
           </div>
 
           <button

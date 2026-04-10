@@ -12,6 +12,7 @@ interface DriverRequestsProps {
     driverCity: string;
     filter: string;
     driverVehicles: any[];
+    onFlagCustomer?: (customer: { uid: string, fullName: string, email?: string, phoneNumber?: string }) => void;
 }
 
 export default function DriverRequests({
@@ -23,7 +24,8 @@ export default function DriverRequests({
     driverState,
     driverCity,
     filter,
-    driverVehicles
+    driverVehicles,
+    onFlagCustomer
 }: DriverRequestsProps) {
     const hasApprovedVehicle = driverVehicles.length > 0;
 
@@ -203,6 +205,23 @@ export default function DriverRequests({
                                                 <MessageCircle className="w-3 h-3" /> {request.offers?.length || 0}
                                             </span>
                                         </button>
+                                        {onFlagCustomer && !isOwnRequest && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onFlagCustomer({
+                                                        uid: request.userId,
+                                                        fullName: request.userName || "Customer",
+                                                        email: request.userEmail,
+                                                        phoneNumber: request.phoneNumber
+                                                    });
+                                                }}
+                                                className="text-[10px] text-red-400 hover:text-red-300 font-bold ml-1 transition-colors flex items-center gap-0.5"
+                                            >
+                                                <AlertCircle className="w-2.5 h-2.5" />
+                                                Flag
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

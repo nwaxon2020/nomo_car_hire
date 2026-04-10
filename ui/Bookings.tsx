@@ -714,8 +714,8 @@ export default function BookingUi() {
             };
 
             const getDriverDistance = (driver: DriverWithVehicle): number => {
-                if (!customerLocation || !driver.location?.latitude || !driver.location?.longitude) return 9999;
-                return haversineDistance(customerLocation.lat, customerLocation.lng, driver.location.latitude, driver.location.longitude);
+                if (!customerLocation || !driver.location?.lat || !driver.location?.lng) return 9999;
+                return haversineDistance(customerLocation.lat, customerLocation.lng, driver.location.lat, driver.location.lng);
             };
 
             // NEW PRIORITY SORTING:

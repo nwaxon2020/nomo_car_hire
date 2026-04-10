@@ -38,7 +38,7 @@ export default function HeroSection({
         <div className="absolute bottom-10 right-10 w-96 h-96 bg-white rounded-full"></div>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-20 w-full">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8 lg:py-20 w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
             <div className="inline-flex items-center gap-2 border-2 border-gray-500 px-4 py-2 rounded-full mb-6">
@@ -87,9 +87,9 @@ export default function HeroSection({
                   <FaArrowLeft />
                   Sign Up
                 </Link>
-                
+
                 <Link
-                  href="/login" 
+                  href="/login"
                   className="md:flex-2 w-full bg-white text-blue-800 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg"
                 >
                   Login

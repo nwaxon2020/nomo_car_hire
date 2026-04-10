@@ -275,7 +275,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => router.push(`/user/mobility/purchase?userId=${userData?.id || userData?.uid || ''}`)}
+                            onClick={() => router.push(`/user/purchase-vip/${userId}`)}
                             className="w-full md:w-auto bg-gradient-to-r from-amber-500 to-yellow-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-yellow-700 transition-all shadow-lg flex items-center justify-center gap-2"
                         >
                             <span>⭐</span> Upgrade VIP

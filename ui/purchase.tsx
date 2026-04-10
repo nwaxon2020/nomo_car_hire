@@ -19,7 +19,7 @@ const VIP_CONFIG = {
   ],
 }
 
-export default function PurchasePage() {
+export default function PurchasePage({ userIdProp }: { userIdProp?: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -32,7 +32,7 @@ export default function PurchasePage() {
   const [benefit, showBenefit] = useState(false)
 
   useEffect(() => {
-    const targetUserId = searchParams.get('userId')
+    const targetUserId = userIdProp || searchParams.get('userId')
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {

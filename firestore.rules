@@ -22,24 +22,31 @@ service cloud.firestore {
     // 1. USERS
     match /users/{userId} {
       allow read: if request.auth != null;
-      // Allow users to create their own user documents (both Google & email/password auth)
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && (
-        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['emergencyContact'])) ||
         request.auth.uid == userId || 
+        // Allow other users (senders) to update the unreadChats array
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadChats']) ||
         isCEO() || 
         (hasPermission("/admin/manage-driver") && (
           resource.data.verified == false || request.resource.data.verified == true || isCEO()
         ))
       );
-      // Allow users to delete their own accounts
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 2. BOOKING REQUESTS
     match /bookingRequests/{requestId} {
-      allow read, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
-      allow create, update: if request.auth != null;
+      // Drivers need to read requests to place bids
+      allow read: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
+      allow create: if request.auth != null;
+      // Allow drivers to update offers/views, and customers to manage their requests
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'views', 'rejectedOnce', 'rejectedTwice']) ||
+        isCEO()
+      );
     }
 
     // 3. TRIPS
@@ -49,7 +56,12 @@ service cloud.firestore {
         resource.data.driverId == request.auth.uid ||
         isCEO()
       );
-      allow create, update: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        isCEO()
+      );
       allow delete: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
     }
 
@@ -110,15 +122,24 @@ service cloud.firestore {
       allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || isCEO());
     }
 
-    // Legacy support
     match /bookings/{bookingId} {
       allow read, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
       allow create, update: if request.auth != null;
     }
 
+    // 12. DIRECT OFFERS (Mobility Bidding)
+    match /directOffers/{offerId} {
+      allow read: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
+      allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || isCEO());
+    }
+
     // 7. CHATS
     match /preChats/{chatId} {
-      allow read, create: if request.auth != null;
+      allow read: if request.auth != null && (request.auth.uid in resource.data.participants || isCEO());
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (request.auth.uid in resource.data.participants || isCEO());
       allow delete: if request.auth != null && (request.auth.uid in resource.data.participants || isCEO());
     }
 

@@ -43,12 +43,13 @@ export function useUnreadChats() {
     if (!auth.currentUser || !chatId) return;
 
     try {
+      console.log(`Attempting to mark chat ${chatId} as read...`);
       const userRef = doc(db, "users", auth.currentUser.uid);
       // This physically removes the ID from the Firestore array
       await updateDoc(userRef, {
         unreadChats: arrayRemove(chatId)
       });
-      console.log(`Chat ${chatId} removed from unread list.`);
+      console.log(`Success: Chat ${chatId} removed from unread list.`);
     } catch (error) {
       console.error("Error marking chat as read:", error);
     }

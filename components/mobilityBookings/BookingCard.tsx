@@ -37,7 +37,7 @@ export default function BookingCard({
     const vehicleImages = getVehicleImages(vehicle);
     const vipLevel = Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
     const distance = customerLocation
-        ? calculateDistance(customerLocation.lat, customerLocation.lng, driver.location?.latitude || 0, driver.location?.longitude || 0)
+        ? calculateDistance(customerLocation.lat, customerLocation.lng, driver.location?.lat || 0, driver.location?.lng || 0)
         : null;
 
     // Dynamic styling based on VIP level

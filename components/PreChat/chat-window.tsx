@@ -311,17 +311,6 @@ export default function ChatWindow({
                     if (lastMessage.senderId !== currentUserId) {
                         setReceivingMessage(true);
                         setTimeout(() => setReceivingMessage(false), 1000);
-
-                        // Add this chat to current user's unreadChats if they're not the sender
-                        if (currentUserId) {
-                            try {
-                                await updateDoc(doc(db, "users", currentUserId), {
-                                    unreadChats: arrayUnion(chatId)
-                                });
-                            } catch (error) {
-                                console.error("Error adding chat to unreadChats:", error);
-                            }
-                        }
                     }
                 }
 

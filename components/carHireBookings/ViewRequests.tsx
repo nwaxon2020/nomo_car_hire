@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
@@ -1115,6 +1115,7 @@ export default function ViewRequests({
           driverCity={driverCity}
           filter={filter}
           driverVehicles={driverVehicles}
+          onFlagCustomer={(customer) => setFlagOverlay({ show: true, targetUser: { ...customer, type: "customer" } })}
         />
       )}
 

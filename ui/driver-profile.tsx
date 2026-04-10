@@ -572,7 +572,7 @@ export default function DriverProfilePage() {
 
   const handleVIPPurchase = async (level: number) => {
     try {
-      router.push(`/user/purchase?userId=${driverId}`);
+      router.push(`/user/purchase-vip/${driverId}`);
     } catch (err) {
       console.error("Error redirecting to purchase:", err);
       toast.error("Failed to redirect to purchase page");
