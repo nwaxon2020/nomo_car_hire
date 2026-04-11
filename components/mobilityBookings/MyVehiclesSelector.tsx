@@ -9,12 +9,14 @@ interface MyVehiclesSelectorProps {
     vehicles: VehicleLog[];
     selectedVehicleId: string;
     onSelect: (vehicle: VehicleLog) => void;
+    isLocked?: boolean;
 }
 
 export default function MyVehiclesSelector({
     vehicles,
     selectedVehicleId,
-    onSelect
+    onSelect,
+    isLocked = false
 }: MyVehiclesSelectorProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -34,8 +36,9 @@ export default function MyVehiclesSelector({
     return (
         <div className="relative mb-6 group">
             <div className="flex items-center justify-between mb-2 px-2">
-                <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">
-                    Switch Your Active Vehicle
+                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-gray-500">
+                    Active Vehicle Selector
+                    {isLocked && <span className="text-[9px] text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full animate-pulse">LOCKED (24H)</span>}
                 </h3>
                 <div className="hidden md:flex gap-2">
                     <button
@@ -73,15 +76,25 @@ export default function MyVehiclesSelector({
                     return (
                         <div
                             key={vehicle.id}
-                            onClick={() => onSelect(vehicle)}
-                            className={`flex-shrink-0  cursor-pointer transition-all duration-300 ${isSelected
-                                ? 'scale-105 z-10'
-                                : 'scale-95 opacity-60 hover:opacity-100 hover:scale-100'
+                            onClick={() => {
+                                if (!isSelected && !isLocked) {
+                                    onSelect(vehicle);
+                                }
+                            }}
+                            className={`flex-shrink-0 transition-all duration-500 ${
+                                isSelected 
+                                ? 'scale-105 z-10 cursor-default' 
+                                : isLocked 
+                                    ? 'scale-95 opacity-30 grayscale cursor-not-allowed' 
+                                    : 'scale-95 opacity-60 hover:opacity-100 hover:scale-100 cursor-pointer'
                                 }`}
                         >
-                            <div className={`relative rounded-xl overflow-hidden border-2 transition-all ${isSelected
+                            <div className={`relative rounded-xl overflow-hidden border-2 transition-all ${
+                                isSelected
                                 ? 'border-emerald-500 shadow-xl shadow-emerald-500/40'
-                                : 'border-gray-800 bg-gray-900'
+                                : isLocked
+                                    ? 'border-gray-800 bg-gray-900 border-dashed'
+                                    : 'border-gray-800 bg-gray-900'
                                 }`}>
                                 <div className="relative h-20 sm:h-48 bg-gray-800">
                                     <Image
@@ -96,7 +109,12 @@ export default function MyVehiclesSelector({
                                         </div>
                                     )}
                                 </div>
-                                <div className={`p-2 text-center transition-colors ${isSelected ? 'bg-emerald-500 text-white' : 'bg-gray-900 text-gray-400 border-t border-gray-800'
+                                <div className={`p-2 text-center transition-colors ${
+                                    isSelected 
+                                    ? 'bg-emerald-500 text-white' 
+                                    : isLocked 
+                                        ? 'bg-gray-900 text-gray-600 border-t border-gray-800' 
+                                        : 'bg-gray-900 text-gray-400 border-t border-gray-800 hover:text-white'
                                     }`}>
                                     <p className="text-[10px] sm:text-xs font-black uppercase truncate tracking-tighter mb-0.5">
                                         {vehicle.carName}
@@ -106,8 +124,8 @@ export default function MyVehiclesSelector({
                                             Active Vehicle
                                         </p>
                                     ) : (
-                                        <p className="text-[8px] sm:text-[10px] font-bold text-gray-500 uppercase leading-none">
-                                            Tap to Switch
+                                        <p className={`text-[8px] sm:text-[10px] font-bold uppercase leading-none ${isLocked ? 'text-red-900' : 'text-gray-500'}`}>
+                                            {isLocked ? "Locked" : "Tap to Switch"}
                                         </p>
                                     )}
                                 </div>

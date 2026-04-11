@@ -200,6 +200,7 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
                         >
                             <VehicleCard
                                 vehicle={v}
+                                isOnlyVehicle={vehicles.length === 1}
                                 onEdit={() => onEditVehicle(v)}
                                 onDelete={() => onDeleteVehicle(v.id)}
                                 onMarkAvailable={() => onMarkAvailable(v.id!)}

@@ -177,7 +177,7 @@ export default function BookingUi() {
     const [showCancelWarning, setShowCancelWarning] = useState(false);
     const [acceptanceMap, setAcceptanceMap] = useState(false);
     const [countdown, setCountdown] = useState(0);
-    const [driverResponse, setDriverResponse] = useState<"none" | "cancelled">("none");
+    const [driverResponse, setDriverResponse] = useState<"none" | "cancelled" | "busy">("none");
 
     // Notifications
     const [notificationCount, setNotificationCount] = useState(0);
@@ -215,13 +215,18 @@ export default function BookingUi() {
             setQuickViewHistory(JSON.parse(savedHistory))
         }
 
-        // Get customer's geolocation for proximity sorting
+        // Get customer's live GPS — use watchPosition for continuous live updates
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
+            const watchId = navigator.geolocation.watchPosition(
                 (pos) => setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
                 () => setCustomerLocation(null),
-                { enableHighAccuracy: false, timeout: 8000 }
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
             );
+            // Clean up the watch when component unmounts
+            return () => {
+                navigator.geolocation.clearWatch(watchId);
+                unsubscribe();
+            };
         }
 
         return () => unsubscribe()
@@ -237,7 +242,7 @@ export default function BookingUi() {
                 const driverStatus = userData.isDriver || false;
                 setIsDriver(driverStatus);
                 if (driverStatus) {
-                    setViewMode("driver");
+                    setViewMode("driver"); // Drivers see their Requests page by default
                 }
                 setNotificationType(driverStatus ? "driver" : "customer");
 
@@ -361,6 +366,7 @@ export default function BookingUi() {
                 if (data.bookingVehicleId) {
                     setActiveOwnVehicleId(data.bookingVehicleId);
                 }
+                setCurrentUser((prev: any) => prev ? { ...prev, ...data } : data);
             }
         });
 
@@ -613,7 +619,8 @@ export default function BookingUi() {
                     passengers: data.passengers || 0,
                     ac: data.ac || false,
                     description: data.description || "",
-                    status: data.status || "available", // Keep actual status
+                    status: data.status || "available",
+                    isApproved: data.isApproved || false, // ← READ isApproved from Firestore
                     driverId: data.driverId || "",
                     images: data.images || {},
                 };
@@ -658,6 +665,8 @@ export default function BookingUi() {
                     isLocationActive: data.isLocationActive || false,
                     locationSharedAt: data.locationSharedAt || undefined,
                     lastLocationUpdate: data.lastLocationUpdate || undefined,
+                    bookingVehicleId: data.bookingVehicleId || undefined,
+                    bookingVehicleLastUpdated: data.bookingVehicleLastUpdated || undefined,
                 };
 
 
@@ -689,6 +698,7 @@ export default function BookingUi() {
                             ac: vehicleData.ac || false,
                             description: vehicleData.description || "",
                             status: vehicleData.status || "available",
+                            isApproved: vehicleData.isApproved || false, // ← READ isApproved
                             driverId: vehicleData.driverId || "",
                             images: vehicleData.images || {},
                         };
@@ -700,11 +710,25 @@ export default function BookingUi() {
                 if (driver.uid === currentUserId) return;
 
                 // Only include driver if they have at least one vehicle
+                // NEW LOGIC: Only include their strictly SET active vehicle (or fallback to the first one)
                 if (driverVehicles.length > 0) {
-                    driversWithVehiclesList.push({
-                        ...driver,
-                        vehicles: driverVehicles
-                    });
+                    let activeVehicle = undefined;
+                    
+                    if (driver.bookingVehicleId) {
+                        activeVehicle = driverVehicles.find(v => v.id === driver.bookingVehicleId);
+                    }
+                    
+                    // Critical Fallback: if the driver's target car doesn't exist anymore, default to their 1st APPROVED vehicle
+                    if (!activeVehicle) {
+                        activeVehicle = driverVehicles.find(v => v.status === 'approved' || (v as any).isApproved) || driverVehicles[0];
+                    }
+
+                    if (activeVehicle) {
+                        driversWithVehiclesList.push({
+                            ...driver,
+                            vehicles: [activeVehicle] // Stricly wrap ONLY the single active vehicle
+                        });
+                    }
                 }
             });
 
@@ -718,8 +742,11 @@ export default function BookingUi() {
             };
 
             const getDriverDistance = (driver: DriverWithVehicle): number => {
-                if (!customerLocation || !driver.location?.latitude || !driver.location?.longitude) return 9999;
-                return haversineDistance(customerLocation.lat, customerLocation.lng, driver.location.latitude, driver.location.longitude);
+                // Driver stores location as {lat, lng} — not {latitude, longitude}
+                const dLat = driver.location?.lat ?? driver.location?.latitude;
+                const dLng = driver.location?.lng ?? driver.location?.longitude;
+                if (!customerLocation || !dLat || !dLng) return 9999;
+                return haversineDistance(customerLocation.lat, customerLocation.lng, dLat, dLng);
             };
 
             // NEW PRIORITY SORTING:
@@ -756,6 +783,14 @@ export default function BookingUi() {
 
             setDriversWithVehicles(driversWithVehiclesList);
 
+            // DEBUG: Log summary to help diagnose visibility issues
+            console.log(`[Bookings] Fetched ${driversWithVehiclesList.length} drivers with vehicles.`);
+            driversWithVehiclesList.forEach(d => {
+                d.vehicles.forEach(v => {
+                    console.log(`  Driver: ${d.fullName} | Car: ${v.carName} | isApproved: ${v.isApproved} | status: ${v.status}`);
+                });
+            });
+
         } catch (err) {
             console.error("Error fetching data:", err);
             setError("Failed to load drivers and vehicles. Please try again.");
@@ -768,41 +803,71 @@ export default function BookingUi() {
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
         return driver.vehicles
             .filter((vehicle) => {
-                // ONLY show approved vehicles
-                if (!vehicle.status || (vehicle.status !== 'approved' && !(vehicle as any).isApproved)) {
+                // ONLY show approved vehicles — gate on isApproved (set by admin)
+                if (!vehicle.isApproved) {
+                    console.log(`[Filter BLOCKED] ${driver.fullName} - not approved`);
                     return false;
                 }
 
-                // Check if driver has location sharing enabled
-                const locationSharingOn =
-                    (driver.location && driver.location.isSharing === true) ||
-                    driver.isLocationActive === true;
+                // Check proximity using LIVE GPS only. Profile city strings are unreliable.
+                // isNearby defaults to true — only GPS math can set it to false.
+                let isNearby = true;
 
-                if (!locationSharingOn) return false;
+                // Driver location stored as {lat, lng} by DriverLocationToggle (NOT latitude/longitude)
+                const driverLat = driver.location?.lat ?? driver.location?.latitude;
+                const driverLng = driver.location?.lng ?? driver.location?.longitude;
 
-                // Check if location was updated recently (within 30 min)
-                if (driver.lastLocationUpdate) {
-                    const lastUpdate = driver.lastLocationUpdate.toDate();
-                    const minutesSinceUpdate = (new Date().getTime() - lastUpdate.getTime()) / (1000 * 60);
-                    if (minutesSinceUpdate > 30) return false;
+                if (customerLocation && driverLat && driverLng) {
+                    const R = 6371;
+                    const lat1 = customerLocation.lat;
+                    const lon1 = customerLocation.lng;
+                    const lat2 = driverLat;
+                    const lon2 = driverLng;
+                    
+                    const dLat = (lat2 - lat1) * Math.PI / 180;
+                    const dLon = (lon2 - lon1) * Math.PI / 180;
+                    const a = 
+                        Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                        Math.sin(dLon/2) * Math.sin(dLon/2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    const distance = R * c;
+                    
+                    isNearby = distance <= 50;
+                    console.log(`[Filter GPS] ${driver.fullName} | distance: ${distance.toFixed(1)}km | isNearby: ${isNearby}`);
                 }
+                // No GPS available on either side → default isNearby stays true (show the car)
 
-                const locationMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
-                    driver.state?.toLowerCase().includes(searchLocation.toLowerCase()) ||
-                    searchLocation === ""
-
-                let categoryMatch = true
-                if (selectedCategory === "all") {
-                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false
+                let locationMatch = false;
+                
+                if (searchLocation !== "") {
+                    const textMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
+                        driver.state?.toLowerCase().includes(searchLocation.toLowerCase());
+                    locationMatch = textMatch;
+                    if (!locationMatch && isNearby) locationMatch = true;
                 } else {
-                    categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase()
-                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false
+                    locationMatch = isNearby;
                 }
 
-                const acMatch = !showACOnly || (vehicle.ac && vehicle.carType.toLowerCase() !== "keke")
-                const verifiedMatch = !showVerifiedOnly || driver.verified
+                let categoryMatch = true;
+                if (selectedCategory === "all") {
+                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false;
+                } else {
+                    categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase();
+                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false;
+                }
 
-                return locationMatch && categoryMatch && acMatch && verifiedMatch
+                const acMatch = !showACOnly || (vehicle.ac && vehicle.carType.toLowerCase() !== "keke");
+                const verifiedMatch = !showVerifiedOnly || driver.verified;
+
+                const passes = locationMatch && categoryMatch && acMatch && verifiedMatch;
+                if (!passes) {
+                    console.log(`[Filter REJECTED] ${driver.fullName} | locationMatch:${locationMatch} categoryMatch:${categoryMatch} acMatch:${acMatch} verifiedMatch:${verifiedMatch}`);
+                } else {
+                    console.log(`[Filter PASSED] ${driver.fullName} | ${vehicle.carName}`);
+                }
+
+                return passes;
             })
             .map(vehicle => ({ driver, vehicle }))
     })
@@ -811,15 +876,32 @@ export default function BookingUi() {
     const handleOwnVehicleSelect = async (vehicle: VehicleLog) => {
         if (!currentUserId || !vehicle.id) return;
 
+        // Check the 24 hour cooldown
+        if (currentUser?.bookingVehicleLastUpdated) {
+            const lastUpdated = currentUser.bookingVehicleLastUpdated.toDate();
+            const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours
+            if (Date.now() - lastUpdated.getTime() < cooldownPeriod) {
+                toast.error("You can only change your active vehicle once every 24 hours.");
+                return;
+            }
+        }
+
         try {
             await updateDoc(doc(db, "users", currentUserId), {
-                bookingVehicleId: vehicle.id
+                bookingVehicleId: vehicle.id,
+                bookingVehicleLastUpdated: serverTimestamp()
             });
             // onSnapshot will handle local state update
+            toast.success("Active booking car updated.");
         } catch (error) {
             console.error("Error updating booking vehicle:", error);
+            toast.error("Failed to update active car.");
         }
     }
+
+    const isVehicleChangeLocked = currentUser?.bookingVehicleLastUpdated 
+        ? (Date.now() - currentUser.bookingVehicleLastUpdated.toDate().getTime()) < (24 * 60 * 60 * 1000)
+        : false;
 
     // Handle driver selection
     const handleDriverSelect = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
@@ -1648,7 +1730,7 @@ export default function BookingUi() {
 
             const docRef = await addDoc(collection(db, 'directOffers'), offerData);
             setPendingOffer({ ...offerData, id: docRef.id });
-            setCountdown(8); // 8 second timeout logic (visual)
+            setCountdown(30); // 30 second timeout logic (visual)
 
             // Trigger Notification for the Driver
             await triggerNotification(
@@ -1673,6 +1755,8 @@ export default function BookingUi() {
                 updatedAt: serverTimestamp()
             });
             setPendingOffer(null);
+            setIncomingOffer(null);
+            setAcceptanceMap(false);
             setShowCancelWarning(false);
         } catch (error) {
             console.error('Error cancelling offer:', error);
@@ -1758,7 +1842,18 @@ export default function BookingUi() {
                 } else if (offer.status === 'accepted') {
                     setPendingOffer(offer);
                     setAcceptanceMap(true);
-                } else if (offer.status === 'rejected' || offer.status === 'timeout' || offer.status === 'cancelled') {
+                } else if (offer.status === 'started' || offer.status === 'completed') {
+                    setPendingOffer(null);
+                    setAcceptanceMap(false);
+                } else if (offer.status === 'rejected') {
+                    setDriverResponse("busy");
+                    // Show "Driver Busy" card before clearing
+                    setTimeout(() => {
+                        setPendingOffer(null);
+                        setAcceptanceMap(false);
+                        setDriverResponse("none");
+                    }, 4000); // 4 seconds delay
+                } else if (offer.status === 'timeout' || offer.status === 'cancelled') {
                     setPendingOffer(null);
                     setAcceptanceMap(false);
                     if (offer.status === 'cancelled') setDriverResponse("cancelled");
@@ -1808,6 +1903,14 @@ export default function BookingUi() {
                     setDriverResponse("none");
                 } else if (offer.status === 'cancelled') {
                     setDriverResponse("cancelled");
+                    setTimeout(() => {
+                        setIncomingOffer(null);
+                        setAcceptanceMap(false);
+                        setDriverResponse("none");
+                    }, 4000);
+                } else if (offer.status === 'started' || offer.status === 'completed') {
+                    setIncomingOffer(null);
+                    setAcceptanceMap(false);
                 }
             });
 
@@ -1821,8 +1924,14 @@ export default function BookingUi() {
                     setIncomingOffer(data);
                     if (data.status === 'accepted') setAcceptanceMap(true);
                 } else {
-                    setIncomingOffer(null);
-                    setAcceptanceMap(false);
+                    const cancelledDoc = snapshot.docs.find(d => d.data().status === 'cancelled');
+                    if (cancelledDoc) {
+                        setIncomingOffer({ ...cancelledDoc.data(), id: cancelledDoc.id } as DirectOffer);
+                        setDriverResponse("cancelled");
+                    } else {
+                        setIncomingOffer(null);
+                        setAcceptanceMap(false);
+                    }
                 }
             }
         });
@@ -1835,8 +1944,6 @@ export default function BookingUi() {
         let timer: NodeJS.Timeout;
         if (pendingOffer && pendingOffer.status === 'pending' && countdown > 0) {
             timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-        } else if (countdown === 0 && pendingOffer && pendingOffer.status === 'pending') {
-            // Optional: Auto-timeout on Firestore?
         }
         return () => clearTimeout(timer);
     }, [countdown, pendingOffer]);
@@ -1909,14 +2016,6 @@ export default function BookingUi() {
             {/* Map Acceptance Overlay */}
             {acceptanceMap && (pendingOffer || incomingOffer) && (
                 <div className="fixed inset-0 z-[200] bg-black">
-                    <div className="absolute top-6 right-6 z-[210]">
-                        <button
-                            onClick={() => setShowCancelWarning(true)}
-                            className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 shadow-2xl transition-all"
-                        >
-                            Cancel Request
-                        </button>
-                    </div>
                     {/* Placeholder for the real Map - integrating with existing map tools if possible */}
                     {/* Unified Map Overlay Content */}
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900">
@@ -1949,16 +2048,41 @@ export default function BookingUi() {
                             {pendingOffer && (
                                 <button
                                     onClick={() => handlePhoneCall(pendingOffer?.driverPhone || "")}
-                                    className="flex-1 py-5 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all"
+                                    className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:scale-105 transition-all"
                                 >
                                     Call Driver
                                 </button>
                             )}
+                            {incomingOffer && (
+                                <>
+                                    <button
+                                        onClick={() => handlePhoneCall("123")} // Customer phone currently not captured, placeholder
+                                        className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all"
+                                    >
+                                        Call Customer
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await updateDoc(doc(db, "directOffers", incomingOffer.id), { status: "started", updatedAt: serverTimestamp() });
+                                                startTrip(currentUser.uid, incomingOffer.vehicleId, incomingOffer.pickupLocation || "Current Location", incomingOffer.destination || "Not Set");
+                                                setAcceptanceMap(false);
+                                                setIncomingOffer(null);
+                                            } catch (err) {
+                                                console.error(err);
+                                            }
+                                        }}
+                                        className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-emerald-700 transition-all"
+                                    >
+                                        Start Trip
+                                    </button>
+                                </>
+                            )}
                             <button 
-                                onClick={() => setAcceptanceMap(false)}
-                                className="flex-1 py-5 bg-gray-800 text-white rounded-2xl font-black uppercase tracking-widest text-xs border border-white/10 shadow-xl hover:bg-gray-700 transition-all"
+                                onClick={() => setShowCancelWarning(true)}
+                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
                             >
-                                Minimize Map
+                                Cancel Request
                             </button>
                         </div>
                     </div>
@@ -1976,7 +2100,7 @@ export default function BookingUi() {
                                 style={{ animationDuration: '2s' }}
                             ></div>
                             <div className="absolute inset-0 flex items-center justify-center text-4xl font-black text-white">
-                                {countdown}
+                                {countdown > 0 ? countdown : "..."}
                             </div>
                         </div>
                         <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Waiting for Driver</h3>
@@ -1987,6 +2111,19 @@ export default function BookingUi() {
                         >
                             Cancel Request
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: Driver Busy Overlay (Passenger sees this when driver rejects) */}
+            {pendingOffer && driverResponse === 'busy' && (
+                <div className="fixed inset-0 z-[180] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 text-center shadow-2xl">
+                        <div className="w-24 h-24 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FaExclamationTriangle className="text-orange-500 text-4xl" />
+                        </div>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Driver is Busy</h3>
+                        <p className="text-gray-400 text-sm mb-8">The driver is currently unavailable or busy. Please try another driver.</p>
                     </div>
                 </div>
             )}
@@ -2023,16 +2160,6 @@ export default function BookingUi() {
                 {isDriver && (
                     <div className="max-w-6xl mx-auto mb-3 flex flex-col md:flex-row gap-2 md:inline-flex w-full md:w-auto">
                         <button
-                            onClick={() => setViewMode("driver")}
-                            className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "driver"
-                                ? "bg-amber-500 text-black border-amber-500 shadow-xl"
-                                : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
-                                }`}
-                        >
-                            <FaCar size={14} />
-                            Requests
-                        </button>
-                        <button
                             onClick={() => setViewMode("customer")}
                             className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "customer"
                                 ? "bg-gray-900 text-white border-gray-900 shadow-xl"
@@ -2040,7 +2167,17 @@ export default function BookingUi() {
                                 }`}
                         >
                             <FaSearch size={14} />
-                            Bookings
+                            Book a Ride
+                        </button>
+                        <button
+                            onClick={() => setViewMode("driver")}
+                            className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "driver"
+                                ? "bg-amber-500 text-black border-amber-500 shadow-xl"
+                                : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
+                                }`}
+                        >
+                            <FaCar size={14} />
+                            My Requests
                         </button>
                     </div>
                 )}
@@ -2127,7 +2264,7 @@ export default function BookingUi() {
                                                             Open Live Map
                                                         </button>
                                                         <button
-                                                            onClick={() => handleRejectOffer(incomingOffer)} // Used as Cancel here
+                                                            onClick={() => setShowCancelWarning(true)} // Used as Cancel here
                                                             className="w-full py-4 bg-gray-50 text-gray-400 font-black uppercase tracking-widest text-[9px] rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all"
                                                         >
                                                             Terminate Trip
@@ -2143,7 +2280,22 @@ export default function BookingUi() {
                                                 <h3 className="text-3xl sm:text-4xl font-black text-gray-900 mb-3 leading-tight tracking-tighter">
                                                     {incomingOffer.customerName} <span className="text-amber-500">wants to book you!</span>
                                                 </h3>
-                                                <p className="text-gray-500 text-lg mb-8 font-medium">Review and accept the request below to see the location.</p>
+                                                <p className="text-gray-500 text-lg mb-6 font-medium">Review and accept the request below to see the location.</p>
+
+                                                {ownVehicles.find(v => v.id === incomingOffer.vehicleId) && (
+                                                    <div className="bg-amber-50 rounded-2xl p-4 mb-8 border border-amber-200 shadow-inner flex items-center justify-center gap-4 max-w-sm mx-auto">
+                                                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                                                            <FaCar className="text-amber-500 text-xl" />
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">Target Vehicle</p>
+                                                            <p className="font-bold text-gray-900 text-sm">
+                                                                {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carName}{" "}
+                                                                {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carModel}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 <div className="flex flex-col sm:flex-row gap-4 max-w-2xl mx-auto">
                                                     <button
@@ -2273,21 +2425,6 @@ export default function BookingUi() {
                     />
                 )}
 
-                {/* ✅ NEW: Floating Global Map Restore Button */}
-                {!acceptanceMap && (pendingOffer?.status === 'accepted' || incomingOffer?.status === 'accepted') && (
-                    <div className="fixed bottom-24 right-6 z-[200] animate-in slide-in-from-right duration-500">
-                        <button
-                            onClick={() => setAcceptanceMap(true)}
-                            className="w-16 h-16 bg-emerald-600 text-white rounded-full flex flex-col items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all group border-4 border-white"
-                        >
-                            <div className="relative">
-                                <FaCar size={20} className="group-hover:animate-bounce" />
-                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse" />
-                            </div>
-                            <span className="text-[7px] font-black uppercase mt-1">Live Map</span>
-                        </button>
-                    </div>
-                )}
             </div>
         </>
     )

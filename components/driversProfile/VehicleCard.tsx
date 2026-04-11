@@ -5,7 +5,7 @@ import {
     ChevronLeft, ChevronRight, X, ShieldCheck,
     User, Wind, Paintbrush, FileText, ChevronDown, ChevronUp, Bookmark
 } from 'lucide-react';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import toast from 'react-hot-toast';
@@ -37,6 +37,7 @@ interface Vehicle {
 
 interface VehicleCardProps {
     vehicle: Vehicle;
+    isOnlyVehicle?: boolean;
     onEdit: () => void;
     onDelete: () => void;
     onMarkAvailable: () => void;
@@ -44,6 +45,7 @@ interface VehicleCardProps {
 
 export const VehicleCard: React.FC<VehicleCardProps> = ({
     vehicle,
+    isOnlyVehicle = false,
     onEdit,
     onDelete,
     onMarkAvailable
@@ -53,6 +55,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
     const [showNoDocsOverlay, setShowNoDocsOverlay] = useState(false);
     const [isBookingVehicle, setIsBookingVehicle] = useState(false);
     const [settingBooking, setSettingBooking] = useState(false);
+    const [isVehicleChangeLocked, setIsVehicleChangeLocked] = useState(false);
 
     // Listen for booking vehicle status
     useEffect(() => {
@@ -64,6 +67,14 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
             if (snap.exists()) {
                 const data = snap.data();
                 setIsBookingVehicle(data.bookingVehicleId === vehicle.id);
+                
+                if (data.bookingVehicleLastUpdated) {
+                    const lastUpdated = data.bookingVehicleLastUpdated.toDate();
+                    const locked = (Date.now() - lastUpdated.getTime()) < (24 * 60 * 60 * 1000);
+                    setIsVehicleChangeLocked(locked);
+                } else {
+                    setIsVehicleChangeLocked(false);
+                }
             }
         });
         return () => unsubscribe();
@@ -71,6 +82,12 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
 
     const handleSetBookingVehicle = async (e: React.MouseEvent) => {
         e.stopPropagation();
+        
+        if (isVehicleChangeLocked) {
+             toast.error("You can only change your active vehicle once every 24 hours.");
+             return;
+        }
+        
         const auth = getAuth();
         const user = auth.currentUser;
         if (!user || !vehicle.id) return;
@@ -78,7 +95,8 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
         setSettingBooking(true);
         try {
             await updateDoc(doc(db, 'users', user.uid), {
-                bookingVehicleId: isBookingVehicle ? null : vehicle.id
+                bookingVehicleId: isBookingVehicle ? null : vehicle.id,
+                bookingVehicleLastUpdated: serverTimestamp()
             });
             toast.success(isBookingVehicle ? 'Booking vehicle deselected' : `${vehicle.carName} set as your booking vehicle!`);
         } catch (err) {
@@ -232,18 +250,26 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                     </div>
 
                     {/* Set as Booking Vehicle Button */}
-                    <button
-                        onClick={handleSetBookingVehicle}
-                        disabled={settingBooking}
-                        className={`w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm ${
-                            isBookingVehicle
-                                ? 'bg-emerald-500 border-emerald-400 text-white shadow-emerald-200'
-                                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
-                        }`}
-                    >
-                        <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />
-                        {settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : 'Set as Booking Vehicle'}
-                    </button>
+                    {isOnlyVehicle ? (
+                        <button disabled className="w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm bg-emerald-500 border-emerald-400 text-white shadow-emerald-200 cursor-default">
+                            <CheckCircle size={14} /> Auto-Selected (Only Vehicle)
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSetBookingVehicle}
+                            disabled={settingBooking || isVehicleChangeLocked}
+                            className={`w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm ${
+                                isBookingVehicle
+                                    ? 'bg-emerald-500 border-emerald-400 text-white shadow-emerald-200'
+                                    : isVehicleChangeLocked
+                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
+                            }`}
+                        >
+                            {isVehicleChangeLocked && !isBookingVehicle ? <Clock size={14} /> : <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />}
+                            {settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : isVehicleChangeLocked ? 'Locked (24H)' : 'Set as Booking Vehicle'}
+                        </button>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="flex gap-2">

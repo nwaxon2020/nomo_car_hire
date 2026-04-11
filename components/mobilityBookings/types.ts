@@ -10,6 +10,7 @@ export interface VehicleLog {
     ac: boolean;
     description: string;
     status: string;
+    isApproved?: boolean;
     driverId: string;
     images?: {
         front?: string;
@@ -59,17 +60,22 @@ export interface Driver {
     referralCount?: number;
     vipBadge?: string;
     location?: {
-        latitude: number;
-        longitude: number;
+        lat?: number;       // Primary field used by DriverLocationToggle
+        lng?: number;       // Primary field used by DriverLocationToggle
+        latitude?: number;  // Legacy fallback
+        longitude?: number; // Legacy fallback
         accuracy?: number;
         address?: string;
+        heading?: number;
         timestamp?: any;
-        isSharing: boolean;
+        isSharing?: boolean;
         vehicleId?: string;
     };
     isLocationActive?: boolean;
     locationSharedAt?: any;
     lastLocationUpdate?: any;
+    bookingVehicleId?: string;
+    bookingVehicleLastUpdated?: any;
 }
 
 export interface DriverWithVehicle extends Driver {
@@ -161,7 +167,7 @@ export interface DirectOffer {
     driverId: string;
     driverName: string;
     vehicleId: string;
-    status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'timeout';
+    status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'timeout' | 'started' | 'completed';
     createdAt: Timestamp;
     updatedAt: Timestamp;
     customerLocation?: {

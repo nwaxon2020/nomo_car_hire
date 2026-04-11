@@ -10,6 +10,19 @@ export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2
     return R * c; // Distance in km
 };
 
+/**
+ * Formats a distance in km into a human-readable string.
+ * Shows meters when under 1km, km with 1 decimal otherwise.
+ * e.g: 0.34 km → "340 m away", 2.3 km → "2.3 km away"
+ */
+export const formatDistance = (distanceKm: number): string => {
+    if (distanceKm < 1) {
+        const meters = Math.round(distanceKm * 1000);
+        return `${meters} m away`;
+    }
+    return `${distanceKm.toFixed(1)} km away`;
+};
+
 export const getDefaultVehicleImage = (carType: string) => {
     const images: Record<string, string> = {
         "sedan": "/carr.jpg",

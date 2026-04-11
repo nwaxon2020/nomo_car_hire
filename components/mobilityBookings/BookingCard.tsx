@@ -7,7 +7,7 @@ import {
     FaFlag, FaCrown, FaLocationArrow
 } from 'react-icons/fa';
 import { Driver, VehicleLog, DriverWithVehicle } from './types';
-import { getVehicleImages, calculateDistance } from './utils';
+import { getVehicleImages, calculateDistance, getDriverLocation, formatDistance } from './utils';
 
 interface BookingCardProps {
     driver: DriverWithVehicle;
@@ -36,8 +36,11 @@ export default function BookingCard({
 }: BookingCardProps) {
     const vehicleImages = getVehicleImages(vehicle);
     const vipLevel = Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
-    const distance = customerLocation
-        ? calculateDistance(customerLocation.lat, customerLocation.lng, driver.location?.latitude || 0, driver.location?.longitude || 0)
+    
+    // Use getDriverLocation which correctly reads {lat, lng} format from Firestore
+    const driverLoc = getDriverLocation(driver);
+    const distance = (customerLocation && driverLoc)
+        ? calculateDistance(customerLocation.lat, customerLocation.lng, driverLoc.lat, driverLoc.lng)
         : null;
 
     // Dynamic styling based on VIP level
@@ -112,11 +115,17 @@ export default function BookingCard({
                         </div>
                     </div>
 
-                    {/* Proximity Badge */}
+                    {/* Proximity Badge — only if BOTH have GPS */}
                     {distance !== null && (
                         <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5">
                             <FaLocationArrow className="text-blue-400 text-[8px]" />
-                            {distance.toFixed(1)} km away
+                            {formatDistance(distance)}
+                        </div>
+                    )}
+                    {distance === null && driverLoc === null && (
+                        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5">
+                            <FaLocationArrow className="text-gray-400 text-[8px]" />
+                            Location Offline
                         </div>
                     )}
                 </div>
