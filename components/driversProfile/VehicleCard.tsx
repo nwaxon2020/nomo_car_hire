@@ -257,17 +257,17 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                     ) : (
                         <button
                             onClick={handleSetBookingVehicle}
-                            disabled={settingBooking || isVehicleChangeLocked}
+                            disabled={settingBooking || isVehicleChangeLocked || !vehicle.isApproved}
                             className={`w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm ${
                                 isBookingVehicle
                                     ? 'bg-emerald-500 border-emerald-400 text-white shadow-emerald-200'
-                                    : isVehicleChangeLocked
+                                    : isVehicleChangeLocked || !vehicle.isApproved
                                         ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                         : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
                             }`}
                         >
-                            {isVehicleChangeLocked && !isBookingVehicle ? <Clock size={14} /> : <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />}
-                            {settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : isVehicleChangeLocked ? 'Locked (24H)' : 'Set as Booking Vehicle'}
+                            {(isVehicleChangeLocked || !vehicle.isApproved) && !isBookingVehicle ? <Clock size={14} /> : <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />}
+                            {!vehicle.isApproved ? 'Unapproved Vehicle' : settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : isVehicleChangeLocked ? 'Locked (24H)' : 'Set as Booking Vehicle'}
                         </button>
                     )}
 

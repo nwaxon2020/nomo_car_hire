@@ -8,7 +8,7 @@ interface BookingGridProps {
     filteredDrivers: { driver: DriverWithVehicle; vehicle: VehicleLog }[];
     currentUser: any;
     customerLocation: { lat: number; lng: number } | null;
-    onBook: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
+    onBook: (driver: DriverWithVehicle, vehicle: VehicleLog) => void | Promise<void>;
     onSelect: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onPreChat: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onWhatsApp: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;

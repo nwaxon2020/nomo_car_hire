@@ -1,5 +1,5 @@
 "use client"
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
 import {
     FaStar, FaCheckCircle, FaUsers, FaSnowflake,
@@ -14,7 +14,7 @@ interface BookingCardProps {
     vehicle: VehicleLog;
     currentUser: any;
     customerLocation: { lat: number; lng: number } | null;
-    onBook: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
+    onBook: (driver: DriverWithVehicle, vehicle: VehicleLog) => void | Promise<void>;
     onSelect: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onPreChat: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
     onWhatsApp: (driver: DriverWithVehicle, vehicle: VehicleLog) => void;
@@ -34,6 +34,7 @@ export default function BookingCard({
     onCall,
     onFlag
 }: BookingCardProps) {
+    const [isBooking, setIsBooking] = useState(false);
     const vehicleImages = getVehicleImages(vehicle);
     const vipLevel = Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
     
@@ -176,19 +177,34 @@ export default function BookingCard({
             <div className='px-3 pb-3'>
                 <div className="space-y-2">
                     <button
-                        onClick={(e) => {
+                        disabled={isBooking}
+                        onClick={async (e) => {
                             e.stopPropagation();
-                            onBook(driver, vehicle);
+                            setIsBooking(true);
+                            try {
+                                await onBook(driver, vehicle);
+                            } finally {
+                                setIsBooking(false);
+                            }
                         }}
                         className={`w-full py-3 rounded-md md:rounded-xl font-black uppercase tracking-widest text-xs transition-all duration-300 shadow-lg flex items-center justify-center gap-2 ${isBlackVip
                             ? 'bg-amber-500 hover:bg-amber-600 text-black shadow-amber-500/20'
                             : isGoldVip
                                 ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20'
                                 : 'bg-purple-500 hover:bg-purple-400 text-white shadow-purple-500/30'
-                            }`}
+                            } ${isBooking ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                        Book Car
-                        <FaChevronRight size={10} />
+                        {isBooking ? (
+                            <>
+                                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                Processing...
+                            </>
+                        ) : (
+                            <>
+                                Book Car
+                                <FaChevronRight size={10} />
+                            </>
+                        )}
                     </button>
 
                     <div className="pt-2 grid grid-cols-3 gap-2">

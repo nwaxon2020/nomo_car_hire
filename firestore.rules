@@ -97,7 +97,7 @@ service cloud.firestore {
       allow read: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
       allow create: if request.auth != null;
       allow update: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
-      allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || isCEO());
+      allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
     }
 
     match /preChats/{chatId} {

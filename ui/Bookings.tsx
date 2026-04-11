@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
     arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc, onSnapshot,
-    orderBy
+    orderBy, deleteDoc
 } from "firebase/firestore"
 import { db } from "@/lib/firebaseConfig"
 import { getAuth } from "firebase/auth"
@@ -187,6 +187,9 @@ export default function BookingUi() {
     // OWN VEHICLE SELECTOR STATE
     const [ownVehicles, setOwnVehicles] = useState<VehicleLog[]>([])
     const [activeOwnVehicleId, setActiveOwnVehicleId] = useState<string>("")
+
+    // ✅ NEW: Loading state for accept offer button
+    const [isAcceptingOffer, setIsAcceptingOffer] = useState(false);
 
 
     // Initialize auth and load history from Firebase
@@ -713,11 +716,11 @@ export default function BookingUi() {
                 // NEW LOGIC: Only include their strictly SET active vehicle (or fallback to the first one)
                 if (driverVehicles.length > 0) {
                     let activeVehicle = undefined;
-                    
+
                     if (driver.bookingVehicleId) {
                         activeVehicle = driverVehicles.find(v => v.id === driver.bookingVehicleId);
                     }
-                    
+
                     // Critical Fallback: if the driver's target car doesn't exist anymore, default to their 1st APPROVED vehicle
                     if (!activeVehicle) {
                         activeVehicle = driverVehicles.find(v => v.status === 'approved' || (v as any).isApproved) || driverVehicles[0];
@@ -823,23 +826,23 @@ export default function BookingUi() {
                     const lon1 = customerLocation.lng;
                     const lat2 = driverLat;
                     const lon2 = driverLng;
-                    
+
                     const dLat = (lat2 - lat1) * Math.PI / 180;
                     const dLon = (lon2 - lon1) * Math.PI / 180;
-                    const a = 
-                        Math.sin(dLat/2) * Math.sin(dLat/2) +
-                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                        Math.sin(dLon/2) * Math.sin(dLon/2);
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    const a =
+                        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                     const distance = R * c;
-                    
+
                     isNearby = distance <= 50;
                     console.log(`[Filter GPS] ${driver.fullName} | distance: ${distance.toFixed(1)}km | isNearby: ${isNearby}`);
                 }
                 // No GPS available on either side → default isNearby stays true (show the car)
 
                 let locationMatch = false;
-                
+
                 if (searchLocation !== "") {
                     const textMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
                         driver.state?.toLowerCase().includes(searchLocation.toLowerCase());
@@ -899,7 +902,7 @@ export default function BookingUi() {
         }
     }
 
-    const isVehicleChangeLocked = currentUser?.bookingVehicleLastUpdated 
+    const isVehicleChangeLocked = currentUser?.bookingVehicleLastUpdated
         ? (Date.now() - currentUser.bookingVehicleLastUpdated.toDate().getTime()) < (24 * 60 * 60 * 1000)
         : false;
 
@@ -1519,16 +1522,17 @@ export default function BookingUi() {
                 currentTripId: tripDoc.id
             });
 
-            // Update driver's customersCarried (add customer ID immediately)
+            // Update driver's customersCarried
             const driverRef = doc(db, 'users', driverId);
             const driverDoc = await getDoc(driverRef);
             const currentCustomers = driverDoc.data()?.customersCarried || [];
 
-            if (!currentCustomers.includes(currentUser.uid)) {
-                await updateDoc(driverRef, {
-                    customersCarried: [...currentCustomers, currentUser.uid]
-                });
-            }
+            // Add this trip directly as a unique entry to increment the passenger stats each time
+            const uniqueTripEntry = `${currentUser.uid}_${tripDoc.id}`;
+
+            await updateDoc(driverRef, {
+                customersCarried: [...currentCustomers, uniqueTripEntry]
+            });
 
             // Set active trip locally
             setActiveTrip({
@@ -1539,7 +1543,7 @@ export default function BookingUi() {
             // Update the selected driver in local state
             setSelectedDriver(prev => prev ? {
                 ...prev,
-                customersCarried: [...(prev.customersCarried || []), currentUser.uid]
+                customersCarried: [...(prev.customersCarried || []), uniqueTripEntry]
             } : null);
 
             // Refresh drivers list to hide the unavailable vehicle
@@ -1681,21 +1685,37 @@ export default function BookingUi() {
             new Promise((resolve) => {
                 if (!navigator.geolocation) {
                     toast.error("Geolocation is not supported by your browser");
-                    resolve(null);
+                    resolve(customerLocation || null);
                     return;
                 }
 
+                // Attempt 1: High Accuracy (e.g. mobile GPS)
                 navigator.geolocation.getCurrentPosition(
                     (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
                     (error) => {
                         if (error.code === 1) { // Permission Denied
                             window.alert("PERMISSION DENIED: Please enable your system location/GPS to book a car. Look for the location icon in your browser address bar or system settings.");
-                        } else {
-                            toast.error("Could not retrieve your location. Check your GPS settings.");
+                            resolve(customerLocation || null);
+                            return;
                         }
-                        resolve(null);
+                        
+                        // Attempt 2: Low Accuracy (e.g. laptop WiFi/IP location) if GPS fails/times out
+                        console.warn("High Accuracy GPS failed, trying Low Accuracy fallback...");
+                        navigator.geolocation.getCurrentPosition(
+                            (posLow) => resolve({ lat: posLow.coords.latitude, lng: posLow.coords.longitude }),
+                            (errorLow) => {
+                                // Attempt 3: Final Fallback to already watched customerLocation
+                                if (customerLocation) {
+                                    resolve(customerLocation);
+                                } else {
+                                    toast.error("Could not retrieve your location. Check your GPS/network settings.");
+                                    resolve(null);
+                                }
+                            },
+                            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+                        );
                     },
-                    { enableHighAccuracy: true, timeout: 8000 }
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 } // Faster timeout so laptops failover quickly
                 );
             });
 
@@ -1754,6 +1774,16 @@ export default function BookingUi() {
                 status: 'cancelled',
                 updatedAt: serverTimestamp()
             });
+
+            // Delayed database purge to ensure UI status propagates first before complete deletion
+            setTimeout(async () => {
+                try {
+                    await deleteDoc(doc(db, 'directOffers', offerId));
+                } catch (e) {
+                    console.error('Silenced delayed delete error:', e);
+                }
+            }, 6000);
+
             setPendingOffer(null);
             setIncomingOffer(null);
             setAcceptanceMap(false);
@@ -1763,8 +1793,13 @@ export default function BookingUi() {
         }
     };
 
-    // ✅ NEW: Direct Booking Flow Logic (Driver)
+    // ✅ NEW: Direct Booking Flow Logic (Driver) - UPDATED with loading state
     const handleAcceptOffer = async (offer: DirectOffer) => {
+        // Prevent multiple clicks
+        if (isAcceptingOffer) return;
+
+        setIsAcceptingOffer(true);
+
         const getFreshDriverLocation = () => new Promise<{ lat: number, lng: number } | null>((resolve) => {
             navigator.geolocation.getCurrentPosition(
                 (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
@@ -1802,6 +1837,9 @@ export default function BookingUi() {
             setAcceptanceMap(true);
         } catch (error) {
             console.error('Error accepting offer:', error);
+            toast.error("Failed to accept offer. Please try again.");
+        } finally {
+            setIsAcceptingOffer(false);
         }
     };
 
@@ -1811,6 +1849,16 @@ export default function BookingUi() {
                 status: 'rejected',
                 updatedAt: serverTimestamp()
             });
+
+            // Delay purge
+            setTimeout(async () => {
+                try {
+                    await deleteDoc(doc(db, 'directOffers', offer.id));
+                } catch (e) {
+                    console.error('Silenced delayed delete error:', e);
+                }
+            }, 6000);
+
             setIncomingOffer(null);
         } catch (error) {
             console.error('Error rejecting offer:', error);
@@ -2078,7 +2126,7 @@ export default function BookingUi() {
                                     </button>
                                 </>
                             )}
-                            <button 
+                            <button
                                 onClick={() => setShowCancelWarning(true)}
                                 className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
                             >
@@ -2145,7 +2193,10 @@ export default function BookingUi() {
                                 No, Wait
                             </button>
                             <button
-                                onClick={() => pendingOffer && cancelOffer(pendingOffer.id)}
+                                onClick={() => {
+                                    if (pendingOffer) cancelOffer(pendingOffer.id);
+                                    else if (incomingOffer) cancelOffer(incomingOffer.id);
+                                }}
                                 className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-lg shadow-red-500/20"
                             >
                                 Yes, Cancel
@@ -2228,68 +2279,70 @@ export default function BookingUi() {
                             {incomingOffer ? (
                                 <div className="px-4 py-5 flex justify-center items-center animate-in fade-in zoom-in duration-500">
                                     {driverResponse === 'cancelled' ? (
-                                        <div className="py-20">
-                                            <div className="max-w-2xl mx-auto bg-red-50 border border-red-100 rounded-[2.5rem] p-12 text-center relative overflow-hidden">
+                                        <div className="py-6">
+                                            <div className="max-w-md mx-auto bg-red-50 border border-red-100 rounded-3xl p-6 md:p-8 text-center relative overflow-hidden shadow-lg">
                                                 <button
                                                     onClick={() => setIncomingOffer(null)}
-                                                    className="absolute top-6 right-6 p-3 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-all"
+                                                    className="absolute top-4 right-4 p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-all"
                                                 >
                                                     <FaTimes />
                                                 </button>
-                                                <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                                    <FaTimesCircle className="text-red-500 text-3xl" />
+                                                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <FaTimesCircle className="text-red-500 text-2xl" />
                                                 </div>
-                                                <h3 className="text-2xl font-black text-red-900 uppercase">Request Cancelled</h3>
-                                                <p className="text-red-700/70 mt-2">The customer cancelled this request at the last minute.</p>
+                                                <h3 className="text-lg font-black text-red-900 uppercase">Request Cancelled</h3>
+                                                <p className="text-red-700/70 mt-1 text-xs sm:text-sm">The customer cancelled this request at the last minute.</p>
                                             </div>
                                         </div>
                                     ) : incomingOffer.status === 'accepted' ? (
-                                        <div className="max-w-2xl mx-auto w-full px-4">
-                                            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
-                                                <div className="bg-emerald-500 py-3 text-center">
+                                        <div className="max-w-lg mx-auto w-full px-2 sm:px-4">
+                                            <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl overflow-hidden">
+                                                <div className="bg-emerald-500 py-2.5 text-center">
                                                     <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Active Trip Signal Connected</p>
                                                 </div>
-                                                <div className="p-10 text-center">
-                                                    <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                                                        <FaCar className="text-emerald-500 text-2xl" />
+                                                <div className="p-6 md:p-8 text-center">
+                                                    <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                        <FaCar className="text-emerald-500 text-xl" />
                                                     </div>
-                                                    <h3 className="text-2xl font-black text-gray-900 mb-2">Trip with {incomingOffer.customerName}</h3>
-                                                    <p className="text-gray-500 text-sm mb-8 font-medium">Map tracking is active. You can minimize this view to see your other requests.</p>
-                                                    
-                                                    <div className="flex flex-col gap-3">
+                                                    <h3 className="text-xl font-black text-gray-900 mb-1">Trip with {incomingOffer.customerName}</h3>
+                                                    <p className="text-gray-500 text-[10px] sm:text-xs mb-6 font-medium">Map tracking is active. You can minimize this view to see your other requests.</p>
+
+                                                    <div className="flex gap-3">
                                                         <button
                                                             onClick={() => setAcceptanceMap(true)}
-                                                            className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-lg transition-all"
+                                                            className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all"
                                                         >
-                                                            Open Live Map
+                                                            Open Map
                                                         </button>
                                                         <button
                                                             onClick={() => setShowCancelWarning(true)} // Used as Cancel here
-                                                            className="w-full py-4 bg-gray-50 text-gray-400 font-black uppercase tracking-widest text-[9px] rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all"
+                                                            className="flex-1 py-3.5 bg-gray-50 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
                                                         >
-                                                            Terminate Trip
+                                                            Terminate
                                                         </button>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="p-2 sm:p-3 rounded-[3rem] bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 shadow-2xl animate-pulse min-h-[300px] flex items-center justify-center max-w-4xl mx-auto">
-                                            <div className="bg-white rounded-[2.8rem] p-10 sm:p-16 text-center w-full">
-                                                <p className="text-xs font-black uppercase tracking-[0.4em] text-amber-600 mb-6 drop-shadow-sm">New Booking Offer</p>
-                                                <h3 className="text-3xl sm:text-4xl font-black text-gray-900 mb-3 leading-tight tracking-tighter">
-                                                    {incomingOffer.customerName} <span className="text-amber-500">wants to book you!</span>
+                                        <div className="p-1 sm:p-2 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 shadow-2xl flex items-center justify-center max-w-lg mx-auto w-full">
+                                            <div className="bg-white rounded-[1.5rem] p-6 sm:p-8 text-center w-full">
+                                                <div className="flex justify-center mb-4">
+                                                    <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center animate-bounce">
+                                                        <FaCar className="text-amber-500 text-xl" />
+                                                    </div>
+                                                </div>
+                                                <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 mb-2 drop-shadow-sm">New Booking Offer</p>
+                                                <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2 leading-tight tracking-tighter">
+                                                    {incomingOffer.customerName} <span className="text-amber-500 flex flex-col sm:inline">wants to book you!</span>
                                                 </h3>
-                                                <p className="text-gray-500 text-lg mb-6 font-medium">Review and accept the request below to see the location.</p>
+                                                <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">Review and accept the request below to see the location.</p>
 
                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId) && (
-                                                    <div className="bg-amber-50 rounded-2xl p-4 mb-8 border border-amber-200 shadow-inner flex items-center justify-center gap-4 max-w-sm mx-auto">
-                                                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
-                                                            <FaCar className="text-amber-500 text-xl" />
-                                                        </div>
-                                                        <div className="text-left">
-                                                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">Target Vehicle</p>
-                                                            <p className="font-bold text-gray-900 text-sm">
+                                                    <div className="bg-amber-50 rounded-xl p-3 mb-6 border border-amber-200 shadow-inner flex items-center justify-center gap-3 w-full">
+                                                        <div className="text-center">
+                                                            <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 mb-0.5">Target Vehicle</p>
+                                                            <p className="font-bold text-gray-900 text-xs">
                                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carName}{" "}
                                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carModel}
                                                             </p>
@@ -2297,18 +2350,22 @@ export default function BookingUi() {
                                                     </div>
                                                 )}
 
-                                                <div className="flex flex-col sm:flex-row gap-4 max-w-2xl mx-auto">
+                                                <div className="flex gap-3 w-full">
                                                     <button
                                                         onClick={() => handleRejectOffer(incomingOffer)}
-                                                        className="flex-1 py-6 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 font-black tracking-widest uppercase rounded-[2rem] transition-all text-sm"
+                                                        className="flex-1 py-3 sm:py-4 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 font-black tracking-widest uppercase rounded-xl transition-all text-[10px] sm:text-xs"
                                                     >
                                                         Reject
                                                     </button>
                                                     <button
                                                         onClick={() => handleAcceptOffer(incomingOffer)}
-                                                        className="flex-1 py-6 bg-gray-900 hover:bg-black text-white font-black tracking-widest uppercase rounded-[2rem] transition-all shadow-2xl text-sm"
+                                                        disabled={isAcceptingOffer}
+                                                        className={`flex-1 py-3 sm:py-4 font-black tracking-widest uppercase rounded-xl transition-all text-[10px] sm:text-xs flex items-center justify-center gap-2 ${isAcceptingOffer
+                                                                ? "bg-gray-400 cursor-not-allowed text-white"
+                                                                : "bg-gray-900 hover:bg-black text-white shadow-xl"
+                                                            }`}
                                                     >
-                                                        Accept Offer
+                                                        {isAcceptingOffer ? "Wait..." : "Accept"}
                                                     </button>
                                                 </div>
                                             </div>

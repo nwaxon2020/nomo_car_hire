@@ -67,6 +67,7 @@ export default function MyVehiclesSelector({
             >
                 {vehicles.map((vehicle) => {
                     const isSelected = vehicle.id === selectedVehicleId;
+                    const isUnapproved = !vehicle.isApproved && vehicle.status !== 'approved';
                     const image = vehicle.images?.front ||
                         vehicle.images?.side ||
                         vehicle.images?.back ||
@@ -77,14 +78,14 @@ export default function MyVehiclesSelector({
                         <div
                             key={vehicle.id}
                             onClick={() => {
-                                if (!isSelected && !isLocked) {
+                                if (!isSelected && !isLocked && !isUnapproved) {
                                     onSelect(vehicle);
                                 }
                             }}
                             className={`flex-shrink-0 transition-all duration-500 ${
                                 isSelected 
                                 ? 'scale-105 z-10 cursor-default' 
-                                : isLocked 
+                                : isLocked || isUnapproved
                                     ? 'scale-95 opacity-30 grayscale cursor-not-allowed' 
                                     : 'scale-95 opacity-60 hover:opacity-100 hover:scale-100 cursor-pointer'
                                 }`}
@@ -92,7 +93,7 @@ export default function MyVehiclesSelector({
                             <div className={`relative rounded-xl overflow-hidden border-2 transition-all ${
                                 isSelected
                                 ? 'border-emerald-500 shadow-xl shadow-emerald-500/40'
-                                : isLocked
+                                : isLocked || isUnapproved
                                     ? 'border-gray-800 bg-gray-900 border-dashed'
                                     : 'border-gray-800 bg-gray-900'
                                 }`}>
@@ -124,8 +125,8 @@ export default function MyVehiclesSelector({
                                             Active Vehicle
                                         </p>
                                     ) : (
-                                        <p className={`text-[8px] sm:text-[10px] font-bold uppercase leading-none ${isLocked ? 'text-red-900' : 'text-gray-500'}`}>
-                                            {isLocked ? "Locked" : "Tap to Switch"}
+                                        <p className={`text-[8px] sm:text-[10px] font-bold uppercase leading-none ${isLocked || isUnapproved ? 'text-red-900' : 'text-gray-500'}`}>
+                                            {isUnapproved ? "Unapproved" : isLocked ? "Locked" : "Tap to Switch"}
                                         </p>
                                     )}
                                 </div>

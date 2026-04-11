@@ -37,6 +37,13 @@ export default function BookingTrackingMap({ pickup, driver }: BookingTrackingMa
       }
     }, 7000); // 7 seconds timeout
 
+    // Global interceptor for Google Maps Auth/Billing failures ("Oops! Something went wrong")
+    (window as any).gm_authFailure = () => {
+      console.warn("Google Maps Auth Failure detected. Enforcing fallback.");
+      setLoadError(true);
+      setShowFallback(true);
+    };
+
     return () => clearTimeout(timer);
   }, [isLoaded]);
 
@@ -62,35 +69,8 @@ export default function BookingTrackingMap({ pickup, driver }: BookingTrackingMa
     return loc.lat !== 0 && loc.lng !== 0;
   };
 
-  // State for blank map protection
-  const isConnecting = !isValidLocation(pickup) || !isValidLocation(driver);
-
   // Backyard Map (OpenStreetMap Fallback) or Connecting State
-  if (showFallback || loadError || isConnecting) {
-    if (isConnecting) {
-        return (
-            <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white p-8 text-center">
-                <div className="relative mb-8">
-                    <div className="w-24 h-24 border-2 border-emerald-500/20 rounded-full animate-ping absolute inset-0" />
-                    <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center relative backdrop-blur-sm border border-emerald-500/30">
-                        <div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(16,185,129,0.8)]" />
-                    </div>
-                </div>
-                <h4 className="text-xl font-black uppercase tracking-[0.2em] mb-3">Syncing Location</h4>
-                <p className="text-gray-400 text-xs font-medium max-w-[240px] leading-relaxed">
-                    {!isValidLocation(pickup) 
-                        ? "Establishing secure connection to your GPS device..." 
-                        : "Waiting for driver to initiate live tracking signal..."}
-                </p>
-                
-                {/* Visual Connection Bar */}
-                <div className="mt-8 w-48 h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 animate-progress-indefinite" />
-                </div>
-            </div>
-        );
-    }
-
+  if (showFallback || loadError) {
     const centerLat = (pickup.lat + driver.lat) / 2;
     const centerLng = (pickup.lng + driver.lng) / 2;
     // Simple OSM iframe as "backyard" fallback
