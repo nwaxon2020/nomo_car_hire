@@ -5,9 +5,9 @@ import { db, storage } from "@/lib/firebaseConfig";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast } from "react-hot-toast";
-import { 
-  FaSave, FaImage, FaUpload, FaEdit, FaPlus, FaTrash, 
-  FaChevronDown, FaShieldAlt, FaCar, 
+import {
+  FaSave, FaImage, FaUpload, FaEdit, FaPlus, FaTrash,
+  FaChevronDown, FaShieldAlt, FaCar,
   FaWallet, FaClock, FaStar, FaUsers, FaUserCheck, FaCrown, FaGem, FaCheckCircle, FaUserShield
 } from "react-icons/fa";
 import LoadingRound from "@/components/re-useable-loading";
@@ -66,9 +66,10 @@ const defaultContent: FullPageContent = {
   },
   howItWorks: { title: "How Nomo Cars Works", subtitle: "Simple steps", steps: [] },
   features: { title: "Why Choose Us?", subtitle: "Best experience", features: [] },
-  partner: { badgeText: "Partner", title: "Drive with Us", subtitle: "", description: "", primaryButtonText: "Register", benefits: [], sectionIcon: "FaCheckCircle", stats: [
-    { id: "stat-1", value: "₦25k+", label: "Weekly Potential" }, { id: "stat-2", value: "95%", label: "Driver Satisfaction" },
-    { id: "stat-3", value: "24/7", label: "Support" }, { id: "stat-4", value: "₦0", label: "Signup Fee" },]
+  partner: {
+    badgeText: "Partner", title: "Drive with Us", subtitle: "", description: "", primaryButtonText: "Register", benefits: [], sectionIcon: "FaCheckCircle", stats: [
+      { id: "stat-1", value: "₦25k+", label: "Weekly Potential" }, { id: "stat-2", value: "95%", label: "Driver Satisfaction" },
+      { id: "stat-3", value: "24/7", label: "Support" }, { id: "stat-4", value: "₦0", label: "Signup Fee" },]
   },
   safety: { title: "Safety First", subtitle: "Our Commitment", description: "", buttonText: "Read More", features: [] },
   cta: { title: "Join Nomo", description: "", primaryButtonText: "Start", secondaryButtonText: "Contact", secondaryButtonLink: "/", stats: [] }
@@ -143,34 +144,34 @@ export default function HomePageEditor() {
         <div className="flex justify-between items-center max-w-5xl mx-auto">
           <h2 className="text-lg font-bold text-blue-600">Home Page Configuration</h2>
           <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-            <span className={`w-2 h-2 rounded-full animate-pulse ${Object.values(dirtySections).includes(true) ? 'bg-red-500' : 'bg-green-500'}`}></span> 
+            <span className={`w-2 h-2 rounded-full animate-pulse ${Object.values(dirtySections).includes(true) ? 'bg-red-500' : 'bg-green-500'}`}></span>
             {Object.values(dirtySections).includes(true) ? 'Unsaved Changes' : 'CMS Active'}
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-3 md:p-8 space-y-6 pb-20">
-        <EditorSection title="Hero Section" icon={<FaEdit />} data={content.hero} isDirty={dirtySections.hero} saving={saving === "hero"} onUndo={() => handleUndo("hero")} onSave={(d: any, f: any) => handleSave("hero", d, f)} hasImage update={(v: any) => setContent({...content, hero: v})}>
+        <EditorSection title="Hero Section" icon={<FaEdit />} data={content.hero} isDirty={dirtySections.hero} saving={saving === "hero"} onUndo={() => handleUndo("hero")} onSave={(d: any, f: any) => handleSave("hero", d, f)} hasImage update={(v: any) => setContent({ ...content, hero: v })}>
           {(d: any, u: any) => <HeroForm data={d} update={u} />}
         </EditorSection>
 
-        <EditorSection title="How It Works" icon={<FaPlus />} data={content.howItWorks} isDirty={dirtySections.howItWorks} saving={saving === "howItWorks"} onUndo={() => handleUndo("howItWorks")} onSave={(d: any) => handleSave("howItWorks", d)} update={(v: any) => setContent({...content, howItWorks: v})}>
+        <EditorSection title="How It Works" icon={<FaPlus />} data={content.howItWorks} isDirty={dirtySections.howItWorks} saving={saving === "howItWorks"} onUndo={() => handleUndo("howItWorks")} onSave={(d: any) => handleSave("howItWorks", d)} update={(v: any) => setContent({ ...content, howItWorks: v })}>
           {(d: any, u: any) => <HowItWorksForm data={d} update={u} />}
         </EditorSection>
 
-        <EditorSection title="Features List" icon={<FaStar />} data={content.features} isDirty={dirtySections.features} saving={saving === "features"} onUndo={() => handleUndo("features")} onSave={(d: any) => handleSave("features", d)} update={(v: any) => setContent({...content, features: v})}>
+        <EditorSection title="Features List" icon={<FaStar />} data={content.features} isDirty={dirtySections.features} saving={saving === "features"} onUndo={() => handleUndo("features")} onSave={(d: any) => handleSave("features", d)} update={(v: any) => setContent({ ...content, features: v })}>
           {(d: any, u: any) => <FeaturesForm data={d} update={u} />}
         </EditorSection>
 
-        <EditorSection title="Driver Partner" icon={<FaCar />} data={content.partner} isDirty={dirtySections.partner} saving={saving === "partner"} onUndo={() => handleUndo("partner")} onSave={(d: any, f: any) => handleSave("partner", d, f)} hasImage update={(v: any) => setContent({...content, partner: v})}>
+        <EditorSection title="Driver Partner" icon={<FaCar />} data={content.partner} isDirty={dirtySections.partner} saving={saving === "partner"} onUndo={() => handleUndo("partner")} onSave={(d: any, f: any) => handleSave("partner", d, f)} hasImage update={(v: any) => setContent({ ...content, partner: v })}>
           {(d: any, u: any) => <DriverForm data={d} update={u} />}
         </EditorSection>
 
-        <EditorSection title="Safety Information" icon={<FaShieldAlt />} data={content.safety} isDirty={dirtySections.safety} saving={saving === "safety"} onUndo={() => handleUndo("safety")} onSave={(d: any) => handleSave("safety", d)} update={(v: any) => setContent({...content, safety: v})}>
+        <EditorSection title="Safety Information" icon={<FaShieldAlt />} data={content.safety} isDirty={dirtySections.safety} saving={saving === "safety"} onUndo={() => handleUndo("safety")} onSave={(d: any) => handleSave("safety", d)} update={(v: any) => setContent({ ...content, safety: v })}>
           {(d: any, u: any) => <SafetyForm data={d} update={u} />}
         </EditorSection>
 
-        <EditorSection title="Final CTA" icon={<FaUsers />} data={content.cta} isDirty={dirtySections.cta} saving={saving === "cta"} onUndo={() => handleUndo("cta")} onSave={(d: any) => handleSave("cta", d)} update={(v: any) => setContent({...content, cta: v})}>
+        <EditorSection title="Final CTA" icon={<FaUsers />} data={content.cta} isDirty={dirtySections.cta} saving={saving === "cta"} onUndo={() => handleUndo("cta")} onSave={(d: any) => handleSave("cta", d)} update={(v: any) => setContent({ ...content, cta: v })}>
           {(d: any, u: any) => <CTAForm data={d} update={u} />}
         </EditorSection>
       </main>
@@ -187,13 +188,13 @@ function IconSelect({ value, onChange }: { value: string; onChange: (v: string) 
   return (
     <div className="relative w-full">
       <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Icon Selection</label>
-      <button 
+      <button
         type="button"
-        onClick={() => setOpen(!open)} 
+        onClick={() => setOpen(!open)}
         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-sm hover:bg-white transition-all"
       >
         <div className="flex items-center gap-3">
-          <span className="text-blue-600 text-lg">{currentIcon || <FaPlus size={10}/>}</span>
+          <span className="text-blue-600 text-lg">{currentIcon || <FaPlus size={10} />}</span>
           <span className="text-slate-700 font-medium">{value || "Choose Icon"}</span>
         </div>
         <FaChevronDown size={10} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -203,15 +204,14 @@ function IconSelect({ value, onChange }: { value: string; onChange: (v: string) 
         <div className="absolute z-50 mt-2 w-full bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in-95">
           <div className="grid grid-cols-4 gap-3">
             {ICON_OPTIONS.map((item) => (
-              <button 
-                key={item.name} 
+              <button
+                key={item.name}
                 type="button"
-                onClick={() => { onChange(item.name); setOpen(false); }} 
-                className={`aspect-square flex items-center justify-center rounded-xl transition-all text-xl ${
-                  value === item.name 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-200" 
-                  : "bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
-                }`}
+                onClick={() => { onChange(item.name); setOpen(false); }}
+                className={`aspect-square flex items-center justify-center rounded-xl transition-all text-xl ${value === item.name
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
+                    : "bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                  }`}
               >
                 {item.icon}
               </button>
@@ -263,31 +263,31 @@ function EditorSection({ title, icon, data, isDirty, saving, onSave, onUndo, has
                   )}
                   <label className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                     <FaUpload className="text-white text-xl" />
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*" 
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
                       onChange={(e) => {
                         const selectedFile = e.target.files?.[0] || null;
                         setFile(selectedFile);
-                      }} 
+                      }}
                     />
                   </label>
                 </div>
                 <div className="mt-4">
-                  <Input label="Image URL" value={data.backgroundImage || ""} onChange={(v: string) => update({...data, backgroundImage: v})} />
+                  <Input label="Image URL" value={data.backgroundImage || ""} onChange={(v: string) => update({ ...data, backgroundImage: v })} />
                 </div>
               </div>
             )}
           </div>
           <div className="flex justify-end gap-3 mt-10 pt-6 border-t border-slate-100">
             <button onClick={() => { setOpen(false); setFile(null); }} className="px-5 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Close</button>
-            <button 
-              onClick={async () => { 
-                await onSave(data, file); 
+            <button
+              onClick={async () => {
+                await onSave(data, file);
                 setFile(null); // Clear local file state after successful upload
-              }} 
-              disabled={saving || !canSave} 
+              }}
+              disabled={saving || !canSave}
               className={`flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold shadow-lg transition-all ${canSave ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
             >
               {saving ? <LoadingRound /> : <><FaSave size={14} /> Update Section</>}
@@ -303,16 +303,17 @@ function EditorSection({ title, icon, data, isDirty, saving, onSave, onUndo, has
 function HeroForm({ data, update }: any) {
   return (
     <div className="space-y-4">
-      <Input label="Badge" value={data.badgeText} onChange={(v: string) => update({...data, badgeText: v})} />
+      <Input label="Badge" value={data.badgeText} onChange={(v: string) => update({ ...data, badgeText: v })} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Title Prefix" value={data.title} onChange={(v: string) => update({...data, title: v})} />
-        <Input label="Title Highlight" value={data.subtitle} onChange={(v: string) => update({...data, subtitle: v})} />
+        <Input label="Title Prefix" value={data.title} onChange={(v: string) => update({ ...data, title: v })} />
+        <Input label="Title Highlight" value={data.subtitle} onChange={(v: string) => update({ ...data, subtitle: v })} />
       </div>
-      <TextArea label="Description" value={data.description} onChange={(v: string) => update({...data, description: v})} />
+      <TextArea label="Description" value={data.description} onChange={(v: string) => update({ ...data, description: v })} />
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Primary CTA" value={data.primaryButtonText} onChange={(v: string) => update({...data, primaryButtonText: v})} />
-        <Input label="Secondary CTA" value={data.secondaryButtonText} onChange={(v: string) => update({...data, secondaryButtonText: v})} />
+        <Input label="Primary CTA" value={data.primaryButtonText} onChange={(v: string) => update({ ...data, primaryButtonText: v })} />
+        <Input label="Secondary CTA" value={data.secondaryButtonText} onChange={(v: string) => update({ ...data, secondaryButtonText: v })} />
       </div>
+      <Input label="Search Placeholder" value={data.searchPlaceholder} onChange={(v: string) => update({ ...data, searchPlaceholder: v })} />
     </div>
   );
 }
@@ -321,30 +322,30 @@ function HowItWorksForm({ data, update }: any) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Section Title" value={data.title} onChange={(v: string) => update({...data, title: v})} />
-        <Input label="Section Subtitle" value={data.subtitle} onChange={(v: string) => update({...data, subtitle: v})} />
+        <Input label="Section Title" value={data.title} onChange={(v: string) => update({ ...data, title: v })} />
+        <Input label="Section Subtitle" value={data.subtitle} onChange={(v: string) => update({ ...data, subtitle: v })} />
       </div>
-      <List 
-        items={data.steps || []} 
-        onUpdate={(it: any) => update({...data, steps: it})} 
-        title="Workflow Steps" 
-        newItem={() => ({ 
-          id: Date.now().toString(), 
-          title: "New Step", 
-          description: "", 
-          icon: "FaCar", 
+      <List
+        items={data.steps || []}
+        onUpdate={(it: any) => update({ ...data, steps: it })}
+        title="Workflow Steps"
+        newItem={() => ({
+          id: Date.now().toString(),
+          title: "New Step",
+          description: "",
+          icon: "FaCar",
           buttonText: "Click Here", // Default button name
-          buttonLink: "/" 
+          buttonLink: "/"
         })}
       >
         {(item: any, updateItem: any) => (
           <div className="space-y-3">
-            <IconSelect value={item.icon} onChange={(v) => updateItem({...item, icon: v})} />
-            <Input label="Step Title" value={item.title} onChange={(v: string) => updateItem({...item, title: v})} />
-            <TextArea label="Detail" value={item.description} onChange={(v: string) => updateItem({...item, description: v})} />
+            <IconSelect value={item.icon} onChange={(v) => updateItem({ ...item, icon: v })} />
+            <Input label="Step Title" value={item.title} onChange={(v: string) => updateItem({ ...item, title: v })} />
+            <TextArea label="Detail" value={item.description} onChange={(v: string) => updateItem({ ...item, description: v })} />
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Button Name" value={item.buttonText} onChange={(v: string) => updateItem({...item, buttonText: v})} />
-              <Input label="Button Link" value={item.buttonLink} onChange={(v: string) => updateItem({...item, buttonLink: v})} />
+              <Input label="Button Name" value={item.buttonText} onChange={(v: string) => updateItem({ ...item, buttonText: v })} />
+              <Input label="Button Link" value={item.buttonLink} onChange={(v: string) => updateItem({ ...item, buttonLink: v })} />
             </div>
           </div>
         )}
@@ -357,15 +358,15 @@ function FeaturesForm({ data, update }: any) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Section Title" value={data.title} onChange={(v: string) => update({...data, title: v})} />
-        <Input label="Section Subtitle" value={data.subtitle} onChange={(v: string) => update({...data, subtitle: v})} />
+        <Input label="Section Title" value={data.title} onChange={(v: string) => update({ ...data, title: v })} />
+        <Input label="Section Subtitle" value={data.subtitle} onChange={(v: string) => update({ ...data, subtitle: v })} />
       </div>
-      <List items={data.features || []} onUpdate={(it: any) => update({...data, features: it})} title="Features" columns={2} newItem={() => ({ id: Date.now().toString(), title: "Feature", description: "", icon: "FaShieldAlt" })}>
+      <List items={data.features || []} onUpdate={(it: any) => update({ ...data, features: it })} title="Features" columns={2} newItem={() => ({ id: Date.now().toString(), title: "Feature", description: "", icon: "FaShieldAlt" })}>
         {(item: any, updateItem: any) => (
           <div className="space-y-3">
-            <IconSelect value={item.icon} onChange={(v) => updateItem({...item, icon: v})} />
-            <Input label="Title" value={item.title} onChange={(v: string) => updateItem({...item, title: v})} />
-            <TextArea label="Description" value={item.description} onChange={(v: string) => updateItem({...item, description: v})} />
+            <IconSelect value={item.icon} onChange={(v) => updateItem({ ...item, icon: v })} />
+            <Input label="Title" value={item.title} onChange={(v: string) => updateItem({ ...item, title: v })} />
+            <TextArea label="Description" value={item.description} onChange={(v: string) => updateItem({ ...item, description: v })} />
           </div>
         )}
       </List>
@@ -387,8 +388,8 @@ function DriverForm({ data, update }: any) {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <Input label="Headline" value={data.title} onChange={(v: string) => update({...data, title: v})} />
-        <TextArea label="Description" value={data.description} onChange={(v: string) => update({...data, description: v})} />
+        <Input label="Headline" value={data.title} onChange={(v: string) => update({ ...data, title: v })} />
+        <TextArea label="Description" value={data.description} onChange={(v: string) => update({ ...data, description: v })} />
       </div>
 
       {/* --- NEW STATS SECTION --- */}
@@ -400,15 +401,15 @@ function DriverForm({ data, update }: any) {
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold text-slate-400">STAT CARD {idx + 1}</span>
               </div>
-              <Input 
-                label="Value (e.g. ₦25k+)" 
-                value={data.stats?.[idx]?.value || ""} 
-                onChange={(v: string) => updateStat(idx, 'value', v)} 
+              <Input
+                label="Value (e.g. ₦25k+)"
+                value={data.stats?.[idx]?.value || ""}
+                onChange={(v: string) => updateStat(idx, 'value', v)}
               />
-              <Input 
-                label="Label (e.g. Weekly Potential / Percent / Time / Fees)" 
-                value={data.stats?.[idx]?.label || ""} 
-                onChange={(v: string) => updateStat(idx, 'label', v)} 
+              <Input
+                label="Label (e.g. Weekly Potential / Percent / Time / Fees)"
+                value={data.stats?.[idx]?.label || ""}
+                onChange={(v: string) => updateStat(idx, 'label', v)}
               />
             </div>
           ))}
@@ -416,24 +417,24 @@ function DriverForm({ data, update }: any) {
       </div>
 
       <div className="pt-6 border-t border-slate-100">
-          <div className="mb-4">
-             <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">General Benefits Icon</label>
-             <IconSelect value={data.sectionIcon || "FaCheckCircle"} onChange={(v) => update({...data, sectionIcon: v})} />
-          </div>
-          
-          <List 
-            items={data.benefits || []} 
-            onUpdate={(it: any) => update({...data, benefits: it})} 
-            title="Benefits List" 
-            newItem={() => ({ id: Date.now().toString(), title: "New Benefit", description: "" })}
-          >
-            {(item: any, updateItem: any) => (
-              <div className="space-y-3">
-                <Input label="Benefit Info" value={item.title} onChange={(v: string) => updateItem({...item, title: v})} />
-                <TextArea label="Benefit Description" value={item.description} onChange={(v: string) => updateItem({...item, description: v})} />
-              </div>
-            )}
-          </List>
+        <div className="mb-4">
+          <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">General Benefits Icon</label>
+          <IconSelect value={data.sectionIcon || "FaCheckCircle"} onChange={(v) => update({ ...data, sectionIcon: v })} />
+        </div>
+
+        <List
+          items={data.benefits || []}
+          onUpdate={(it: any) => update({ ...data, benefits: it })}
+          title="Benefits List"
+          newItem={() => ({ id: Date.now().toString(), title: "New Benefit", description: "" })}
+        >
+          {(item: any, updateItem: any) => (
+            <div className="space-y-3">
+              <Input label="Benefit Info" value={item.title} onChange={(v: string) => updateItem({ ...item, title: v })} />
+              <TextArea label="Benefit Description" value={item.description} onChange={(v: string) => updateItem({ ...item, description: v })} />
+            </div>
+          )}
+        </List>
       </div>
     </div>
   );
@@ -442,14 +443,14 @@ function DriverForm({ data, update }: any) {
 function SafetyForm({ data, update }: any) {
   return (
     <div className="space-y-4">
-      <Input label="Safety Title" value={data.title} onChange={(v: string) => update({...data, title: v})} />
-      <TextArea label="Description" value={data.description} onChange={(v: string) => update({...data, description: v})} />
-      <List items={data.features || []} onUpdate={(it: any) => update({...data, features: it})} title="Safety Features" newItem={() => ({ id: Date.now().toString(), title: "Protocol", icon: "FaShieldAlt", description: "" })}>
+      <Input label="Safety Title" value={data.title} onChange={(v: string) => update({ ...data, title: v })} />
+      <TextArea label="Description" value={data.description} onChange={(v: string) => update({ ...data, description: v })} />
+      <List items={data.features || []} onUpdate={(it: any) => update({ ...data, features: it })} title="Safety Features" newItem={() => ({ id: Date.now().toString(), title: "Protocol", icon: "FaShieldAlt", description: "" })}>
         {(item: any, updateItem: any) => (
           <div className="space-y-3">
-            <IconSelect value={item.icon} onChange={(v) => updateItem({...item, icon: v})} />
-            <Input label="Name" value={item.title} onChange={(v: string) => updateItem({...item, title: v})} />
-            <TextArea label="Feature Description" value={item.description} onChange={(v: string) => updateItem({...item, description: v})} />
+            <IconSelect value={item.icon} onChange={(v) => updateItem({ ...item, icon: v })} />
+            <Input label="Name" value={item.title} onChange={(v: string) => updateItem({ ...item, title: v })} />
+            <TextArea label="Feature Description" value={item.description} onChange={(v: string) => updateItem({ ...item, description: v })} />
           </div>
         )}
       </List>
@@ -460,11 +461,11 @@ function SafetyForm({ data, update }: any) {
 function CTAForm({ data, update }: any) {
   return (
     <div className="space-y-4">
-      <Input label="CTA Title" value={data.title} onChange={(v: string) => update({...data, title: v})} />
-      <TextArea label="Description" value={data.description} onChange={(v: string) => update({...data, description: v})} />
+      <Input label="CTA Title" value={data.title} onChange={(v: string) => update({ ...data, title: v })} />
+      <TextArea label="Description" value={data.description} onChange={(v: string) => update({ ...data, description: v })} />
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Primary Button Text" value={data.primaryButtonText} onChange={(v: string) => update({...data, primaryButtonText: v})} />
-        <Input label="Secondary Button Text" value={data.secondaryButtonText} onChange={(v: string) => update({...data, secondaryButtonText: v})} />
+        <Input label="Primary Button Text" value={data.primaryButtonText} onChange={(v: string) => update({ ...data, primaryButtonText: v })} />
+        <Input label="Secondary Button Text" value={data.secondaryButtonText} onChange={(v: string) => update({ ...data, secondaryButtonText: v })} />
       </div>
     </div>
   );

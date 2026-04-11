@@ -26,7 +26,7 @@ export default function SearchFilters({
     filteredDriversCount
 }: SearchFiltersProps) {
     return (
-        <div className=" mb-6 p-3 sm:p-6 bg-gray-950 border border-white/5 shadow-xl">
+        <div className="p-3 sm:px-6 sm:py-3 bg-gray-950 border border-white/5 shadow-xl">
             <div className="flex items-center gap-2 mb-4">
                 <FaFilter className="text-purple-400 text-xs" />
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">Filter Vehicles</p>

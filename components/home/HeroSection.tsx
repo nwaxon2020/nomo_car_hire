@@ -109,7 +109,7 @@ export default function HeroSection({
                     <FaMapMarkerAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
                     <input
                       type="text"
-                      placeholder={content.searchPlaceholder || "Enter location, city, or destination..."}
+                      placeholder={content.searchPlaceholder || "Enter destination, city, or place"}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyPress={handleKeyPress}
