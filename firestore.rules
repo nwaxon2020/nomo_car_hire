@@ -7,160 +7,184 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == "oto7WgugASOkcA4oBl6OB6C39Ww1";
     }
 
-    // This looks at the staff member's document to see if the route is in their array
     function hasPermission(route) {
-      let staffDoc = get(/databases/$(database)/documents/adminStaffs/$(request.auth.uid)).data;
-      return isCEO() || (staffDoc != null && route in staffDoc.allowedRoutes);
+      return request.auth != null && (
+        isCEO() || 
+        (get(/databases/$(database)/documents/adminStaffs/$(request.auth.uid)).data != null && 
+         route in get(/databases/$(database)/documents/adminStaffs/$(request.auth.uid)).data.allowedRoutes)
+      );
     }
 
     function isAnyAdmin() {
       return isCEO() || exists(/databases/$(database)/documents/adminStaffs/$(request.auth.uid));
     }
 
-    // --- COLLECTION MATCHES ---
+    function isDriver() {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDriver == true;
+    }
 
-    // 1. USERS
+    function isCustomer() {
+      return request.auth != null && 
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDriver == false || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDriver == null);
+    }
+
+    function isValidReviewUpdate() {
+      let allowedFields = ['comments', 'ratings', 'averageRating', 'totalRatings', 'updatedAt'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
+    function isValidProfileUpdate() {
+      let allowedFields = [
+        'location', 'isLocationActive', 'locationLastUpdated', 'locationSharedAt',
+        'lastLocationUpdate',
+        'emergencyContact', 'lovedOnes', 'whatsappLovedOnes',
+        'firstName', 'lastName', 'fullName', 'phoneNumber', 'city', 'state', 
+        'whatsappPreferred', 'profileImage', 'fcmToken', 'updatedAt', 
+        'lastActive', 'notificationEnabled', 'notifications', 'hasUnreadNotifications',
+        'unreadChats', 'preferences', 'email', 'authType', 'isEmailVerified',
+        'rating', 'totalTrips', 'earnings', 'isDriver', 'vip', 'bidsUsed', 'lastBidReset',
+        'vehicleLog', 'bookingVehicleId', 'verified',
+        'hasCompany', 'ownedCompanies' 
+      ];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
+    function isReferralRewardUpdate() {
+      let allowedFields = [
+        'referralPoints', 'referrals', 'referralCount', 'freeRides', 
+        'lastFreeRideEarned', 'notifications', 'hasUnreadNotifications'
+      ];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
+    function isValidBidReturn() {
+      let allowedFields = ['bidsUsed', 'updatedAt'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
+    // --- CORE COLLECTION MATCHES ---
+
     match /users/{userId} {
+      // ✅ Allow any authenticated user to read profiles (needed for tracking and ID)
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && (
-        request.auth.uid == userId || 
-        // Allow other users (senders) to update the unreadChats array
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadChats']) ||
-        isCEO() || 
-        (hasPermission("/admin/manage-driver") && (
-          resource.data.verified == false || request.resource.data.verified == true || isCEO()
-        ))
+        (request.auth.uid == userId && isValidProfileUpdate()) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadChats'])) ||
+        (request.auth.uid != userId && 
+         get(/databases/$(database)/documents/users/$(userId)).data.isDriver == true &&
+         isValidReviewUpdate()) ||
+        (request.auth.uid != userId && (isReferralRewardUpdate() || isValidBidReturn())) ||
+        isAnyAdmin()
       );
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if isCEO();
     }
 
-    // 2. BOOKING REQUESTS
     match /bookingRequests/{requestId} {
-      // Drivers need to read requests to place bids
-      allow read: if request.auth != null;
+      allow read, create: if request.auth != null;
       allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
-      allow create: if request.auth != null;
-      // Allow drivers to update offers/views, and customers to manage their requests
       allow update: if request.auth != null && (
         resource.data.userId == request.auth.uid || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'views', 'rejectedOnce', 'rejectedTwice']) ||
+        (isDriver() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'views', 'rejectedOnce', 'rejectedTwice'])) ||
         isCEO()
       );
     }
 
-    // 3. TRIPS
-    match /trips/{tripId} {
-      allow read: if request.auth != null && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.driverId == request.auth.uid ||
-        isCEO()
-      );
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.driverId == request.auth.uid ||
-        isCEO()
-      );
-      allow delete: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
-    }
-
-    // 4. WHATSAPP CONTACTS (Emergency Contacts)
-    match /whatsappContacts/{contactId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // 5. TRACKING TOKENS (For Live SOS Links)
-    match /trackingTokens/{tokenId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    // 6. ADMIN STAFF & ROUTE CONFIG
-    match /adminStaffs/{staffId} {
-      allow read: if request.auth != null;
-      allow write: if isCEO();
-    }
-
-    match /adminRoutes/{docId} {
-      allow read: if isAnyAdmin();
-      allow write: if isCEO();
-    }
-
-    // ============================================
-    // FIXED: NEW ADMIN FINANCE & CONFIG RULES!
-    // Everyone must be able to read pricing & countdown properties to calculate their VIP.
-    match /adminfinance/{docId} {
-      allow read: if true;
-      allow write: if isCEO() || hasPermission("/admin/finance");
-    }
-    match /adminConfig/{docId} {
-      allow read: if true;
-      allow write: if isCEO();
-    }
-    // ============================================
-
-    // 5. COMPLAINS
-    match /complains/{complaintId} {
-      allow create: if request.auth != null;
-      allow read, update: if request.auth != null && (resource.data.userId == request.auth.uid || hasPermission("/admin/complaints"));
-      allow delete: if hasPermission("/admin/complaints") || isCEO();
-    }
-
-    // 6. VEHICLES & LOGS
-    match /vehicles/{vehicleId} {
-      allow read: if true;
-      allow write: if hasPermission("/admin/manage-driver"); // Adjusted to match your permissions
-    }
-
-    match /vehicleLog/{logId} {
-      allow read: if true;
-      // CHANGED: Allow update if they have manage-driver OR applicants permission
-      allow update: if isCEO() || hasPermission("/admin/manage-driver") || hasPermission("/admin/applicants");
-      allow create: if request.auth != null;
-      allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || isCEO());
-    }
-
-    match /bookings/{bookingId} {
-      allow read, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
-      allow create, update: if request.auth != null;
-    }
-
-    // 12. DIRECT OFFERS (Mobility Bidding)
     match /directOffers/{offerId} {
+      // ✅ Participants have full access to offer for real-time tracking
       allow read: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
       allow create: if request.auth != null;
       allow update: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
       allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || isCEO());
     }
 
-    // 7. CHATS
     match /preChats/{chatId} {
-      allow read: if request.auth != null && (request.auth.uid in resource.data.participants || isCEO());
       allow create: if request.auth != null;
-      allow update: if request.auth != null && (request.auth.uid in resource.data.participants || isCEO());
-      allow delete: if request.auth != null && (request.auth.uid in resource.data.participants || isCEO());
+      allow read, update, delete: if request.auth != null && (
+        (chatId.matches(".*" + request.auth.uid + ".*")) ||
+        (resource != null && request.auth.uid in resource.data.participants) ||
+        isCEO()
+      );
+
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null && (
+          chatId.matches(".*" + request.auth.uid + ".*") || 
+          isCEO()
+        );
+      }
     }
 
-    // 8. CMS & SITE CONTENT
+    // --- TRANSPORT HUB ---
+    match /transportCompanies/{companyId} {
+      allow read: if true; 
+
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (isAnyAdmin() || resource.data.ownerId == request.auth.uid);
+      allow delete: if isCEO();
+    }
+
+
+    match /transportListings/{listingId} {
+      function getCompanyData(companyId) {
+        return get(/databases/$(database)/documents/transportCompanies/$(companyId)).data;
+      }
+      allow read: if true; 
+      
+      allow create: if request.auth != null && (
+        isAnyAdmin() || 
+        (getCompanyData(request.resource.data.companyId).ownerId == request.auth.uid && 
+         getCompanyData(request.resource.data.companyId).expiryDate > request.time)
+      );
+
+      allow update: if request.auth != null && (
+        isAnyAdmin() || 
+        (getCompanyData(resource.data.companyId).ownerId == request.auth.uid)
+      );
+
+      allow delete: if request.auth != null && (
+        isAnyAdmin() || 
+        (getCompanyData(resource.data.companyId).ownerId == request.auth.uid)
+      );
+    }
+
+    // --- OTHER MATCHES ---
+    match /admin_metadata/{docId} { allow read: if true; allow update: if request.auth != null; }
+    match /adminfinance/{docId} { allow read: if true; allow write: if isCEO() || hasPermission("/admin/finance"); }
+    match /adminConfig/{docId} { allow read: if true; allow write: if isCEO(); }
+    match /adminStaffs/{staffId} { allow read: if request.auth != null && (request.auth.uid == staffId || isCEO()); allow write: if isCEO(); }
+    match /adminRoutes/{docId} { allow read: if isAnyAdmin(); allow write: if isCEO(); }
     match /cms/{docId} { allow read: if true; allow write: if hasPermission("/admin/content-manager") || isCEO(); }
     match /siteContent/{docId} { allow read: if true; allow write: if hasPermission("/admin/content-manager") || isCEO(); }
     match /site_configs/{docId} { allow read: if true; allow write: if isCEO(); }
-    match /generalSiteReviews/{reviewId} { allow read: if true; allow write: if request.auth != null; }
-
-    // 9. FAQ & POLICIES
+    match /settings/{docId} { allow read: if true; allow write: if isAnyAdmin(); }
     match /faq_categories/{catId} { allow read: if true; allow write: if isCEO() || hasPermission("/admin/faq-editor"); }
     match /faq_questions/{qId} { allow read: if true; allow write: if isCEO() || hasPermission("/admin/faq-editor"); }
     match /site_policies/{policyId} { allow read: if true; allow write: if isCEO() || hasPermission("/admin/policy-editor"); }
-
-    // 10. SETTINGS
-    match /settings/{docId} {
+    match /employment_applications/{appId} { allow create: if true; allow read, write: if isAnyAdmin(); }
+    match /generalSiteReviews/{reviewId} { allow read: if true; allow write: if request.auth != null; }
+    match /complains/{complaintId} {
+      allow create: if request.auth != null;
+      allow read, update: if request.auth != null && (resource.data.userId == request.auth.uid || isAnyAdmin());
+      allow delete: if isAnyAdmin();
+    }
+    match /vehicles/{vehicleId} { allow read: if true; allow write: if isAnyAdmin(); }
+    match /vehicleLog/{logId} {
       allow read: if true;
-      allow write: if isCEO();
+      allow create: if request.auth != null;
+      allow update: if isAnyAdmin() || (request.auth != null && resource.data.driverId == request.auth.uid);
+      allow delete: if isCEO() || (request.auth != null && resource.data.driverId == request.auth.uid);
+    }
+    match /whatsappContacts/{contactId} { allow read: if request.auth != null; allow write: if request.auth != null && (request.resource.data.userId == request.auth.uid || isCEO()); }
+    match /trackingTokens/{tokenId} { allow read: if true; allow create: if request.auth != null; allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO()); }
+    match /trips/{tripId} {
+      allow read: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
+      allow delete: if isAnyAdmin();
     }
 
-    // GLOBAL SAFETY
     match /{document=**} {
       allow read, write: if isCEO();
     }

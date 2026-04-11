@@ -169,6 +169,12 @@ export interface DirectOffer {
         lng: number;
         address?: string;
     };
+    driverLocation?: {
+        lat: number;
+        lng: number;
+        address?: string;
+    };
+    driverPhone?: string;
     fare?: number;
     pickupLocation?: string;
     destination?: string;

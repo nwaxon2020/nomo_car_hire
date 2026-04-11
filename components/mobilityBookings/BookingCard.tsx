@@ -146,7 +146,7 @@ export default function BookingCard({
                         </div>
                     </div>
 
-                    <div className={`grid grid-cols-2 gap-2 mb-4 p-2 rounded-xl border ${gridBg}`}>
+                    <div className={`grid grid-cols-2 gap-2 mb-4 p-2 rounded-md md:rounded-xl border ${gridBg}`}>
                         <div className="flex items-center gap-2">
                             <div className={`p-1 rounded-lg ${iconBg}`}>
                                 <FaUsers className={iconColor} size={10} />
@@ -171,7 +171,7 @@ export default function BookingCard({
                             e.stopPropagation();
                             onBook(driver, vehicle);
                         }}
-                        className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all duration-300 shadow-lg flex items-center justify-center gap-2 ${isBlackVip
+                        className={`w-full py-3 rounded-md md:rounded-xl font-black uppercase tracking-widest text-xs transition-all duration-300 shadow-lg flex items-center justify-center gap-2 ${isBlackVip
                             ? 'bg-amber-500 hover:bg-amber-600 text-black shadow-amber-500/20'
                             : isGoldVip
                                 ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20'
@@ -182,16 +182,16 @@ export default function BookingCard({
                         <FaChevronRight size={10} />
                     </button>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="pt-2 grid grid-cols-3 gap-2">
                         <button
                             onClick={() => onPreChat(driver, vehicle)}
-                            className="py-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider bg-blue-600 border-blue-400 text-white hover:bg-white/20"
+                            className="py-2.5 rounded-md md:rounded-xl border flex items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider bg-blue-600 border-blue-400 text-white hover:bg-white/20"
                         >
                             <FaComment /> Chat
                         </button>
                         <button
                             onClick={() => driver.whatsappPreferred ? onWhatsApp(driver, vehicle) : onCall(driver.phoneNumber)}
-                            className="py-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider bg-green-600 border-green-400 text-white hover:bg-green-500/20 hover:border-green-500/30"
+                            className="py-2.5 rounded-md md:rounded-xl border flex items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider bg-green-600 border-green-400 text-white hover:bg-green-500/20 hover:border-green-500/30"
                         >
                             {driver.whatsappPreferred ? <FaWhatsapp /> : <FaPhone />} {driver.whatsappPreferred ? "WHATSAPP" : "Call"}
                         </button>
@@ -200,7 +200,7 @@ export default function BookingCard({
                                 e.stopPropagation();
                                 onFlag(driver, vehicle);
                             }}
-                            className="py-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider bg-red-600 border-red-400 text-white hover:bg-red-500/20"
+                            className="py-2.5 rounded-md md:rounded-xl border flex items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider bg-red-600 border-red-400 text-white hover:bg-red-500/20"
                         >
                             <FaFlag /> Flag
                         </button>

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Navigation, Search, MapPin, Clock, Plus, ArrowRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from "@/lib/firebaseConfig";
-import { collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, query, where, getDocs, onSnapshot, doc, getDoc, setDoc, increment, serverTimestamp } from "firebase/firestore";
 import RegistrationForm from '@/components/transportHub/RegistrationForm';
 import CompanyDashboard from '@/components/transportHub/CompanyDashboard';
 import LoadingRound from '@/components/re-useable-loading';
@@ -56,7 +56,7 @@ const TransportHubUi = () => {
                 const data = doc.data();
                 const isExpired = data.expiryDate && data.expiryDate.toDate() < now;
                 const isNotApproved = data.status !== "approved";
-                
+
                 if (isExpired || isNotApproved) {
                     hidden.add(doc.id);
                 }
@@ -103,7 +103,15 @@ const TransportHubUi = () => {
 
         // 3. Fetch Registered Listings (Real-time)
         const unsubListings = onSnapshot(collection(db, "transportListings"), (snap) => {
-            const data = snap.docs.map(d => ({ ...d.data(), id: d.id, type: 'registered' } as TransportListing));
+            const data = snap.docs.map(d => {
+                const docData = d.data();
+                return {
+                    ...docData,
+                    id: d.id,
+                    type: 'registered',
+                    company: docData.company || docData.companyName // Map companyName to company for UI consistency
+                } as TransportListing;
+            });
             setListings(data);
             setLoading(false);
         });
@@ -114,16 +122,22 @@ const TransportHubUi = () => {
         };
     }, []);
 
-    const allListings = [...scrapedListings, ...listings].filter(item => {
-        // Filter out registered listings from expired or unapproved companies
-        if (item.type === 'registered' && item.companyId && hiddenCompanies.has(item.companyId)) {
-            return false;
-        }
+    const allListings = [...listings, ...scrapedListings]
+        .sort((a, b) => {
+            if (a.type === 'registered' && b.type === 'scraped') return -1;
+            if (a.type === 'scraped' && b.type === 'registered') return 1;
+            return 0;
+        })
+        .filter(item => {
+            // Filter out registered listings from expired or unapproved companies
+            if (item.type === 'registered' && item.companyId && hiddenCompanies.has(item.companyId)) {
+                return false;
+            }
 
-        const fromMatch = item.from.toLowerCase().includes(searchFrom.toLowerCase());
-        const toMatch = item.to.toLowerCase().includes(searchTo.toLowerCase());
-        return fromMatch && toMatch;
-    });
+            const fromMatch = item.from.toLowerCase().includes(searchFrom.toLowerCase());
+            const toMatch = item.to.toLowerCase().includes(searchTo.toLowerCase());
+            return fromMatch && toMatch;
+        });
 
     if (view === 'dashboard' && userCompany) {
         return <CompanyDashboard companyId={userCompany.id} onBack={() => setView('hub')} />;
@@ -249,6 +263,35 @@ const TransportHubUi = () => {
     );
 };
 
+const handleTrackVisit = async (companyId: string) => {
+    const user = auth.currentUser;
+    if (!user || !companyId || companyId === 'scraped') return;
+
+    const now = new Date();
+    const monthId = `${now.getFullYear()}-${now.getMonth() + 1}`;
+    const visitorRecordId = `${monthId}_${user.uid}`;
+
+    const recordRef = doc(db, "transportCompanies", companyId, "visitors", visitorRecordId);
+
+    try {
+        const recordSnap = await getDoc(recordRef);
+        if (!recordSnap.exists()) {
+            // First time this month
+            await setDoc(recordRef, {
+                userId: user.uid,
+                timestamp: serverTimestamp(),
+                month: monthId
+            });
+
+            // Increment visitor count on company doc
+            const companyRef = doc(db, "transportCompanies", companyId);
+            await setDoc(companyRef, { visitorCount: increment(1) }, { merge: true });
+        }
+    } catch (err) {
+        console.error("Error tracking visit:", err);
+    }
+};
+
 const ListingCard = ({ item }: { item: TransportListing }) => {
     return (
         <motion.div
@@ -266,7 +309,7 @@ const ListingCard = ({ item }: { item: TransportListing }) => {
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-1">
                     <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">
-                        {item.company.charAt(0)}
+                        {item.company?.charAt(0) || '?'}
                     </div>
                     <h3 className="font-bold text-slate-200">{item.company}</h3>
                 </div>
@@ -292,6 +335,7 @@ const ListingCard = ({ item }: { item: TransportListing }) => {
                     href={item.website || "#"}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => item.type === 'registered' && handleTrackVisit(item.companyId)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/20"
                 >
                     Book Now <ExternalLink size={12} />

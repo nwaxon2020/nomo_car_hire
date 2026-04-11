@@ -33,7 +33,7 @@ export default function MyVehiclesSelector({
 
     return (
         <div className="relative mb-6 group">
-            <div className="flex items-center justify-between mb-3 px-2">
+            <div className="flex items-center justify-between mb-2 px-2">
                 <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">
                     Switch Your Active Vehicle
                 </h3>
@@ -55,7 +55,7 @@ export default function MyVehiclesSelector({
 
             <div
                 ref={scrollRef}
-                className="grid grid-cols-3 gap-3 overflow-x-auto no-scrollbar scroll-smooth py-5 px-2"
+                className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-x-auto no-scrollbar scroll-smooth py-5 px-2"
                 style={{
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',

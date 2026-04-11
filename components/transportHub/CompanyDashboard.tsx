@@ -42,7 +42,11 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
     const [showAddForm, setShowAddForm] = useState(false);
     const [isExpired, setIsExpired] = useState(false);
     const [showRenewalForm, setShowRenewalForm] = useState(false);
-    
+    const [visitorCount, setVisitorCount] = useState(0);
+    const [showEditForm, setShowEditForm] = useState(false);
+    const [editingListing, setEditingListing] = useState<TransportListing | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
     const [newListing, setNewListing] = useState({
         from: "",
         to: "",
@@ -61,7 +65,7 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
             if (snap.exists()) {
                 const data = snap.data() as TransportCompany;
                 setCompany({ ...data, id: snap.id });
-                
+
                 // Check expiry
                 if (data.expiryDate) {
                     const now = new Date();
@@ -77,7 +81,7 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
         const q = query(collection(db, "transportListings"), where("companyId", "==", companyId));
         const unsub = onSnapshot(q, (snap) => {
             const data = snap.docs.map(d => ({ ...d.data(), id: d.id } as TransportListing));
-            
+
             // Auto-cleanup check (client-side filter then delete from DB)
             const now = new Date();
             const validListings = data.filter(item => {
@@ -94,6 +98,15 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
             setLoading(false);
         });
 
+        // Fetch visitor count
+        const fetchVisitors = async () => {
+            const companyDoc = await getDoc(doc(db, "transportCompanies", companyId));
+            if (companyDoc.exists()) {
+                setVisitorCount(companyDoc.data().visitorCount || 0);
+            }
+        };
+        fetchVisitors();
+
         return () => unsub();
     }, [companyId]);
 
@@ -102,6 +115,13 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
         setLoading(true);
         try {
             const listingId = `listing_${Date.now()}`;
+
+            if (!newListing.maxDate) {
+                toast.error("Please select an expiry date");
+                setLoading(false);
+                return;
+            }
+
             const listingData = {
                 ...newListing,
                 id: listingId,
@@ -124,11 +144,40 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this trip?")) return;
+    const handleUpdateListing = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingListing) return;
+        setLoading(true);
         try {
-            await deleteDoc(doc(db, "transportListings", id));
+            const updatedData = {
+                ...editingListing,
+                amount: Number(editingListing.amount),
+                updatedAt: Timestamp.now(),
+                maxDate: Timestamp.fromDate(new Date(editingListing.maxDate as any)),
+            };
+
+            await setDoc(doc(db, "transportListings", editingListing.id), updatedData);
+            toast.success("Listing Updated!");
+            setShowEditForm(false);
+            setEditingListing(null);
+        } catch (error) {
+            console.error(error);
+            toast.error("Update failed");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        setConfirmDelete(id);
+    };
+
+    const confirmDeleteListing = async () => {
+        if (!confirmDelete) return;
+        try {
+            await deleteDoc(doc(db, "transportListings", confirmDelete));
             toast.success("Trip deleted");
+            setConfirmDelete(null);
         } catch (error) {
             toast.error("Delete failed");
         }
@@ -140,19 +189,19 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
         <div className="min-h-screen bg-[#061a14] relative overflow-hidden text-white font-sans">
             {/* Background Image with Emerald Overlay */}
             <div className="absolute inset-0 z-0">
-                <img 
-                    src="https://images.unsplash.com/photo-1542332213-9b5a5a3fab35?q=80&w=2070&auto=format&fit=crop" 
-                    className="w-full h-full object-cover opacity-20 grayscale" 
-                    alt="background" 
+                <img
+                    src="https://images.unsplash.com/photo-1542332213-9b5a5a3fab35?q=80&w=2070&auto=format&fit=crop"
+                    className="w-full h-full object-cover opacity-20 grayscale"
+                    alt="background"
                 />
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-[#061a14]/95 to-black/90" />
             </div>
 
             <div className="relative z-10 max-w-6xl mx-auto px-3 md:px-6 py-4 md:py-8">
                 {/* Header */}
-                <header className="flex justify-between items-center mb-12">
-                    <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-all">
+                <header className="flex gap-3 flex-col md:flex-row justify-between items-center mb-12">
+                    <div className="w-full flex items-center gap-4">
+                        <button onClick={onBack} className="hidden md:block p-2 hover:bg-white/10 rounded-full transition-all">
                             <FiArrowLeft size={24} />
                         </button>
                         <div>
@@ -170,42 +219,71 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
                             </div>
                         </div>
                     </div>
-                    {!isExpired && (
-                        <button 
-                            onClick={() => setShowAddForm(true)}
-                            className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl flex items-center gap-2 transition-all shadow-xl shadow-emerald-500/20 text-xs md:text-base"
-                        >
-                            <FiPlus /> <span className="hidden sm:inline">Add Destination</span><span className="sm:hidden">Add</span>
+
+                    <div className="w-full flex justify-center md:justify-end items-center gap-2 md:gap-4">
+                        {!isExpired && (
+                            <button
+                                onClick={() => setShowAddForm(true)}
+                                className="w-full md:w-auto bg-emerald-500 hover:bg-emerald-400 text-black font-black px-4 md:px-6 py-2.5 md:py-3 rounded-md md:rounded-lg flex justify-center items-center gap-2 transition-all shadow-xl shadow-emerald-500/20 text-xs md:text-base"
+                            >
+                                <FiPlus size={14} /> Add Destination
+                            </button>
+                        )}
+
+                        <button onClick={onBack} className="w-full md:w-auto bg-blue-500 hover:bg-blue-400 text-white font-black px-4 md:px-6 py-2.5 md:py-3 rounded-md md:rounded-lg flex justify-center items-center gap-2 transition-all shadow-xl shadow-blue-500/20 text-xs md:text-base">
+                            Trans-Hub <FiArrowRight size={14} />
                         </button>
-                    )}
+                    </div>
                 </header>
 
                 {/* Stats / Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-12">
-                    <StatCard title="Active Trips" value={listings.length} icon={<FiMapPin />} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8 md:mb-12">
+                    <StatCard title="Added Destinations" value={listings.length} icon={<FiMapPin />} />
                     <StatCard title="CEO" value={company?.ceoName || "N/A"} icon={<FiUser />} />
                     <StatCard title="Registered On" value={company?.registrationDate?.toDate().toLocaleDateString() || "N/A"} icon={<FiCalendar />} />
+                    <StatCard title="Visitor Count" value={visitorCount} icon={<FiRefreshCw />} />
                 </div>
 
                 {/* Listings Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <AnimatePresence>
                         {listings.map((item: TransportListing) => (
-                            <motion.div 
+                            <motion.div
                                 key={item.id}
                                 layout
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.8 }}
-                                className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl md:rounded-3xl p-4 md:p-6 relative group hover:border-emerald-500/30 transition-all ${company?.status !== 'approved' ? 'opacity-50 grayscale pointer-events-none' : ''}`}
+                                className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-lg p-4 md:p-6 relative group hover:border-emerald-500/30 transition-all ${company?.status !== 'approved' ? 'opacity-50 grayscale pointer-events-none' : ''}`}
                             >
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                        {item.time}
+                                    <div className="flex flex-col gap-2">
+                                        <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-block w-fit">
+                                            {item.time}
+                                        </div>
+                                        {company?.status !== 'approved' && (
+                                            <p className="p-1 bg-black/60 text-white text-[9px] font-bold rounded border border-white/10">
+                                                Admin is yet to verify your company
+                                            </p>
+                                        )}
                                     </div>
-                                    <button onClick={() => handleDelete(item.id)} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                                        <FiTrash2 />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                setEditingListing({
+                                                    ...item,
+                                                    maxDate: (item.maxDate as any).toDate().toISOString().split('T')[0] as any
+                                                });
+                                                setShowEditForm(true);
+                                            }}
+                                            className="text-white/40 hover:text-emerald-400 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                                        >
+                                            <FiRefreshCw size={14} />
+                                        </button>
+                                        <button onClick={() => handleDelete(item.id)} className="text-red-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all">
+                                            <FiTrash2 size={14} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
@@ -238,7 +316,7 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
                     </AnimatePresence>
 
                     {listings.length === 0 && (
-                        <div className="col-span-full py-12 md:py-20 text-center bg-white/5 rounded-2xl md:rounded-3xl border border-dashed border-white/10">
+                        <div className="col-span-full py-12 md:py-20 text-center bg-white/5 rounded-lg md:rounded-xl border border-dashed border-white/10">
                             <FiMapPin className="mx-auto text-3xl md:text-4xl text-slate-600 mb-4" />
                             <p className="text-slate-400 font-bold text-sm md:text-base">No active destinations listed yet.</p>
                             <p className="text-slate-600 text-[10px] md:text-sm px-4">Click 'Add Destination' to start appearing in the transport hub.</p>
@@ -312,12 +390,12 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
             {/* Add Destination Modal */}
             <AnimatePresence>
                 {showAddForm && (
-                    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-                        <motion.div 
+                    <div className="h-[100vh] fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                        <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 20 }}
-                            className="bg-[#0f1d36] border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl"
+                            className="bg-[#0f1d36] border border-white/10 rounded-lg md:rounded-2xl p-4 md:p-8 w-full max-w-md shadow-2xl"
                         >
                             <div className="flex justify-between items-center mb-6">
                                 <h2 className="text-xl font-black text-white">Add New Listing</h2>
@@ -325,24 +403,98 @@ export default function CompanyDashboard({ companyId, onBack }: CompanyDashboard
                             </div>
 
                             <form onSubmit={handleAddListing} className="space-y-4">
-                                <FormInput label="From City" value={newListing.from} onChange={v => setNewListing({...newListing, from: v})} required />
-                                <FormInput label="To City" value={newListing.to} onChange={v => setNewListing({...newListing, to: v})} required />
+                                <FormInput label="From City" value={newListing.from} onChange={v => setNewListing({ ...newListing, from: v })} required />
+                                <FormInput label="To City" value={newListing.to} onChange={v => setNewListing({ ...newListing, to: v })} required />
                                 <div className="grid grid-cols-2 gap-4">
-                                    <FormInput label="Amount (₦)" type="number" value={newListing.amount} onChange={v => setNewListing({...newListing, amount: v})} required />
-                                    <FormInput label="Discount (e.g. 5%)" value={newListing.discount} onChange={v => setNewListing({...newListing, discount: v})} />
+                                    <FormInput label="Amount (₦)" type="number" value={newListing.amount} onChange={v => setNewListing({ ...newListing, amount: v })} required />
+                                    <FormInput label="Discount (e.g. 5%)" value={newListing.discount} onChange={v => setNewListing({ ...newListing, discount: v })} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <FormInput label="Departure Time" value={newListing.time} onChange={v => setNewListing({...newListing, time: v})} required />
-                                    <FormInput label="Expiry Date" type="date" value={newListing.maxDate} onChange={v => setNewListing({...newListing, maxDate: v})} required />
+                                    <FormInput label="Departure Time" value={newListing.time} onChange={v => setNewListing({ ...newListing, time: v })} required />
+                                    <FormInput label="Expiry Date" type="date" value={newListing.maxDate} onChange={v => setNewListing({ ...newListing, maxDate: v })} required />
                                 </div>
 
-                                <button 
+                                <button
                                     type="submit"
                                     className="w-full py-4 rounded-xl bg-emerald-500 text-black font-black uppercase tracking-widest hover:bg-emerald-400 transition-all mt-4"
                                 >
                                     Upload Trip
                                 </button>
                             </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+            {/* Edit Destination Modal */}
+            <AnimatePresence>
+                {showEditForm && editingListing && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className="bg-[#0f1d36] border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl"
+                        >
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl font-black text-white">Edit Listing</h2>
+                                <button onClick={() => setShowEditForm(false)} className="text-slate-400"><FiX /></button>
+                            </div>
+
+                            <form onSubmit={handleUpdateListing} className="space-y-4">
+                                <FormInput label="From City" value={editingListing.from} onChange={v => setEditingListing({ ...editingListing, from: v })} required />
+                                <FormInput label="To City" value={editingListing.to} onChange={v => setEditingListing({ ...editingListing, to: v })} required />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormInput label="Amount (₦)" type="number" value={editingListing.amount} onChange={v => setEditingListing({ ...editingListing, amount: Number(v) })} required />
+                                    <FormInput label="Discount (e.g. 5%)" value={editingListing.discount} onChange={v => setEditingListing({ ...editingListing, discount: v })} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormInput label="Departure Time" value={editingListing.time} onChange={v => setEditingListing({ ...editingListing, time: v })} required />
+                                    <FormInput label="Expiry Date" type="date" value={editingListing.maxDate as any} onChange={v => setEditingListing({ ...editingListing, maxDate: v as any })} required />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="w-full py-4 rounded-xl bg-emerald-500 text-black font-black uppercase tracking-widest hover:bg-emerald-400 transition-all mt-4"
+                                >
+                                    Update Trip
+                                </button>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Custom Delete Confirmation */}
+            <AnimatePresence>
+                {confirmDelete && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-[#1a0b0b] border border-red-500/20 rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl"
+                        >
+                            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-500 mb-6">
+                                <FiAlertCircle size={32} />
+                            </div>
+                            <h3 className="text-xl font-black text-white mb-2">Confirm Delete</h3>
+                            <p className="text-slate-400 text-sm mb-8">
+                                Are you sure you want to delete this trip destination? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setConfirmDelete(null)}
+                                    className="flex-1 py-3 rounded-xl bg-white/5 text-slate-300 font-bold hover:bg-white/10 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDeleteListing}
+                                    className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase tracking-widest hover:bg-red-500 transition-all shadow-lg shadow-red-600/20"
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </motion.div>
                     </div>
                 )}
@@ -359,7 +511,7 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon }: StatCardProps) {
     return (
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-4 md:p-6 rounded-2xl md:rounded-3xl">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-4 md:p-6 rounded-lg">
             <div className="flex items-center gap-3 mb-1 md:mb-2">
                 <div className="text-emerald-400 text-sm md:text-base">{icon}</div>
                 <p className="text-[9px] md:text-[10px] uppercase font-black text-slate-500 tracking-widest">{title}</p>
@@ -381,12 +533,12 @@ function FormInput({ label, value, onChange, type = "text", required = false }: 
     return (
         <div className="space-y-1">
             <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest ml-1">{label}</label>
-            <input 
+            <input
                 type={type}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 required={required}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg md:rounded-xl py-3 px-4 text-white focus:outline-none focus:border-emerald-500/50"
             />
         </div>
     );

@@ -95,8 +95,9 @@ export default function AdminDashboardUi() {
 
         // Calculate VIP Revenue
         if (data.vipHistory && Array.isArray(data.vipHistory)) {
-          data.vipHistory.forEach((item: { price: number }) => {
-            if (item.price) vipRevenue += Number(item.price);
+          data.vipHistory.forEach((item: { price: any }) => {
+            const priceVal = Number(item.price);
+            if (!isNaN(priceVal)) vipRevenue += priceVal;
           });
         }
 
@@ -104,9 +105,10 @@ export default function AdminDashboardUi() {
         if (data.tickets && Array.isArray(data.tickets)) {
           let userHasActiveTicket = false;
 
-          data.tickets.forEach((ticket: { amount?: number; expired?: boolean }) => {
+          data.tickets.forEach((ticket: { amount?: any; expired?: boolean }) => {
             // Add all money ever spent on tickets to revenue
-            ticketRevenue += (ticket.amount || 0);
+            const ticketAmt = Number(ticket.amount);
+            if (!isNaN(ticketAmt)) ticketRevenue += ticketAmt;
 
             // If even one ticket in their array is not expired, they are a valid user
             if (ticket.expired === false) {
@@ -136,27 +138,31 @@ export default function AdminDashboardUi() {
         }
       });
 
-      setStats(prev => ({
-        ...prev,
-        totalDrivers: drivers,
-        totalCustomers: customers,
-        vipRevenueOnly: vipRevenue,
-        ticketRevenueOnly: ticketRevenue,
-        ticketCount: validTicketUserCount,
-        totalRevenue: vipRevenue + ticketRevenue + prev.transportRevenueOnly,
-        vipCounts: vips
-      }));
+      setStats(prev => {
+        const total = vipRevenue + ticketRevenue + (prev.transportRevenueOnly || 0);
+        return {
+          ...prev,
+          totalDrivers: drivers,
+          totalCustomers: customers,
+          vipRevenueOnly: vipRevenue,
+          ticketRevenueOnly: ticketRevenue,
+          ticketCount: validTicketUserCount,
+          totalRevenue: total,
+          vipCounts: vips
+        };
+      });
     });
 
     const unsubTransport = onSnapshot(collection(db, "transportCompanies"), (snap) => {
       let transportRevenue = 0;
       snap.docs.forEach(d => {
-        transportRevenue += (d.data().paymentAmount || 0);
+        const amtVal = Number(d.data().paymentAmount);
+        if (!isNaN(amtVal)) transportRevenue += amtVal;
       });
       setStats(prev => ({
         ...prev,
         transportRevenueOnly: transportRevenue,
-        totalRevenue: prev.vipRevenueOnly + prev.ticketRevenueOnly + transportRevenue
+        totalRevenue: (prev.vipRevenueOnly || 0) + (prev.ticketRevenueOnly || 0) + transportRevenue
       }));
     });
 
