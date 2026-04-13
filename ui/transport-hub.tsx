@@ -40,6 +40,7 @@ const TransportHubUi = () => {
     const [loading, setLoading] = useState(true);
     const [userCompany, setUserCompany] = useState<TransportCompany | null>(null);
     const [showRegistration, setShowRegistration] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
     // Filters
     const [searchFrom, setSearchFrom] = useState("");
@@ -87,6 +88,7 @@ const TransportHubUi = () => {
                 if (res.ok) {
                     const data = await res.json();
                     setScrapedListings(data.listings || []);
+                    setLastUpdated(data.last_updated || null);
                 } else {
                     // Mock data if API is not yet ready
                     setScrapedListings([
@@ -198,7 +200,14 @@ const TransportHubUi = () => {
                 <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6 mb-10">
                     <div>
                         <h2 className="text-2xl font-black text-white">Popular Routes</h2>
-                        <p className="text-slate-500 text-sm">Showing {allListings.length} available travel options.</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
+                            <p className="text-slate-500 text-sm">Showing {allListings.length} available travel options.</p>
+                            {lastUpdated && (
+                                <span className="hidden sm:block text-[10px] font-bold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full uppercase tracking-widest leading-none">
+                                    Last Updated: {new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">

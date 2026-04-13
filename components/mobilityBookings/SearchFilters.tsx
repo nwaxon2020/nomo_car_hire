@@ -1,6 +1,7 @@
 "use client"
 import React from 'react';
-import { FaSearch, FaSnowflake, FaCheckCircle, FaFilter } from 'react-icons/fa';
+import { FaSearch, FaSnowflake, FaCheckCircle, FaFilter, FaMapMarkerAlt } from 'react-icons/fa';
+import { nigeriaLocations } from '@/components/carHireBookings/locations';
 
 interface SearchFiltersProps {
     searchLocation: string;
@@ -12,6 +13,7 @@ interface SearchFiltersProps {
     showVerifiedOnly: boolean;
     setShowVerifiedOnly: (val: boolean) => void;
     filteredDriversCount: number;
+    customerCity?: string;
 }
 
 export default function SearchFilters({
@@ -23,8 +25,13 @@ export default function SearchFilters({
     setShowACOnly,
     showVerifiedOnly,
     setShowVerifiedOnly,
-    filteredDriversCount
+    filteredDriversCount,
+    customerCity
 }: SearchFiltersProps) {
+    const cityAreas = customerCity && (nigeriaLocations as any)[customerCity] 
+        ? (nigeriaLocations as any)[customerCity] 
+        : [];
+
     return (
         <div className="p-3 sm:px-6 sm:py-3 bg-gray-950 border border-white/5 shadow-xl">
             <div className="flex items-center gap-2 mb-4">
@@ -98,6 +105,26 @@ export default function SearchFilters({
                     </div>
                 </div>
             </div>
+
+            {/* Quick Area Suggestions */}
+            {cityAreas.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest mr-1">Quick Areas:</span>
+                    {cityAreas.slice(0, 8).map((area: string) => (
+                        <button
+                            key={area}
+                            onClick={() => setSearchLocation(area)}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${
+                                searchLocation === area
+                                    ? 'bg-purple-500 border-purple-400 text-white'
+                                    : 'bg-gray-900/50 border-white/5 text-gray-400 hover:border-purple-500/30 hover:text-purple-300'
+                            }`}
+                        >
+                            {area}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

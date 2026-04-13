@@ -309,7 +309,7 @@ export const handleGoogleAuthUnified = async (
     if (
       user.photoURL &&
       user.photoURL !== userData.profileImage &&
-      !userData.profileImage?.includes("profile.png")
+      (userData.profileImage?.includes("profile.png") || !userData.profileImage)
     ) {
       updates.profileImage = user.photoURL;
     }

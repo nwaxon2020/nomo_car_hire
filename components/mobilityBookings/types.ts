@@ -180,6 +180,8 @@ export interface DirectOffer {
         lng: number;
         address?: string;
     };
+    customerImage?: string;
+    driverImage?: string;
     driverPhone?: string;
     fare?: number;
     pickupLocation?: string;

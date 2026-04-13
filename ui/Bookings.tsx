@@ -1,16 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image";
+import { motion } from "framer-motion";
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
     arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc, onSnapshot,
     orderBy, deleteDoc
-} from "firebase/firestore"
-import { db } from "@/lib/firebaseConfig"
-import { getAuth } from "firebase/auth"
+} from "firebase/firestore";
+import { db } from "@/lib/firebaseConfig";
+import { getAuth } from "firebase/auth";
 import {
     FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes,
-} from 'react-icons/fa'
+} from 'react-icons/fa';
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from "react-hot-toast"
 import { triggerNotification } from "@/lib/notifications"
@@ -30,14 +32,14 @@ import {
     getDriverLocation,
     getDriverAddress, formatDate, getDefaultVehicleImage
 } from "@/components/mobilityBookings/utils"
+import { nigeriaLocations } from "@/components/carHireBookings/locations"
 
 // NEW: Refactored Components
-import QuickViewHistory from "@/components/mobilityBookings/QuickViewHistory"
-import SearchFilters from "@/components/mobilityBookings/SearchFilters"
-import BookingGrid from "@/components/mobilityBookings/BookingGrid"
-import DriverDetailsModal from "@/components/mobilityBookings/DriverDetailsModal"
-import MyVehiclesSelector from "@/components/mobilityBookings/MyVehiclesSelector"
-import { div } from "framer-motion/client"
+import QuickViewHistory from "@/components/mobilityBookings/QuickViewHistory";
+import SearchFilters from "@/components/mobilityBookings/SearchFilters";
+import BookingGrid from "@/components/mobilityBookings/BookingGrid";
+import DriverDetailsModal from "@/components/mobilityBookings/DriverDetailsModal";
+import MyVehiclesSelector from "@/components/mobilityBookings/MyVehiclesSelector";
 
 const SubtleDriverNotice = () => (
     <div className="mb-2 p-2 bg-gray-900 border border-gray-800 rounded-xl flex items-center gap-3">
@@ -61,17 +63,15 @@ export default function BookingUi() {
     // activate for parameters
     const searchParams = useSearchParams()
 
+    // Close driver's information page
+    const [driverInfo, setDriverInfo] = useState(false)
+
     // State for contacted drivers and hired cars from Firebase
     const [tripHistory, setTripHistory] = useState<TripHistory[]>([]) // Trip history state
     const [contactedDrivers, setContactedDrivers] = useState<ContactedDriver[]>([])
     const [hiredCars, setHiredCars] = useState<HiredCar[]>([])
 
 
-
-    // Close driver's information page
-    const [driverInfo, setDriverInfo] = useState(false)
-
-    // Trip management states
     // Trip management states
     const [tripInfo, setTripInfo] = useState<{
         pickupLocation: string;
@@ -181,7 +181,6 @@ export default function BookingUi() {
 
     // Notifications
     const [notificationCount, setNotificationCount] = useState(0);
-    const [notificationType, setNotificationType] = useState<"driver" | "customer">("customer");
     const [isDriver, setIsDriver] = useState(false);
 
     // OWN VEHICLE SELECTOR STATE
@@ -207,7 +206,6 @@ export default function BookingUi() {
                 setContactedDrivers([])
                 setHiredCars([])
                 setNotificationCount(0)
-                setNotificationType("customer")
                 setIsDriver(false)
             }
         })
@@ -245,31 +243,11 @@ export default function BookingUi() {
                 const driverStatus = userData.isDriver || false;
                 setIsDriver(driverStatus);
                 if (driverStatus) {
-                    setViewMode("driver"); // Drivers see their Requests page by default
+                    setViewMode("driver"); 
                 }
-                setNotificationType(driverStatus ? "driver" : "customer");
 
                 // Notification counts for drivers
                 if (driverStatus) {
-                    const requestsRef = collection(db, "bookingRequests");
-                    const querySnapshot = await getDocs(query(
-                        requestsRef,
-                        where("status", "==", "active")
-                    ));
-
-                    let unofferedCount = 0;
-                    querySnapshot.forEach((docSnap) => {
-                        const request = docSnap.data();
-                        const hasMadeOffer = request.offers?.some((offer: any) => offer.driverId === userId);
-                        if (!hasMadeOffer && request.userId !== userId) {
-                            unofferedCount++;
-                        }
-                    });
-                    setNotificationCount(Math.min(unofferedCount, 99));
-                }
-
-                if (driverStatus) {
-                    // For drivers: Count unoffered requests
                     const requestsRef = collection(db, "bookingRequests");
                     const querySnapshot = await getDocs(query(
                         requestsRef,
@@ -346,11 +324,25 @@ export default function BookingUi() {
                                     driverId: vData.driverId || "",
                                     images: vData.images || {},
                                 });
-                            }
-                        }
                     }
                 }
-                setOwnVehicles(myVehiclesList);
+            }
+        }
+        setOwnVehicles(myVehiclesList);
+
+                // ✅ AUTO-SELECT: If driver has exactly 1 approved/available car and no bookingVehicleId set yet
+                if (myVehiclesList.length === 1 && !userData.bookingVehicleId) {
+                    const soleVehicle = myVehiclesList[0];
+                    console.log(`[Auto-Select] Driver has only 1 car. Selecting ${soleVehicle.carName} (ID: ${soleVehicle.id})`);
+                    
+                    await updateDoc(doc(db, "users", currentUserId), {
+                        bookingVehicleId: soleVehicle.id,
+                        bookingVehicleLastUpdated: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
+                    
+                    setActiveOwnVehicleId(soleVehicle.id);
+                }
             } catch (error) {
                 console.error("Error fetching own vehicles:", error);
             }
@@ -506,6 +498,7 @@ export default function BookingUi() {
             setLoadingHistory(false);
         }
     };
+
 
     // Fetch drivers and vehicle data from Firebase
     useEffect(() => {
@@ -806,15 +799,19 @@ export default function BookingUi() {
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
         return driver.vehicles
             .filter((vehicle) => {
-                // ONLY show approved vehicles — gate on isApproved (set by admin)
+                // 1. Check if driver has location sharing ON in the app
+                if (!driver.isLocationActive) {
+                    return false;
+                }
+
+                // 2. ONLY show approved vehicles — gate on isApproved (set by admin)
                 if (!vehicle.isApproved) {
                     console.log(`[Filter BLOCKED] ${driver.fullName} - not approved`);
                     return false;
                 }
 
-                // Check proximity using LIVE GPS only. Profile city strings are unreliable.
-                // isNearby defaults to true — only GPS math can set it to false.
-                let isNearby = true;
+                // Check proximity using LIVE GPS or City fallback
+                let isNearby = false;
 
                 // Driver location stored as {lat, lng} by DriverLocationToggle (NOT latitude/longitude)
                 const driverLat = driver.location?.lat ?? driver.location?.latitude;
@@ -838,17 +835,52 @@ export default function BookingUi() {
 
                     isNearby = distance <= 50;
                     console.log(`[Filter GPS] ${driver.fullName} | distance: ${distance.toFixed(1)}km | isNearby: ${isNearby}`);
+                } else if (currentUser?.city && driver.city) {
+                    // Fallback to city string match if GPS is unavailable (e.g., initial page load)
+                    isNearby = driver.city.toLowerCase() === currentUser.city.toLowerCase();
+                    console.log(`[Filter City Fallback] ${driver.fullName} | city: ${driver.city} | matches: ${isNearby}`);
+                } else if (!customerLocation && !currentUser?.city) {
+                    // No location data at all → default to show all
+                    isNearby = true;
                 }
-                // No GPS available on either side → default isNearby stays true (show the car)
 
                 let locationMatch = false;
 
                 if (searchLocation !== "") {
-                    const textMatch = driver.city?.toLowerCase().includes(searchLocation.toLowerCase()) ||
-                        driver.state?.toLowerCase().includes(searchLocation.toLowerCase());
-                    locationMatch = textMatch;
-                    if (!locationMatch && isNearby) locationMatch = true;
+                    const searchLower = searchLocation.toLowerCase();
+                    const liveAddress = (driver.location?.address || "").toLowerCase();
+                    const profileCity = (driver.city || "").toLowerCase();
+                    const profileState = (driver.state || "").toLowerCase();
+
+                    // 1. Check for match in Live GPS Address (most reliable)
+                    const liveMatch = liveAddress !== "" && liveAddress.includes(searchLower);
+
+                    // 2. Check for match in Profile (City, State, or Area)
+                    const profileMatch = profileCity.includes(searchLower) || profileState.includes(searchLower);
+                    
+                    let areaInProfileCity = false;
+                    if (driver.city && (nigeriaLocations as any)[driver.city]) {
+                        areaInProfileCity = (nigeriaLocations as any)[driver.city].some(
+                            (area: string) => area.toLowerCase().includes(searchLower)
+                        );
+                    }
+
+                    // 3. Logic to resolve Relocated Drivers
+                    if (liveAddress !== "") {
+                        // If driver has LIVE GPS:
+                        // They ONLY match if their live address contains the search term.
+                        // This prevents finding a driver registered in Lagos who is currently in Abuja.
+                        locationMatch = liveMatch;
+                    } else {
+                        // If driver is offline (no live GPS):
+                        // Fallback to trusting their profile data.
+                        locationMatch = profileMatch || areaInProfileCity;
+                    }
+
+                    // When searching, we ONLY show matches. We don't override with isNearby 
+                    // to avoid noise and respect the user's explicit search intention.
                 } else {
+                    // Default behavior (no search term): show drivers within 50km
                     locationMatch = isNearby;
                 }
 
@@ -902,9 +934,6 @@ export default function BookingUi() {
         }
     }
 
-    const isVehicleChangeLocked = currentUser?.bookingVehicleLastUpdated
-        ? (Date.now() - currentUser.bookingVehicleLastUpdated.toDate().getTime()) < (24 * 60 * 60 * 1000)
-        : false;
 
     // Handle driver selection
     const handleDriverSelect = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
@@ -925,6 +954,20 @@ export default function BookingUi() {
             "/car_select.jpg"
         setMainImage(firstImage)
         window.scrollTo({ top: 0, behavior: "smooth" })
+    }
+
+    // Helper for phone calls
+    const handlePhoneCall = (phoneNumber: string) => {
+        if (!phoneNumber) return
+
+        let dialNumber = phoneNumber.replace(/\s+/g, '')
+        if (dialNumber.startsWith('0') && dialNumber.length === 11) {
+            dialNumber = '+234' + dialNumber.substring(1)
+        } else if (!dialNumber.startsWith('+')) {
+            dialNumber = '+234' + dialNumber
+        }
+
+        window.location.href = `tel:${dialNumber}`
     }
 
     // ✅ NEW: Handle Pre-Chat button click
@@ -989,7 +1032,8 @@ export default function BookingUi() {
             setSaveMessage({ type: "", text: "" })
 
             const userDocRef = doc(db, "users", String(currentUser.uid))
-            const driverDocRef = doc(db, "users", String(selectedDriver.id))
+            const driverDocId = selectedDriver.id || selectedDriver.uid
+            const driverDocRef = doc(db, "users", String(driverDocId))
             const now = Timestamp.now()
 
             // Create the new history items
@@ -1065,7 +1109,8 @@ export default function BookingUi() {
             })
 
             // Add user to driver's customersCarried (if not already there)
-            if (!selectedDriver.customersCarried?.includes(currentUser.uid)) {
+            const customersCarried = selectedDriver.customersCarried || []
+            if (!customersCarried.includes(currentUser.uid)) {
                 batch.update(driverDocRef, {
                     customersCarried: arrayUnion(currentUser.uid),
                     updatedAt: now
@@ -1121,6 +1166,8 @@ export default function BookingUi() {
     // Handle closing driver info and showing quick view if saved
     const handleCloseDriverInfo = () => {
         setDriverInfo(false)
+        setSelectedDriver(null)
+        setSelectedVehicle(null)
         setSaveMessage({ type: "", text: "" }) // Clear save message
         setShowDeleteConfirm({ show: false, comment: null }) // Clear delete confirmation
     }
@@ -1167,7 +1214,8 @@ export default function BookingUi() {
 
         try {
             const commentToDelete = showDeleteConfirm.comment
-            const driverDocRef = doc(db, "users", selectedDriver.uid)
+            const driverDocId = selectedDriver.id || selectedDriver.uid
+            const driverDocRef = doc(db, "users", driverDocId)
 
             // Remove the comment from the array
             await updateDoc(driverDocRef, {
@@ -1494,7 +1542,7 @@ export default function BookingUi() {
                 driverId,
                 vehicleId,
                 customerId: currentUser.uid,
-                customerName: currentUser.displayName || 'Customer',
+                customerName: currentUser.fullName || (currentUser.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : (currentUser.displayName || 'Customer')),
                 pickupLocation,
                 destination,
                 fare: estimatedFare,
@@ -1735,7 +1783,7 @@ export default function BookingUi() {
         try {
             const offerData: any = {
                 customerId: currentUser.uid,
-                customerName: currentUser.displayName || 'Customer',
+                customerName: currentUser.fullName || (currentUser.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : (currentUser.displayName || 'Customer')),
                 driverId: driver.uid,
                 driverName: driver.fullName || `${driver.firstName} ${driver.lastName}`,
                 vehicleId: vehicle.id,
@@ -1743,6 +1791,10 @@ export default function BookingUi() {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 customerLocation: freshLoc || customerLocation,
+                customerImage: (currentUser?.profileImage && !currentUser.profileImage.includes("profile.png")) 
+                    ? currentUser.profileImage 
+                    : (currentUser?.photoURL || ""),
+                driverImage: driver.profileImage || "",
                 driverPhone: driver.phoneNumber,
                 pickupLocation: '', // Can be enhanced later
                 destination: '',
@@ -2041,10 +2093,6 @@ export default function BookingUi() {
     }, [currentUser]);
 
 
-    // Handle regular call
-    const handlePhoneCall = (phoneNumber: string) => {
-        window.location.href = `tel:${phoneNumber}`
-    }
 
     if (loading) {
         return (
@@ -2141,18 +2189,39 @@ export default function BookingUi() {
             {pendingOffer && pendingOffer.status === 'pending' && (
                 <div className="fixed inset-0 z-[180] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 text-center shadow-2xl">
-                        <div className="relative w-32 h-32 mx-auto mb-8">
+                        <div className="relative w-36 h-36 mx-auto mb-8">
+                            {/* Rotating Spinner Border */}
                             <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
-                            <div
-                                className="absolute inset-0 border-4 border-blue-500 rounded-full animate-spin border-t-transparent"
-                                style={{ animationDuration: '2s' }}
-                            ></div>
-                            <div className="absolute inset-0 flex items-center justify-center text-4xl font-black text-white">
+                            <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent z-10"
+                            ></motion.div>
+                            
+                            {/* Driver Image Container */}
+                            <div className="absolute inset-2 rounded-full overflow-hidden bg-gray-800 border-4 border-gray-900 shadow-inner">
+                                {pendingOffer.driverImage ? (
+                                    <Image 
+                                        src={pendingOffer.driverImage} 
+                                        alt={pendingOffer.driverName}
+                                        width={144}
+                                        height={144}
+                                        className="object-cover w-full h-full"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-blue-600/20 text-blue-500">
+                                        <FaCar size={40} />
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Countdown Badge */}
+                            <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center text-lg font-black shadow-xl z-20 border-4 border-gray-900">
                                 {countdown > 0 ? countdown : "..."}
                             </div>
                         </div>
-                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Waiting for Driver</h3>
-                        <p className="text-gray-400 text-sm mb-8">Driver is reviewing your booking request. Please stay on this page.</p>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Connecting to Driver</h3>
+                        <p className="text-gray-400 text-sm mb-8">Driver {pendingOffer.driverName} is reviewing your booking request. Please stay on this page.</p>
                         <button
                             onClick={() => setShowCancelWarning(true)}
                             className="w-full py-4 bg-white/5 hover:bg-white/10 text-red-400 font-bold rounded-2xl transition-all border border-red-500/20"
@@ -2257,6 +2326,7 @@ export default function BookingUi() {
                                 showVerifiedOnly={showVerifiedOnly}
                                 setShowVerifiedOnly={setShowVerifiedOnly}
                                 filteredDriversCount={filteredDrivers.length}
+                                customerCity={currentUser?.city}
                             />
 
                             <div className="px-3">
@@ -2327,16 +2397,31 @@ export default function BookingUi() {
                                     ) : (
                                         <div className="p-1 sm:p-2 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 shadow-2xl flex items-center justify-center max-w-lg mx-auto w-full">
                                             <div className="bg-white rounded-[1.5rem] p-6 sm:p-8 text-center w-full">
-                                                <div className="flex justify-center mb-4">
-                                                    <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center animate-bounce">
-                                                        <FaCar className="text-amber-500 text-xl" />
+                                                <div className="flex justify-center mb-6">
+                                                    <div className="relative w-24 h-24">
+                                                        <div className="absolute inset-0 bg-amber-500 rounded-full animate-ping opacity-25"></div>
+                                                        <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-amber-500 shadow-xl bg-gray-100">
+                                                            {incomingOffer.customerImage ? (
+                                                                <Image 
+                                                                    src={incomingOffer.customerImage}
+                                                                    alt={incomingOffer.customerName}
+                                                                    width={96}
+                                                                    height={96}
+                                                                    className="object-cover w-full h-full"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center bg-amber-100 text-amber-600">
+                                                                    <FaCar size={32} />
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 mb-2 drop-shadow-sm">New Booking Offer</p>
                                                 <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2 leading-tight tracking-tighter">
                                                     {incomingOffer.customerName} <span className="text-amber-500 flex flex-col sm:inline">wants to book you!</span>
                                                 </h3>
-                                                <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">Review and accept the request below to see the location.</p>
+                                                <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">Accept request from {incomingOffer.customerName} to see the location.</p>
 
                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId) && (
                                                     <div className="bg-amber-50 rounded-xl p-3 mb-6 border border-amber-200 shadow-inner flex items-center justify-center gap-3 w-full">
@@ -2380,6 +2465,9 @@ export default function BookingUi() {
                                                 <h2 className="text-lg md:text-xl font-black text-emerald-700 uppercase tracking-tight">Your Active Fleet</h2>
                                                 <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{ownVehicles.length} Vehicles</span>
                                             </div>
+                                            
+                                            <SubtleDriverNotice />
+
                                             <MyVehiclesSelector
                                                 vehicles={ownVehicles}
                                                 selectedVehicleId={activeOwnVehicleId}
