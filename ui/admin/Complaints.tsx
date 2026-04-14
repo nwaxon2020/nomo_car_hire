@@ -173,6 +173,8 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
           </div>
           <div className="flex items-center gap-2">
             {isDriverComplaint && (
+              <button
+                onClick={handleToggleDisabled}
                 className={`p-1.5 rounded-lg transition-colors ${isDisabled ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'} ${!isCEO ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={!isCEO ? "CEO Authorization Required" : (isDisabled ? "Enable User" : "Disable User")}
                 disabled={!isCEO}
