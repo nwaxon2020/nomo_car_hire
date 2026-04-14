@@ -51,6 +51,27 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
             {/* Subtle Premium Background Glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] -z-10" />
 
+            {/* Flag Alert Banner */}
+            {(driverData?.flags > 0 || driverData?.status === 'flagged') && (
+                <div className="relative z-20 bg-red-600/90 backdrop-blur-md px-4 py-2 flex items-center justify-center gap-3 border-b border-red-500/50 overflow-hidden mx-[-12px] md:mx-[-24px] mt-[-20px] md:mt-[-24px] mb-6">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+                    <span className="text-white text-lg animate-pulse">🚩</span>
+                    <div className="flex flex-col md:flex-row items-center gap-2">
+                        <span className="text-white font-black uppercase italic text-[10px] tracking-widest">
+                            Account Flagged
+                        </span>
+                        {driverData.flagReason && (
+                            <span className="bg-white/10 px-2 py-0.5 rounded text-[9px] text-white font-medium border border-white/20">
+                                Reason: {driverData.flagReason}
+                            </span>
+                        )}
+                    </div>
+                    <div className="ml-auto bg-white/20 px-2 py-0.5 rounded-full text-[9px] text-white font-black uppercase tracking-tighter">
+                        {driverData.flags || 1} Reports
+                    </div>
+                </div>
+            )}
+
             <div className="flex flex-col lg:flex-row gap-6 md:gap-8">
                 {/* Left Column - Profile Info */}
                 <div className="lg:w-1/2 flex flex-col gap-5 ">

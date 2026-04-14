@@ -65,6 +65,36 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 className="relative mb-8 overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-r from-gray-800/50 via-gray-900/50 to-black/50 backdrop-blur-xl border border-gray-700/50 shadow-2xl"
             >
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-pink-600/10" />
+                
+                {/* Flag Alert Banner */}
+                {(userData.flags > 0 || userData.status === 'flagged') && (
+                    <div className="relative z-20 bg-red-600/90 backdrop-blur-md px-4 py-2 flex items-center justify-center gap-3 border-b border-red-500/50 overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+                        <motion.span 
+                            animate={{ scale: [1, 1.2, 1] }} 
+                            transition={{ duration: 1, repeat: Infinity }}
+                            className="text-white text-lg"
+                        >
+                            🚩
+                        </motion.span>
+                        <div className="flex flex-col md:flex-row items-center gap-2">
+                            <span className="text-white font-black uppercase italic text-xs tracking-widest">
+                                Account Flagged
+                            </span>
+                            <span className="hidden md:block text-red-200 text-[10px] font-bold">
+                                • User has been reported for review
+                            </span>
+                            {userData.flagReason && (
+                                <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] text-white font-medium border border-white/20">
+                                    Reason: {userData.flagReason}
+                                </span>
+                            )}
+                        </div>
+                        <div className="ml-auto bg-white/20 px-3 py-1 rounded-full text-[10px] text-white font-black uppercase tracking-tighter">
+                            {userData.flags || 1} Reports
+                        </div>
+                    </div>
+                )}
 
                 <div className="relative py-6 px-4 md:p-8">
                     <div className="flex flex-col lg:flex-row gap-8">

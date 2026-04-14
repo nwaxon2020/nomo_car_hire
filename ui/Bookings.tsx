@@ -119,6 +119,7 @@ export default function BookingUi() {
     // New filter states
     const [showACOnly, setShowACOnly] = useState(false)
     const [showVerifiedOnly, setShowVerifiedOnly] = useState(false)
+    const [visibleCount, setVisibleCount] = useState(20)
 
     // New state to handle review form inputs
     const [reviewForm, setReviewForm] = useState({
@@ -929,6 +930,11 @@ export default function BookingUi() {
             })
             .map(vehicle => ({ driver, vehicle }))
     })
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setVisibleCount(20)
+    }, [searchLocation, selectedCategory, showACOnly, showVerifiedOnly])
 
     // Handle own vehicle selection (persists to Firestore)
     const handleOwnVehicleSelect = async (vehicle: VehicleLog) => {
@@ -2362,9 +2368,9 @@ export default function BookingUi() {
                                 customerCity={currentUser?.city}
                             />
 
-                            <div className="px-3">
+                            <div className="px-3 pb-8">
                                 <BookingGrid
-                                    filteredDrivers={filteredDrivers}
+                                    filteredDrivers={filteredDrivers.slice(0, visibleCount)}
                                     currentUser={currentUser}
                                     customerLocation={customerLocation}
                                     onBook={handleBookNow}
@@ -2374,6 +2380,17 @@ export default function BookingUi() {
                                     onCall={handlePhoneCall}
                                     onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
                                 />
+                                
+                                {filteredDrivers.length > visibleCount && (
+                                    <div className="flex justify-center mt-8">
+                                        <button
+                                            onClick={() => setVisibleCount(prev => prev + 20)}
+                                            className="px-8 py-3 bg-gray-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-black transition-all shadow-xl hover:scale-105 active:scale-95 border border-gray-700"
+                                        >
+                                            Load More Drivers ({filteredDrivers.length - visibleCount} remaining)
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </>
                     ) : (

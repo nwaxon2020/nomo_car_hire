@@ -57,7 +57,7 @@ const PRESET_REASONS = [
   "Harassment", "Fraud Attempt"
 ];
 
-function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSendReply, loadingId, onToggle, isDisabled }: any) {
+function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSendReply, loadingId, onToggle, isDisabled, isCEO }: any) {
   const isDriverComplaint = complaint.targetType === "driver" || complaint.reportedBy === "customer";
   const [showFlagInput, setShowFlagInput] = useState(false);
   const [flagReason, setFlagReason] = useState("");
@@ -173,10 +173,9 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
           </div>
           <div className="flex items-center gap-2">
             {isDriverComplaint && (
-              <button
-                onClick={handleToggleDisabled}
-                className={`p-1.5 rounded-lg transition-colors ${isDisabled ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}`}
-                title={isDisabled ? "Enable User" : "Disable User"}
+                className={`p-1.5 rounded-lg transition-colors ${isDisabled ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'} ${!isCEO ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={!isCEO ? "CEO Authorization Required" : (isDisabled ? "Enable User" : "Disable User")}
+                disabled={!isCEO}
               >
                 {isDisabled ? <FiUserX size={16} /> : <FiUserCheck size={16} />}
               </button>
@@ -236,14 +235,19 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
                   <FaFlag
                     key={n}
                     size={12}
-                    onClick={() => { setPendingFlags(n); setShowFlagInput(true); }}
-                    className={`cursor-pointer transition-colors ${(pendingFlags >= n) ? "text-red-500" : "text-gray-300"}`}
+                    onClick={() => { 
+                      if (!isCEO) return toast.error("CEO Only: Cannot update flags");
+                      setPendingFlags(n); 
+                      setShowFlagInput(true); 
+                    }}
+                    className={`cursor-pointer transition-colors ${(pendingFlags >= n) ? "text-red-500" : "text-gray-300"} ${!isCEO ? 'opacity-50' : ''}`}
                   />
                 ))}
               </div>
               {pendingFlags > 0 && (
                 <button
                   onClick={async () => {
+                    if (!isCEO) return toast.error("CEO Only: Cannot clear flags");
                     const tId = complaint.targetId || complaint.targetUid;
                     if (!tId) return;
                     await updateDoc(doc(db, "users", tId), { flagHistory: [], flags: 0, flagReason: "" });
@@ -251,7 +255,7 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
                     setPendingFlags(0);
                     toast.success("Flags cleared");
                   }}
-                  className="text-[9px] font-black px-2 py-0.5 rounded-full border border-green-500 text-green-600 hover:bg-green-50"
+                  className={`text-[9px] font-black px-2 py-0.5 rounded-full border border-green-500 text-green-600 hover:bg-green-50 ${!isCEO ? 'opacity-50' : ''}`}
                 >
                   Clear
                 </button>
@@ -674,6 +678,7 @@ const AdminComplaintsUi = () => {
                     loadingId={loadingId}
                     onToggle={(data: any) => setConfirmToggle({ ...data, complaintId: c.id })}
                     isDisabled={disabledUserIds.has(tId)}
+                    isCEO={auth.currentUser?.uid === ADMIN_UID}
                   />
                 );
               })}
