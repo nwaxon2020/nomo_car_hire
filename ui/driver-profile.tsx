@@ -41,15 +41,12 @@ const setStoredVipLevel = (driverId: string, level: number) => {
   } catch { }
 };
 
-const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, vipExpiryDate?: any) => {
-  let referralBasedLevel = 0;
-  for (let i = 0; i < VIP_CONFIG.levels.length; i++) {
-    if (referralCount >= VIP_CONFIG.levels[i].referralsRequired) {
-      referralBasedLevel = VIP_CONFIG.levels[i].level;
-    } else {
-      break;
-    }
-  }
+const getReferralVipLevel = (referralCount: number, threshold: number) => {
+  return Math.floor(referralCount / (threshold || 20));
+};
+
+const calculateVIPDetails = (referralCount: number, purchasedVipLevel: number, threshold: number = 20, vipExpiryDate?: any) => {
+  const referralBasedLevel = getReferralVipLevel(referralCount, threshold);
 
   let vipExpiry: Date | null = null;
   if (vipExpiryDate) {
@@ -253,6 +250,7 @@ export default function DriverProfilePage() {
   const [loading, setLoading] = useState(true);
   const [driverData, setDriverData] = useState<any>(null);
   const [game, setGame] = useState(false);
+  const [showVIPModal, setShowVIPModal] = useState(false);
 
   // Vehicle States
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -282,9 +280,11 @@ export default function DriverProfilePage() {
   const [contactedDrivers, setContactedDrivers] = useState<any[]>([]);
   const [tripHistory, setTripHistory] = useState<any[]>([]);
   const [loadingTripHistory, setLoadingTripHistory] = useState(false);
-  const [showVIPModal, setShowVIPModal] = useState(false);
+  const [freerideConfig, setFreerideConfig] = useState<any>({
+    driverThreshold: 20
+  });
 
-  const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel);
+  const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel, freerideConfig.driverThreshold);
   const averageRating = ratings.length > 0
     ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
     : "0.0";
@@ -589,6 +589,11 @@ export default function DriverProfilePage() {
 
     const fetchData = async () => {
       try {
+        const configSnap = await getDoc(doc(db, "adminSettings", "freerideConfig"));
+        if (configSnap.exists()) {
+          setFreerideConfig(configSnap.data());
+        }
+
         await initializeVIPFields(driverId);
 
         const userRef = doc(db, "users", driverId);
@@ -609,7 +614,7 @@ export default function DriverProfilePage() {
             let prestigeLevel = data.prestigeLevel || 0;
 
             const storedVipLevel = getStoredVipLevel(driverId);
-            const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel);
+            const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel, configSnap.exists() ? configSnap.data().driverThreshold : 20);
 
             if (calculatedVIP.vipLevel !== vipLevel || calculatedVIP.prestigeLevel !== prestigeLevel) {
               vipLevel = calculatedVIP.vipLevel;

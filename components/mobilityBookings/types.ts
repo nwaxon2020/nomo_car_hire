@@ -10,6 +10,7 @@ export interface VehicleLog {
     ac: boolean;
     description: string;
     status: string;
+    plateNumber?: string;
     isApproved?: boolean;
     driverId: string;
     images?: {
@@ -184,6 +185,7 @@ export interface DirectOffer {
     customerImage?: string;
     driverImage?: string;
     driverPhone?: string;
+    plateNumber?: string;
     fare?: number;
     pickupLocation?: string;
     destination?: string;

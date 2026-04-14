@@ -69,8 +69,27 @@ export default function UserProfilePageUi() {
     const [loadingTripHistory, setLoadingTripHistory] = useState(false);
     const [showChat, setShowChat] = useState(false);
 
+    const [freerideConfig, setFreerideConfig] = useState<any>({
+        passengerThreshold: 20,
+        freeRideTimesLimit: 1
+    });
+
     const rawId = params?.id;
     const userId = rawId ? (Array.isArray(rawId) ? rawId[0] : rawId) : "";
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const configSnap = await getDoc(doc(db, "adminSettings", "freerideConfig"));
+                if (configSnap.exists()) {
+                    setFreerideConfig(configSnap.data());
+                }
+            } catch (err) {
+                console.error("Error fetching freeride config:", err);
+            }
+        };
+        fetchConfig();
+    }, []);
 
     useEffect(() => {
         if (!userId) {
@@ -89,12 +108,30 @@ export default function UserProfilePageUi() {
                     const normalizedVipHistory = normalizedResult.normalized;
                     const activeVipEntries = getActiveVipHistoryEntries(normalizedVipHistory);
                     const activePurchasedVipLevel = getActivePurchasedVipLevel(normalizedVipHistory);
-                    const isVip = activeVipEntries.length > 0;
+                    
+                    // Freeride & Referral-based VIP Logic
+                    const ptsThreshold = freerideConfig.passengerThreshold || 20;
+                    const timesLimit = freerideConfig.freeRideTimesLimit || 1;
+                    const freeRidesUsed = data.freeRidesUsed || 0;
+                    const totalReferralPoints = data.referralPoints || 0;
+
+                    let referralVipLevel = 0;
+                    if (freeRidesUsed >= timesLimit) {
+                        // All referrals now go to VIP
+                        // Discounting the referrals that were used for free rides
+                        const pointsUsedForFreeRides = freeRidesUsed * ptsThreshold;
+                        const remainingPoints = Math.max(0, totalReferralPoints - pointsUsedForFreeRides);
+                        referralVipLevel = Math.floor(remainingPoints / ptsThreshold);
+                    }
+
+                    const isVip = activeVipEntries.length > 0 || referralVipLevel > 0;
 
                     const updates: any = {};
                     if (normalizedResult.changed) updates.vipHistory = normalizedVipHistory;
                     if ((data.purchasedVipLevel || 0) !== activePurchasedVipLevel) updates.purchasedVipLevel = activePurchasedVipLevel;
-                    if ((data.vipLevel || 0) !== (isVip ? Math.max(data.vipLevel || 0, activePurchasedVipLevel) : 0)) updates.vipLevel = isVip ? Math.max(data.vipLevel || 0, activePurchasedVipLevel) : 0;
+                    
+                    const targetVipLevel = isVip ? Math.max(data.vipLevel || 0, activePurchasedVipLevel, referralVipLevel) : 0;
+                    if ((data.vipLevel || 0) !== targetVipLevel) updates.vipLevel = targetVipLevel;
                     if (data.vip !== isVip) updates.vip = isVip;
 
                     if (Object.keys(updates).length > 0) {
@@ -274,9 +311,36 @@ export default function UserProfilePageUi() {
     };
 
     const referralPoints = userData?.referralPoints || 0;
-    const freeRides = Math.floor(referralPoints / POINTS_PER_FREE_RIDE);
-    const pointsToNextFreeRide = POINTS_PER_FREE_RIDE - (referralPoints % POINTS_PER_FREE_RIDE);
-    const progressPercentage = ((referralPoints % POINTS_PER_FREE_RIDE) / POINTS_PER_FREE_RIDE) * 100;
+    const ptsThreshold = freerideConfig.passengerThreshold || 20;
+    const timesLimit = freerideConfig.freeRideTimesLimit || 1;
+    const freeRidesUsed = userData?.freeRidesUsed || 0;
+
+    let freeRides = 0;
+    let pointsToNextFreeRide = ptsThreshold;
+    let progressPercentage = 0;
+
+    if (freeRidesUsed < timesLimit) {
+        // Still eligible for free rides
+        freeRides = Math.floor(referralPoints / ptsThreshold) - freeRidesUsed;
+        if (freeRides < 0) freeRides = 0;
+        
+        // If they haven't used up all their "potential" free rides from total points
+        const totalPotentialFreeRides = Math.floor(referralPoints / ptsThreshold);
+        if (totalPotentialFreeRides < timesLimit) {
+             pointsToNextFreeRide = ptsThreshold - (referralPoints % ptsThreshold);
+             progressPercentage = ((referralPoints % ptsThreshold) / ptsThreshold) * 100;
+        } else {
+            // They have enough points for all their allowed free rides
+            pointsToNextFreeRide = 0;
+            progressPercentage = 100;
+        }
+    } else {
+        // Exhausted free rides, now VIP mode
+        const pointsUsedForFreeRides = freeRidesUsed * ptsThreshold;
+        const remainingPoints = Math.max(0, referralPoints - pointsUsedForFreeRides);
+        pointsToNextFreeRide = ptsThreshold - (remainingPoints % ptsThreshold);
+        progressPercentage = ((remainingPoints % ptsThreshold) / ptsThreshold) * 100;
+    }
 
     if (loading) {
         return (

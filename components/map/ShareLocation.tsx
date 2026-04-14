@@ -1,24 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
-import { getAuth } from 'firebase/auth';
 import {
   FaWhatsapp,
-  FaUser,
-  FaMapMarkerAlt,
   FaShare,
-  FaLock,
-  FaLocationArrow,
-  FaPhone,
   FaCar,
-  FaClock,
-  FaRoad,
-  FaExclamationCircle,
   FaTimes
 } from 'react-icons/fa';
-import { toast } from 'react-hot-toast';
 
 interface ShareLocationProps {
   tripId: string;
@@ -31,13 +21,9 @@ interface ShareLocationProps {
 }
 
 export default function ShareLocation({
-  tripId,
   driverId,
   driverName,
   vehicleDetails,
-  pickup,
-  destination,
-  currentUserId
 }: ShareLocationProps) {
   const [showShareModal, setShowShareModal] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -45,12 +31,9 @@ export default function ShareLocation({
   const [sharing, setSharing] = useState(false);
   const [sharedSuccess, setSharedSuccess] = useState(false);
   const [driverLocation, setDriverLocation] = useState<any>(null);
-  const [customerLocation, setCustomerLocation] = useState<any>(null);
   const [isCustomerSharing, setIsCustomerSharing] = useState(false);
   const [driverPhoneNumber, setDriverPhoneNumber] = useState<string>('');
   const [isLoadingDriverData, setIsLoadingDriverData] = useState(false);
-  const [showPhonePrompt, setShowPhonePrompt] = useState(false);
-  const [tempPhoneInput, setTempPhoneInput] = useState('');
   const [phoneError, setPhoneError] = useState<string>('');
 
   // ... [Keep logic: fetchDriverData, fetchCustomerLocation, generateTrackingLink, etc. - identical to your original]

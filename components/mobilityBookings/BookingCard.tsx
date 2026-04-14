@@ -151,7 +151,7 @@ export default function BookingCard({
                                 })}
                             </div>
                             <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${subTextColor}`}>
-                                {vehicle.carType} • {vehicle.exteriorColor}
+                                {vehicle.carType} • {vehicle.exteriorColor} • {vehicle.plateNumber || 'N/A'}
                             </p>
                         </div>
                     </div>

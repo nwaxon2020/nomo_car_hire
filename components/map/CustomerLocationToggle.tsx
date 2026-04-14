@@ -48,7 +48,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [sendingLinks, setSendingLinks] = useState<string[]>([]);
-  const [showValidationInfo, setShowValidationInfo] = useState(false);
   const [showTracking, setShowTracking] = useState(false);
 
   // GPS Permission Modal State
@@ -87,9 +86,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             }
             // Auto resume tracking if it was left ON
             setTimeout(() => {
-                if (!watchIdRef.current) {
-                    startLocationSharing();
-                }
+              if (!watchIdRef.current) {
+                startLocationSharing();
+              }
             }, 1000);
           }
 

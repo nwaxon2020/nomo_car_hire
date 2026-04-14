@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader } from '@googlemaps/js-api-loader';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
-import { FaMapMarkerAlt, FaLocationArrow, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaLocationArrow, FaExternalLinkAlt } from 'react-icons/fa';
 
 export default function LiveTracking({ driverId }: { driverId: string }) {
     const mapRef = useRef<HTMLDivElement>(null);
@@ -17,7 +17,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
 
     useEffect(() => {
         const loader: any = new Loader({
-            apiKey: "YOUR_GOOGLE_MAPS_API_KEY",
+            apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
             version: "weekly",
         });
 
@@ -82,7 +82,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
         : "#";
 
     return (
-        <div className="relative w-full rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-[#0a0a0a] group">
+        <div className="py-4 md:py-10 relative w-full rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-[#0a0a0a] group">
 
             {/* The Map Canvas */}
             <div ref={mapRef} className="w-full h-[450px] md:h-[550px]" />

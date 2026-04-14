@@ -11,7 +11,7 @@ import {
 import { db } from "@/lib/firebaseConfig";
 import { getAuth } from "firebase/auth";
 import {
-    FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes,
+    FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes, FaInfoCircle
 } from 'react-icons/fa';
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from "react-hot-toast"
@@ -49,6 +49,21 @@ const SubtleDriverNotice = () => (
         <div>
             <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Fleet Active</p>
             <p className="text-[10px] font-medium text-gray-400">Tap a vehicle below to set your active booking car.</p>
+        </div>
+    </div>
+);
+
+// Negotiation Notice ///////////////////////////////////////////////////////////
+const NegotiationNotice = () => (
+    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 flex items-center gap-2 shadow-sm">
+        <div className="bg-blue-600 px-2 py-1 rounded-xl text-white shadow-md shrink-0">
+            <FaInfoCircle size={14} />
+        </div>
+        <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-900">Fair Negotiation Policy</p>
+            <p className="text-[11px] font-medium text-gray-600 leading-tight">
+                Bookings are negotiations between drivers and customers. Please ensure a proper agreement on fare and terms is reached before starting your trip.
+            </p>
         </div>
     </div>
 );
@@ -243,7 +258,7 @@ export default function BookingUi() {
                 const driverStatus = userData.isDriver || false;
                 setIsDriver(driverStatus);
                 if (driverStatus) {
-                    setViewMode("driver"); 
+                    setViewMode("driver");
                 }
 
                 // Notification counts for drivers
@@ -324,23 +339,23 @@ export default function BookingUi() {
                                     driverId: vData.driverId || "",
                                     images: vData.images || {},
                                 });
+                            }
+                        }
                     }
                 }
-            }
-        }
-        setOwnVehicles(myVehiclesList);
+                setOwnVehicles(myVehiclesList);
 
                 // ✅ AUTO-SELECT: If driver has exactly 1 approved/available car and no bookingVehicleId set yet
                 if (myVehiclesList.length === 1 && !userData.bookingVehicleId) {
                     const soleVehicle = myVehiclesList[0];
                     console.log(`[Auto-Select] Driver has only 1 car. Selecting ${soleVehicle.carName} (ID: ${soleVehicle.id})`);
-                    
+
                     await updateDoc(doc(db, "users", currentUserId), {
                         bookingVehicleId: soleVehicle.id,
                         bookingVehicleLastUpdated: serverTimestamp(),
                         updatedAt: serverTimestamp()
                     });
-                    
+
                     setActiveOwnVehicleId(soleVehicle.id);
                 }
             } catch (error) {
@@ -616,6 +631,7 @@ export default function BookingUi() {
                     ac: data.ac || false,
                     description: data.description || "",
                     status: data.status || "available",
+                    plateNumber: data.plateNumber || "",
                     isApproved: data.isApproved || false, // ← READ isApproved from Firestore
                     driverId: data.driverId || "",
                     images: data.images || {},
@@ -864,7 +880,7 @@ export default function BookingUi() {
 
                     // 2. Check for match in Profile (City, State, or Area)
                     const profileMatch = profileCity.includes(searchLower) || profileState.includes(searchLower);
-                    
+
                     let areaInProfileCity = false;
                     if (driver.city && (nigeriaLocations as any)[driver.city]) {
                         areaInProfileCity = (nigeriaLocations as any)[driver.city].some(
@@ -1757,7 +1773,7 @@ export default function BookingUi() {
                             resolve(customerLocation || null);
                             return;
                         }
-                        
+
                         // Attempt 2: Low Accuracy (e.g. laptop WiFi/IP location) if GPS fails/times out
                         console.warn("High Accuracy GPS failed, trying Low Accuracy fallback...");
                         navigator.geolocation.getCurrentPosition(
@@ -1802,11 +1818,12 @@ export default function BookingUi() {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 customerLocation: freshLoc || customerLocation,
-                customerImage: (currentUser?.profileImage && !currentUser.profileImage.includes("profile.png")) 
-                    ? currentUser.profileImage 
+                customerImage: (currentUser?.profileImage && !currentUser.profileImage.includes("profile.png"))
+                    ? currentUser.profileImage
                     : (currentUser?.photoURL || ""),
                 driverImage: driver.profileImage || "",
                 driverPhone: driver.phoneNumber,
+                plateNumber: vehicle.plateNumber || "N/A",
                 pickupLocation: '', // Can be enhanced later
                 destination: '',
             };
@@ -2116,7 +2133,7 @@ export default function BookingUi() {
         )
     }
 
-    // MAIN RETURN PAGE
+    // MAIN RETURN PAGE //////////////////////////////////////////////////////////////////////////////
     return (
         <>
             {/* ✅ NEW: Full-screen Acceptance Map Overlay */}
@@ -2126,8 +2143,8 @@ export default function BookingUi() {
                     {/* Placeholder for the real Map - integrating with existing map tools if possible */}
                     {/* Unified Map Overlay Content */}
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900">
-                        <div className="text-center text-white mb-8">
-                            <h2 className="text-2xl font-black uppercase tracking-widest mb-2">
+                        <div className="text-center text-white mb-4 md:mb-8">
+                            <h2 className="text-xl md:text-2xl font-black uppercase tracking-widest mb-2">
                                 {pendingOffer ? "Driver En Route" : "Customer Location"}
                             </h2>
                             <p className="text-gray-400">
@@ -2138,10 +2155,14 @@ export default function BookingUi() {
                             </p>
                         </div>
 
-                        <div className="w-full md:w-[80%] h-[60vh] bg-gray-800 rounded-[3rem] overflow-hidden border-8 border-gray-800 shadow-2xl relative">
+                        <div className="w-full md:w-[80%] h-[50vh] md:h-[60vh] bg-gray-800 rounded-[2rem] md:rounded-[3rem] overflow-hidden border-4 md:border-8 border-gray-800 shadow-2xl relative">
                             <BookingTrackingMap
                                 pickup={pendingOffer?.customerLocation || incomingOffer?.customerLocation || { lat: 0, lng: 0, address: "" }}
                                 driver={pendingOffer?.driverLocation || incomingOffer?.driverLocation || { lat: 0, lng: 0, address: "" }}
+                                customerImage={pendingOffer?.customerImage || incomingOffer?.customerImage}
+                                driverImage={pendingOffer?.driverImage || incomingOffer?.driverImage}
+                                plateNumber={pendingOffer?.plateNumber || incomingOffer?.plateNumber}
+                                viewerRole={pendingOffer ? 'customer' : 'driver'}
                             />
 
                             {/* Visual Pulse for active tracking */}
@@ -2151,7 +2172,7 @@ export default function BookingUi() {
                             </div>
                         </div>
 
-                        <div className="mt-10 flex flex-col sm:flex-row gap-4 w-full px-6 max-w-xl">
+                        <div className="mt-6 md:mt-10 flex flex-col sm:flex-row gap-4 w-full px-6 max-w-xl">
                             {pendingOffer && (
                                 <button
                                     onClick={() => handlePhoneCall(pendingOffer?.driverPhone || "")}
@@ -2208,12 +2229,12 @@ export default function BookingUi() {
                                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                                 className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent z-10"
                             ></motion.div>
-                            
+
                             {/* Driver Image Container */}
                             <div className="absolute inset-2 rounded-full overflow-hidden bg-gray-800 border-4 border-gray-900 shadow-inner">
                                 {pendingOffer.driverImage ? (
-                                    <Image 
-                                        src={pendingOffer.driverImage} 
+                                    <Image
+                                        src={pendingOffer.driverImage}
                                         alt={pendingOffer.driverName}
                                         width={144}
                                         height={144}
@@ -2225,7 +2246,7 @@ export default function BookingUi() {
                                     </div>
                                 )}
                             </div>
-                            
+
                             {/* Countdown Badge */}
                             <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center text-lg font-black shadow-xl z-20 border-4 border-gray-900">
                                 {countdown > 0 ? countdown : "..."}
@@ -2286,13 +2307,13 @@ export default function BookingUi() {
                 </div>
             )}
 
-            <div className="px-4 pt-3 relative bg-[#F9FAF9]">
+            <div className="px-2 md:px-4 pt-4 relative bg-[#F9FAF9]">
                 {/* ✅ NEW: View Mode Toggles */}
                 {isDriver && (
-                    <div className="max-w-6xl mx-auto mb-3 flex flex-col md:flex-row gap-2 md:inline-flex w-full md:w-auto">
+                    <div className="max-w-6xl mx-auto mb- flex justify-center md:justify-start flex-row gap-2 md:inline-flex w-full md:w-auto">
                         <button
                             onClick={() => setViewMode("customer")}
-                            className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "customer"
+                            className={`px-3 md:px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-1 md:gap-3 border-2 ${viewMode === "customer"
                                 ? "bg-gray-900 text-white border-gray-900 shadow-xl"
                                 : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
                                 }`}
@@ -2302,7 +2323,7 @@ export default function BookingUi() {
                         </button>
                         <button
                             onClick={() => setViewMode("driver")}
-                            className={`px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 border-2 ${viewMode === "driver"
+                            className={`px-3 md:px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-1 md:gap-3 border-2 ${viewMode === "driver"
                                 ? "bg-amber-500 text-black border-amber-500 shadow-xl"
                                 : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
                                 }`}
@@ -2313,11 +2334,12 @@ export default function BookingUi() {
                     </div>
                 )}
 
-                {/* Main Content Area */}
+                {/* Main Content Area ////////////////////////////////////////////////////////////////////////////////////////////*/}
                 <div className="pt-0 pb-20 px-0  mx-auto max-w-6xl bg-white shadow-md min-h-[40rem]">
 
                     {viewMode === 'customer' ? (
                         <>
+                            <NegotiationNotice />
                             <QuickViewHistory
                                 quickViewHistory={quickViewHistory}
                                 driverInfo={driverInfo}
@@ -2356,11 +2378,12 @@ export default function BookingUi() {
                         </>
                     ) : (
                         <div className="relative">
+                            <NegotiationNotice />
                             {/* Incoming Offer Switch Logic */}
                             {incomingOffer ? (
-                                <div className="px-4 py-5 flex justify-center items-center animate-in fade-in zoom-in duration-500">
+                                <div className="p-4 flex justify-center items-center animate-in fade-in zoom-in duration-500">
                                     {driverResponse === 'cancelled' ? (
-                                        <div className="py-6">
+                                        <div className="py-5">
                                             <div className="max-w-md mx-auto bg-red-50 border border-red-100 rounded-3xl p-6 md:p-8 text-center relative overflow-hidden shadow-lg">
                                                 <button
                                                     onClick={() => setIncomingOffer(null)}
@@ -2413,7 +2436,7 @@ export default function BookingUi() {
                                                         <div className="absolute inset-0 bg-amber-500 rounded-full animate-ping opacity-25"></div>
                                                         <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-amber-500 shadow-xl bg-gray-100">
                                                             {incomingOffer.customerImage ? (
-                                                                <Image 
+                                                                <Image
                                                                     src={incomingOffer.customerImage}
                                                                     alt={incomingOffer.customerName}
                                                                     width={96}
@@ -2457,8 +2480,8 @@ export default function BookingUi() {
                                                         onClick={() => handleAcceptOffer(incomingOffer)}
                                                         disabled={isAcceptingOffer}
                                                         className={`flex-1 py-3 sm:py-4 font-black tracking-widest uppercase rounded-xl transition-all text-[10px] sm:text-xs flex items-center justify-center gap-2 ${isAcceptingOffer
-                                                                ? "bg-gray-400 cursor-not-allowed text-white"
-                                                                : "bg-gray-900 hover:bg-black text-white shadow-xl"
+                                                            ? "bg-gray-400 cursor-not-allowed text-white"
+                                                            : "bg-gray-900 hover:bg-black text-white shadow-xl"
                                                             }`}
                                                     >
                                                         {isAcceptingOffer ? "Wait..." : "Accept"}
@@ -2476,7 +2499,7 @@ export default function BookingUi() {
                                                 <h2 className="text-lg md:text-xl font-black text-emerald-700 uppercase tracking-tight">Your Active Fleet</h2>
                                                 <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{ownVehicles.length} Vehicles</span>
                                             </div>
-                                            
+
                                             <SubtleDriverNotice />
 
                                             <MyVehiclesSelector

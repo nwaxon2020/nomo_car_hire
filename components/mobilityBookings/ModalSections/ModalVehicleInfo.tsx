@@ -1,5 +1,4 @@
 "use client"
-import React from 'react';
 import { DriverWithVehicle, VehicleLog } from '../types';
 import { getVehicleImages } from '../utils';
 
@@ -40,6 +39,10 @@ export default function ModalVehicleInfo({
                     <div>
                         <p className="text-gray-400 text-sm">Color</p>
                         <p className="font-bold text-white">{vehicle.exteriorColor}</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-400 text-sm">Plate Number</p>
+                        <p className="font-bold text-white uppercase tracking-wider">{vehicle.plateNumber || 'N/A'}</p>
                     </div>
                     <div>
                         <p className="text-gray-400 text-sm">AC</p>

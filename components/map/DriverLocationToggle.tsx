@@ -7,15 +7,13 @@ import { db, storage } from '@/lib/firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import {
   FaMapMarkerAlt, FaLocationArrow, FaStopCircle, FaPhone,
-  FaUser, FaTimes, FaEdit, FaWhatsapp, FaCamera, FaGlobe, FaInfoCircle, FaChevronDown, FaExclamationCircle
+  FaUser, FaTimes, FaEdit, FaWhatsapp, FaCamera, FaGlobe, FaChevronDown, FaExclamationCircle
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import GPSPermissionModal from './GPSPermissionModal';
 
 export default function DriverLocationToggle({
   driverId,
-  vehicleId,
-  tripId,
 }: { driverId: string; vehicleId?: string; tripId?: string; }) {
   const [isLocationOn, setIsLocationOn] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<any>(null);
@@ -87,11 +85,11 @@ export default function DriverLocationToggle({
         setOriginalData(initialValues);
 
         if (data.location?.isSharing) {
-           setTimeout(() => {
-               if (!watchIdRef.current) {
-                  startLocationSharing();
-               }
-           }, 1000);
+          setTimeout(() => {
+            if (!watchIdRef.current) {
+              startLocationSharing();
+            }
+          }, 1000);
         }
       }
     };
@@ -147,84 +145,84 @@ export default function DriverLocationToggle({
   };
 
   const startLocationSharing = async () => {
-      if (watchIdRef.current) return;
-      if (!navigator.geolocation) {
-        setGpsErrorType("notSupported");
-        setGpsModalOpen(true);
-        return;
-      }
-      setIsLoading(true);
+    if (watchIdRef.current) return;
+    if (!navigator.geolocation) {
+      setGpsErrorType("notSupported");
+      setGpsModalOpen(true);
+      return;
+    }
+    setIsLoading(true);
 
-      const id = navigator.geolocation.watchPosition(
-        async (pos) => {
-          const { latitude, longitude, heading } = pos.coords;
-          try {
-            const response = await fetch(
-              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-            );
-            const data = await response.json();
-            const areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
+    const id = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude, heading } = pos.coords;
+        try {
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+          );
+          const data = await response.json();
+          const areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
 
-            const loc = {
-              lat: latitude,
-              lng: longitude,
-              heading: heading || 0,
-              isSharing: true,
-              address: areaName,
-              timestamp: Timestamp.now()
-            };
+          const loc = {
+            lat: latitude,
+            lng: longitude,
+            heading: heading || 0,
+            isSharing: true,
+            address: areaName,
+            timestamp: Timestamp.now()
+          };
 
-            setCurrentLocation(loc);
-            await updateDoc(doc(db, 'users', driverId), { location: loc, isLocationActive: true });
-            setIsLocationOn(true);
-            setIsLoading(false);
-          } catch (error) {
-            const fallbackLoc = {
-              lat: latitude,
-              lng: longitude,
-              isSharing: true,
-              address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-              timestamp: Timestamp.now()
-            };
-            setCurrentLocation(fallbackLoc);
-            await updateDoc(doc(db, 'users', driverId), { location: fallbackLoc, isLocationActive: true });
-            setIsLocationOn(true);
-            setIsLoading(false);
-          }
-        },
-        (err) => {
+          setCurrentLocation(loc);
+          await updateDoc(doc(db, 'users', driverId), { location: loc, isLocationActive: true });
+          setIsLocationOn(true);
           setIsLoading(false);
-          
-          if (err.code === err.PERMISSION_DENIED) {
-            setGpsErrorType("denied");
-          } else if (err.code === err.POSITION_UNAVAILABLE) {
-            setGpsErrorType("unavailable");
-          } else if (err.code === err.TIMEOUT) {
-            setGpsErrorType("timeout");
-          } else {
-            setGpsErrorType("unknown");
-          }
-          
-          setGpsModalOpen(true);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-      );
-      setWatchId(id);
-      watchIdRef.current = id;
+        } catch (error) {
+          const fallbackLoc = {
+            lat: latitude,
+            lng: longitude,
+            isSharing: true,
+            address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            timestamp: Timestamp.now()
+          };
+          setCurrentLocation(fallbackLoc);
+          await updateDoc(doc(db, 'users', driverId), { location: fallbackLoc, isLocationActive: true });
+          setIsLocationOn(true);
+          setIsLoading(false);
+        }
+      },
+      (err) => {
+        setIsLoading(false);
+
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsErrorType("denied");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setGpsErrorType("unavailable");
+        } else if (err.code === err.TIMEOUT) {
+          setGpsErrorType("timeout");
+        } else {
+          setGpsErrorType("unknown");
+        }
+
+        setGpsModalOpen(true);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+    setWatchId(id);
+    watchIdRef.current = id;
   };
 
   const stopLocationSharing = async () => {
-      if (watchIdRef.current) {
-         navigator.geolocation.clearWatch(watchIdRef.current);
-         setWatchId(null);
-         watchIdRef.current = null;
-      }
-      setIsLocationOn(false);
-      await updateDoc(doc(db, 'users', driverId), {
-        'location.isSharing': false,
-        isLocationActive: false
-      });
-      toast.success("Location Off");
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      setWatchId(null);
+      watchIdRef.current = null;
+    }
+    setIsLocationOn(false);
+    await updateDoc(doc(db, 'users', driverId), {
+      'location.isSharing': false,
+      isLocationActive: false
+    });
+    toast.success("Location Off");
   };
 
   const toggleLocation = async () => {
@@ -415,7 +413,7 @@ export default function DriverLocationToggle({
       )}
 
       {/* GPS Permission Modal */}
-      <GPSPermissionModal 
+      <GPSPermissionModal
         isOpen={gpsModalOpen}
         onDismiss={() => setGpsModalOpen(false)}
         onRetry={() => toggleLocation()}
