@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
     arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc, onSnapshot,
-    orderBy, deleteDoc
+    orderBy, deleteDoc, limit, startAfter
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { getAuth } from "firebase/auth";
@@ -134,6 +134,11 @@ export default function BookingUi() {
 
     // State for drivers with vehicles
     const [driversWithVehicles, setDriversWithVehicles] = useState<DriverWithVehicle[]>([])
+    
+    // Server-side pagination states
+    const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null)
+    const [hasMoreDrivers, setHasMoreDrivers] = useState(true)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
 
     // Car hero image setter and thumbnail images
     const [mainImage, setMainImage] = useState<string>("/car_select.jpg")
@@ -516,10 +521,13 @@ export default function BookingUi() {
     };
 
 
-    // Fetch drivers and vehicle data from Firebase
+    // Fetch drivers and vehicle data from Firebase (Debounced on Search)
     useEffect(() => {
-        fetchDriversAndVehicles()
-    }, [currentUserId]) // Re-fetch when currentUserId changes
+        const timeoutId = setTimeout(() => {
+            fetchDriversAndVehicles(false)
+        }, 600); // 600ms debounce
+        return () => clearTimeout(timeoutId);
+    }, [currentUserId, searchLocation]) // Re-fetch when currentUserId or search changes
 
     // new useEffect to handle query parameters
     useEffect(() => {
@@ -601,54 +609,68 @@ export default function BookingUi() {
         }
     }, [driversWithVehicles, searchParams])
 
-    // Fetch Drivers and Vehicles
-    const fetchDriversAndVehicles = async () => {
+    // Fetch Drivers and Vehicles from Backend (Paginated)
+    const fetchDriversAndVehicles = async (isLoadMore = false) => {
         try {
-            setLoading(true);
+            if (!isLoadMore) {
+                setLoading(true);
+                setDriversWithVehicles([]);
+                setHasMoreDrivers(true);
+            } else {
+                setIsLoadingMore(true);
+            }
             setError(null);
 
-            // Fetch drivers
-            const driversQuery = query(
-                collection(db, "users"),
-                where("isDriver", "==", true)
-            );
+            // Base query array
+            const queryConstraints: any[] = [
+                where("isDriver", "==", true),
+                where("isLocationActive", "==", true) // only fetch active drivers
+            ];
+
+            // Setup Backend Filter based on location
+            let locationInput = "";
+            if (searchLocation.trim() !== "") {
+                locationInput = searchLocation.trim().toLowerCase();
+            } else if (currentUser?.city) {
+                locationInput = currentUser.city.toLowerCase();
+            }
+
+            if (locationInput) {
+                queryConstraints.push(where("searchableLocations", "array-contains", locationInput));
+            }
+
+            // Apply Pagination
+            if (isLoadMore && lastVisibleDoc) {
+                queryConstraints.push(startAfter(lastVisibleDoc));
+            }
+
+            queryConstraints.push(limit(20));
+
+            const driversQuery = query(collection(db, "users"), ...queryConstraints);
             const driversSnapshot = await getDocs(driversQuery);
 
-            // Fetch ALL vehicles (including unavailable ones)
-            const vehiclesQuery = collection(db, "vehicleLog");
-            const vehiclesSnapshot = await getDocs(vehiclesQuery);
+            if (driversSnapshot.empty) {
+                setHasMoreDrivers(false);
+                if (!isLoadMore) setDriversWithVehicles([]);
+                setLoading(false);
+                setIsLoadingMore(false);
+                return;
+            }
 
-            // Create vehicle map - INCLUDE ALL VEHICLES regardless of status
-            const vehicleMap = new Map<string, VehicleLog>();
-            vehiclesSnapshot.forEach((doc) => {
-                const data = doc.data();
-                const vehicle: VehicleLog = {
-                    id: doc.id,
-                    carName: data.carName || "",
-                    carModel: data.carModel || "",
-                    carType: data.carType || "",
-                    exteriorColor: data.exteriorColor || "",
-                    passengers: data.passengers || 0,
-                    ac: data.ac || false,
-                    description: data.description || "",
-                    status: data.status || "available",
-                    plateNumber: data.plateNumber || "",
-                    isApproved: data.isApproved || false, // ← READ isApproved from Firestore
-                    driverId: data.driverId || "",
-                    images: data.images || {},
-                };
-                vehicleMap.set(doc.id, vehicle);
-            });
+            // Save the last visible document for the next page
+            setLastVisibleDoc(driversSnapshot.docs[driversSnapshot.docs.length - 1]);
 
-            // Combine drivers with ALL their vehicles (including unavailable ones)
-            const driversWithVehiclesList: DriverWithVehicle[] = [];
+            // Gather required vehicle IDs
+            const vehicleIdsToFetch = new Set<string>();
+            const driversList: Driver[] = [];
 
-            driversSnapshot.forEach(doc => {
-                const data = doc.data();
-                // In fetchDrivers
+            driversSnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data.uid === currentUserId) return; // Skip self
+
                 const driver: Driver = {
-                    id: doc.id,
-                    uid: data.uid || doc.id,
+                    id: docSnap.id,
+                    uid: data.uid || docSnap.id,
                     firstName: data.firstName || "",
                     lastName: data.lastName || "",
                     fullName: data.fullName || `${data.firstName} ${data.lastName}`,
@@ -672,80 +694,79 @@ export default function BookingUi() {
                     prestigeLevel: data.prestigeLevel || 0,
                     referralCount: data.referralCount || 0,
                     vipBadge: data.vipBadge || "",
-
-                    // LOCATION FIELDS
                     location: data.location || undefined,
                     isLocationActive: data.isLocationActive || false,
                     locationSharedAt: data.locationSharedAt || undefined,
                     lastLocationUpdate: data.lastLocationUpdate || undefined,
                     bookingVehicleId: data.bookingVehicleId || undefined,
                     bookingVehicleLastUpdated: data.bookingVehicleLastUpdated || undefined,
+                    isDisabled: data.isDisabled || false,
                 };
 
-
-                // Get ALL vehicles for this driver (including unavailable ones)
-                const driverVehicles: VehicleLog[] = [];
-
-                // Get vehicles from driver's vehicleLog array
-                driver.vehicleLog.forEach(vehicleId => {
-                    const vehicle = vehicleMap.get(vehicleId);
-                    if (vehicle) {
-                        driverVehicles.push(vehicle);
-                    }
-                });
-
-                // Also check vehicles by driverId (in case vehicleLog IDs don't match)
-                vehiclesSnapshot.forEach((vehicleDoc) => {
-                    const vehicleData = vehicleDoc.data();
-                    if (
-                        vehicleData.driverId === driver.uid &&
-                        !driverVehicles.some(v => v.id === vehicleDoc.id)
-                    ) {
-                        const vehicle: VehicleLog = {
-                            id: vehicleDoc.id,
-                            carName: vehicleData.carName || "",
-                            carModel: vehicleData.carModel || "",
-                            carType: vehicleData.carType || "",
-                            exteriorColor: vehicleData.exteriorColor || "",
-                            passengers: vehicleData.passengers || 0,
-                            ac: vehicleData.ac || false,
-                            description: vehicleData.description || "",
-                            status: vehicleData.status || "available",
-                            isApproved: vehicleData.isApproved || false, // ← READ isApproved
-                            driverId: vehicleData.driverId || "",
-                            images: vehicleData.images || {},
-                        };
-                        driverVehicles.push(vehicle);
-                    }
-                });
-
-                // Skip if this driver is the current user (prevent self-booking)
-                if (driver.uid === currentUserId) return;
-
-                // Only include driver if they have at least one vehicle
-                // NEW LOGIC: Only include their strictly SET active vehicle (or fallback to the first one)
-                if (driverVehicles.length > 0) {
-                    let activeVehicle = undefined;
-
-                    if (driver.bookingVehicleId) {
-                        activeVehicle = driverVehicles.find(v => v.id === driver.bookingVehicleId);
-                    }
-
-                    // Critical Fallback: if the driver's target car doesn't exist anymore, default to their 1st APPROVED vehicle
-                    if (!activeVehicle) {
-                        activeVehicle = driverVehicles.find(v => v.status === 'approved' || (v as any).isApproved) || driverVehicles[0];
-                    }
-
-                    if (activeVehicle) {
-                        driversWithVehiclesList.push({
-                            ...driver,
-                            vehicles: [activeVehicle] // Stricly wrap ONLY the single active vehicle
-                        });
-                    }
+                // Add active car ID (or first array element) to fetch list
+                if (driver.bookingVehicleId) {
+                    vehicleIdsToFetch.add(driver.bookingVehicleId);
+                } else if (driver.vehicleLog.length > 0) {
+                    vehicleIdsToFetch.add(driver.vehicleLog[0]);
                 }
+
+                driversList.push(driver);
             });
 
-            // SORT DRIVERS BY PRIORITY: VIP level → Verified → Distance
+            // Fetch exactly ONLY those vehicles instead of the whole vehicleLog collection
+            const vehicleMap = new Map<string, VehicleLog>();
+            const vIds = Array.from(vehicleIdsToFetch);
+            
+            // Note: 'in' queries natively support up to 30 items, so vIds.length <= 20 is safe
+            if (vIds.length > 0) {
+                const vehiclesQuery = query(collection(db, "vehicleLog"), where("__name__", "in", vIds));
+                const vehiclesSnapshot = await getDocs(vehiclesQuery);
+
+                vehiclesSnapshot.forEach((vDoc) => {
+                    const data = vDoc.data();
+                    vehicleMap.set(vDoc.id, {
+                        id: vDoc.id,
+                        carName: data.carName || "",
+                        carModel: data.carModel || "",
+                        carType: data.carType || "",
+                        exteriorColor: data.exteriorColor || "",
+                        passengers: data.passengers || 0,
+                        ac: data.ac || false,
+                        description: data.description || "",
+                        status: data.status || "available",
+                        plateNumber: data.plateNumber || "",
+                        isApproved: data.isApproved || false,
+                        driverId: data.driverId || "",
+                        images: data.images || {},
+                    });
+                });
+            }
+
+            // Combine Drivers and their targeted Vehicles
+            const newDriversWithVehicles: DriverWithVehicle[] = [];
+
+            for (const driver of driversList) {
+                // Front-end filter check: do not show disabled drivers
+                if (driver.isDisabled) continue;
+
+                let activeVehicle = undefined;
+                if (driver.bookingVehicleId) {
+                    activeVehicle = vehicleMap.get(driver.bookingVehicleId);
+                }
+                if (!activeVehicle && driver.vehicleLog.length > 0) {
+                    activeVehicle = vehicleMap.get(driver.vehicleLog[0]);
+                }
+
+                // Append if vehicle is approved
+                if (activeVehicle && activeVehicle.isApproved) {
+                    newDriversWithVehicles.push({
+                        ...driver,
+                        vehicles: [activeVehicle]
+                    });
+                }
+            }
+
+            // Sorting by Priority (VIP -> Rating -> Distance)
             const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
                 const R = 6371;
                 const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -755,178 +776,68 @@ export default function BookingUi() {
             };
 
             const getDriverDistance = (driver: DriverWithVehicle): number => {
-                // Driver stores location as {lat, lng} — not {latitude, longitude}
                 const dLat = driver.location?.lat ?? driver.location?.latitude;
                 const dLng = driver.location?.lng ?? driver.location?.longitude;
                 if (!customerLocation || !dLat || !dLng) return 9999;
                 return haversineDistance(customerLocation.lat, customerLocation.lng, dLat, dLng);
             };
 
-            // NEW PRIORITY SORTING:
-            // 1. Verified + VIP (Ranked by Level)
-            // 2. Verified + Star Ratings
-            // 3. Verified
-            // 4. Non-Verified
-            // All buckets sorted by distance within the bucket.
-
             const getPriorityRank = (driver: DriverWithVehicle): number => {
                 const vipLevel = Math.max(driver.vipLevel || 0, driver.purchasedVipLevel || 0);
-                if (driver.verified && vipLevel > 0) return 0; // Top Priority
+                if (driver.verified && vipLevel > 0) return 0;
                 if (driver.verified && (driver.averageRating || 0) > 0) return 1;
                 if (driver.verified) return 2;
-                return 3; // Lowest
+                return 3;
             };
 
-            driversWithVehiclesList.sort((a, b) => {
+            newDriversWithVehicles.sort((a, b) => {
                 const rankA = getPriorityRank(a);
                 const rankB = getPriorityRank(b);
-
                 if (rankA !== rankB) return rankA - rankB;
-
-                // Within same rank, sort by VIP level if applicable
                 if (rankA === 0) {
                     const vipA = Math.max(a.vipLevel || 0, a.purchasedVipLevel || 0);
                     const vipB = Math.max(b.vipLevel || 0, b.purchasedVipLevel || 0);
                     if (vipA !== vipB) return vipB - vipA;
                 }
-
-                // Finally sort by distance
                 return getDriverDistance(a) - getDriverDistance(b);
             });
 
-            setDriversWithVehicles(driversWithVehiclesList);
+            if (isLoadMore) {
+                setDriversWithVehicles(prev => [...prev, ...newDriversWithVehicles]);
+            } else {
+                setDriversWithVehicles(newDriversWithVehicles);
+            }
 
-            // DEBUG: Log summary to help diagnose visibility issues
-            console.log(`[Bookings] Fetched ${driversWithVehiclesList.length} drivers with vehicles.`);
-            driversWithVehiclesList.forEach(d => {
-                d.vehicles.forEach(v => {
-                    console.log(`  Driver: ${d.fullName} | Car: ${v.carName} | isApproved: ${v.isApproved} | status: ${v.status}`);
-                });
-            });
-
+            console.log(`[Bookings] Fetched ${newDriversWithVehicles.length} drivers on this page.`);
         } catch (err) {
             console.error("Error fetching data:", err);
             setError("Failed to load drivers and vehicles. Please try again.");
         } finally {
             setLoading(false);
+            setIsLoadingMore(false);
         }
     }
 
-    // Filter drivers - only approved vehicles, with location/category/AC/verified filters
+    // Filter drivers - final frontend pass for category/AC/verified logic
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
         if (!driver || !driver.vehicles) return [];
 
         return driver.vehicles
             .filter((vehicle) => {
-                // 0. Skip disabled drivers
-                if (driver.isDisabled === true) {
-                    return false;
-                }
-
-                // 1. Check if driver has location sharing ON in the app
-                if (!driver.isLocationActive) {
-                    return false;
-                }
-
-                // 2. ONLY show approved vehicles — gate on isApproved (set by admin)
-                if (!vehicle.isApproved) {
-                    console.log(`[Filter BLOCKED] ${driver.fullName} - not approved`);
-                    return false;
-                }
-
-                // Check proximity using LIVE GPS or City fallback
-                let isNearby = false;
-
-                // Driver location stored as {lat, lng} by DriverLocationToggle (NOT latitude/longitude)
-                const driverLat = driver.location?.lat ?? driver.location?.latitude;
-                const driverLng = driver.location?.lng ?? driver.location?.longitude;
-
-                if (customerLocation && driverLat && driverLng) {
-                    const R = 6371;
-                    const lat1 = customerLocation.lat;
-                    const lon1 = customerLocation.lng;
-                    const lat2 = driverLat;
-                    const lon2 = driverLng;
-
-                    const dLat = (lat2 - lat1) * Math.PI / 180;
-                    const dLon = (lon2 - lon1) * Math.PI / 180;
-                    const a =
-                        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                    const distance = R * c;
-
-                    isNearby = distance <= 50;
-                    console.log(`[Filter GPS] ${driver.fullName} | distance: ${distance.toFixed(1)}km | isNearby: ${isNearby}`);
-                } else if (currentUser?.city && driver.city) {
-                    // Fallback to city string match if GPS is unavailable (e.g., initial page load)
-                    isNearby = driver.city.toLowerCase() === currentUser.city.toLowerCase();
-                    console.log(`[Filter City Fallback] ${driver.fullName} | city: ${driver.city} | matches: ${isNearby}`);
-                } else if (!customerLocation && !currentUser?.city) {
-                    // No location data at all → default to show all
-                    isNearby = true;
-                }
-
-                let locationMatch = false;
-
-                if (searchLocation !== "") {
-                    const searchLower = searchLocation.toLowerCase();
-                    const liveAddress = (driver.location?.address || "").toLowerCase();
-                    const profileCity = (driver.city || "").toLowerCase();
-                    const profileState = (driver.state || "").toLowerCase();
-
-                    // 1. Check for match in Live GPS Address (most reliable)
-                    const liveMatch = liveAddress !== "" && liveAddress.includes(searchLower);
-
-                    // 2. Check for match in Profile (City, State, or Area)
-                    const profileMatch = profileCity.includes(searchLower) || profileState.includes(searchLower);
-
-                    let areaInProfileCity = false;
-                    if (driver.city && (nigeriaLocations as any)[driver.city]) {
-                        areaInProfileCity = (nigeriaLocations as any)[driver.city].some(
-                            (area: string) => area.toLowerCase().includes(searchLower)
-                        );
-                    }
-
-                    // 3. Logic to resolve Relocated Drivers
-                    if (liveAddress !== "") {
-                        // If driver has LIVE GPS:
-                        // They ONLY match if their live address contains the search term.
-                        // This prevents finding a driver registered in Lagos who is currently in Abuja.
-                        locationMatch = liveMatch;
-                    } else {
-                        // If driver is offline (no live GPS):
-                        // Fallback to trusting their profile data.
-                        locationMatch = profileMatch || areaInProfileCity;
-                    }
-
-                    // When searching, we ONLY show matches. We don't override with isNearby 
-                    // to avoid noise and respect the user's explicit search intention.
-                } else {
-                    // Default behavior (no search term): show drivers within 50km
-                    locationMatch = isNearby;
-                }
-
+                // Secondary runtime filters that can be done client-side cheaply
+                
                 let categoryMatch = true;
-                if (selectedCategory === "all") {
-                    if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false;
-                } else {
+                if (selectedCategory !== "all") {
                     categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase();
                     if (showACOnly && vehicle.carType.toLowerCase() === "keke") categoryMatch = false;
+                } else if (showACOnly && vehicle.carType.toLowerCase() === "keke") {
+                    categoryMatch = false;
                 }
 
                 const acMatch = !showACOnly || (vehicle.ac && vehicle.carType.toLowerCase() !== "keke");
                 const verifiedMatch = !showVerifiedOnly || driver.verified;
 
-                const passes = locationMatch && categoryMatch && acMatch && verifiedMatch;
-                if (!passes) {
-                    console.log(`[Filter REJECTED] ${driver.fullName} | locationMatch:${locationMatch} categoryMatch:${categoryMatch} acMatch:${acMatch} verifiedMatch:${verifiedMatch}`);
-                } else {
-                    console.log(`[Filter PASSED] ${driver.fullName} | ${vehicle.carName}`);
-                }
-
-                return passes;
+                return categoryMatch && acMatch && verifiedMatch;
             })
             .map(vehicle => ({ driver, vehicle }))
     })
@@ -2370,7 +2281,7 @@ export default function BookingUi() {
 
                             <div className="px-3 pb-8">
                                 <BookingGrid
-                                    filteredDrivers={filteredDrivers.slice(0, visibleCount)}
+                                    filteredDrivers={filteredDrivers}
                                     currentUser={currentUser}
                                     customerLocation={customerLocation}
                                     onBook={handleBookNow}
@@ -2381,13 +2292,15 @@ export default function BookingUi() {
                                     onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
                                 />
                                 
-                                {filteredDrivers.length > visibleCount && (
+                                {hasMoreDrivers && (
                                     <div className="flex justify-center mt-8">
                                         <button
-                                            onClick={() => setVisibleCount(prev => prev + 20)}
-                                            className="px-8 py-3 bg-gray-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-black transition-all shadow-xl hover:scale-105 active:scale-95 border border-gray-700"
+                                            onClick={() => fetchDriversAndVehicles(true)}
+                                            disabled={isLoadingMore}
+                                            className="px-8 py-3 bg-gray-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-black transition-all shadow-xl hover:scale-105 active:scale-95 border border-gray-700 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
                                         >
-                                            Load More Drivers ({filteredDrivers.length - visibleCount} remaining)
+                                            {isLoadingMore && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                                            {isLoadingMore ? 'Loading...' : 'Load More Drivers'}
                                         </button>
                                     </div>
                                 )}

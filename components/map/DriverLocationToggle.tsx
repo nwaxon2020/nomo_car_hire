@@ -118,9 +118,25 @@ export default function DriverLocationToggle({
     }
   };
 
+  const buildSearchableLocations = (c: string, s: string, address: string) => {
+    const tokens = new Set<string>();
+    if (c) tokens.add(c.toLowerCase());
+    if (s) tokens.add(s.toLowerCase());
+    if (address) {
+      address.split(',').forEach(part => {
+        const trimmed = part.trim().toLowerCase();
+        if (trimmed) tokens.add(trimmed);
+      });
+    }
+    return Array.from(tokens);
+  };
+
   const handleUpdateProfile = async () => {
     setIsSaving(true);
     try {
+      const address = currentLocation?.address || "";
+      const searchableLocations = buildSearchableLocations(city, state, address);
+
       const updatedFields = {
         firstName,
         lastName,
@@ -128,6 +144,7 @@ export default function DriverLocationToggle({
         city,
         state,
         whatsappPreferred,
+        searchableLocations,
         updatedAt: Timestamp.now()
       };
       await updateDoc(doc(db, 'users', driverId), updatedFields);
@@ -172,20 +189,34 @@ export default function DriverLocationToggle({
             timestamp: Timestamp.now()
           };
 
+          const searchableLocations = buildSearchableLocations(city, state, areaName);
+
           setCurrentLocation(loc);
-          await updateDoc(doc(db, 'users', driverId), { location: loc, isLocationActive: true });
+          await updateDoc(doc(db, 'users', driverId), { 
+            location: loc, 
+            isLocationActive: true,
+            searchableLocations 
+          });
           setIsLocationOn(true);
           setIsLoading(false);
         } catch (error) {
-          const fallbackLoc = {
+          const fallbackAddress = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          const loc = {
             lat: latitude,
             lng: longitude,
             isSharing: true,
-            address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            address: fallbackAddress,
             timestamp: Timestamp.now()
           };
-          setCurrentLocation(fallbackLoc);
-          await updateDoc(doc(db, 'users', driverId), { location: fallbackLoc, isLocationActive: true });
+          
+          const searchableLocations = buildSearchableLocations(city, state, fallbackAddress);
+
+          setCurrentLocation(loc);
+          await updateDoc(doc(db, 'users', driverId), { 
+            location: loc, 
+            isLocationActive: true,
+            searchableLocations 
+          });
           setIsLocationOn(true);
           setIsLoading(false);
         }
