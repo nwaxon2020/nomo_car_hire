@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, collection, query, where, onSnapshot, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import VehicleCard from "./VehicleCard";
 import { toast } from "react-hot-toast";
@@ -17,6 +17,7 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showToggleConfirm, setShowToggleConfirm] = useState(false);
   const [flagReason, setFlagReason] = useState(driver.flagReason || "");
   const [pendingFlag, setPendingFlag] = useState(driver.flags || 0);
 
@@ -127,7 +128,7 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   };
 
   const confirmClear = async () => {
-    await updateDoc(doc(db, "users", driver.id), { flags: 0, flagReason: "" });
+    await updateDoc(doc(db, "users", driver.id), { flagHistory: [], flags: 0, flagReason: "" });
     setShowReasonInput(false);
     setShowClearConfirm(false);
     setFlagReason("");
@@ -138,13 +139,40 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   const saveReason = async () => {
     if (!flagReason.trim()) return toast.error("Please provide a reason");
     try {
-      await updateDoc(doc(db, "users", driver.id), {
-        flags: pendingFlag,
+      const newFlag = {
+        reason: flagReason,
+        createdAt: Timestamp.now(),
+        type: 'admin_flag'
+      };
+
+      // Get current history to calculate new status
+      const snap = await getDoc(doc(db, "users", driver.id));
+      const history = snap.data()?.flagHistory || [];
+      const updatedHistory = [...history, newFlag];
+
+      // Calculate active count
+      const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+      const activeCount = updatedHistory.filter((f: any) => {
+        const time = f.createdAt?.toMillis ? f.createdAt.toMillis() : new Date(f.createdAt).getTime();
+        return time > ninetyDaysAgo;
+      }).length;
+
+      const updatePayload: any = {
+        flagHistory: arrayUnion(newFlag),
+        flags: activeCount,
         flagReason: flagReason
-      });
+      };
+
+      if (activeCount >= 3) {
+        updatePayload.isDisabled = true;
+      }
+
+      await updateDoc(doc(db, "users", driver.id), updatePayload);
+
       setShowReasonInput(false);
       setShowPresets(false);
-      toast.success(`Driver set to ${pendingFlag} Flags`);
+      toast.success(`Flag added. Active Count: ${activeCount}`);
+      if (activeCount >= 3) toast.error("User automatically disabled!");
     } catch (error) {
       toast.error("Failed to save report");
     }
@@ -177,11 +205,17 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
                     <FaFlag
                       key={n}
                       onClick={() => handleFlagClick(n)}
-                      className={`cursor-pointer transition-colors ${(pendingFlag >= n || driver.flags >= n) ? 'text-red-600' : 'text-gray-200'
+                      className={`cursor-pointer transition-colors ${(pendingFlag >= n) ? 'text-red-600' : 'text-gray-200'
                         }`}
                       size={16}
                     />
                   ))}
+                  <button
+                    onClick={() => setShowToggleConfirm(true)}
+                    className={`ml-3 text-[10px] font-black px-3 py-1 rounded-xl border transition-all ${driver.isDisabled ? 'bg-green-50 text-green-600 border-green-500 hover:bg-green-100' : 'bg-red-50 text-red-600 border-red-500 hover:bg-red-100'}`}
+                  >
+                    {driver.isDisabled ? "ENABLE ACCOUNT" : "DISABLE ACCOUNT"}
+                  </button>
                   {(driver.flags > 0 || pendingFlag > 0) && (
                     <div className="flex items-center gap-2 ml-2">
                       <button onClick={handleClearFlags} className="text-[11px] font-bold px-3 py-0.5 rounded-xl border border-green-500 text-green-600 hover:bg-green-50">Clear Flag</button>
@@ -326,6 +360,47 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
               <div className="flex gap-3 w-full pt-2">
                 <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm">CANCEL</button>
                 <button onClick={confirmClear} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-100">CONFIRM CLEAR</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ACCOUNT TOGGLE CONFIRMATION */}
+      {showToggleConfirm && (
+        <div className="fixed inset-0 z-[250] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 border border-gray-100">
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${driver.isDisabled ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                {driver.isDisabled ? <FaInfoCircle size={32} /> : <FaExclamationTriangle size={32} />}
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter">
+                  {driver.isDisabled ? "Enable Account?" : "Disable Account?"}
+                </h3>
+                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                  Are you sure you want to {driver.isDisabled ? "restore" : "restrict"} access for <b>{driver.firstName} {driver.lastName}</b>? 
+                  {!driver.isDisabled && " This will block their dashboard access immediately."}
+                </p>
+              </div>
+              <div className="flex gap-3 w-full">
+                <button onClick={() => setShowToggleConfirm(false)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-bold text-xs uppercase hover:bg-gray-200 transition-colors">CANCEL</button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const newStatus = !driver.isDisabled;
+                      await updateDoc(doc(db, "users", driver.id), { isDisabled: newStatus });
+                      setShowToggleConfirm(false);
+                      toast.success(newStatus ? "Account Disabled" : "Account Enabled");
+                    } catch (error) {
+                      toast.error("Operation failed");
+                    }
+                  }}
+                  className={`flex-1 py-4 text-white rounded-2xl font-bold text-xs uppercase shadow-lg transition-all 
+                    ${driver.isDisabled ? 'bg-green-600 hover:bg-green-700 shadow-green-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'}`}
+                >
+                  CONFIRM
+                </button>
               </div>
             </div>
           </div>

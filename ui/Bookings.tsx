@@ -797,8 +797,15 @@ export default function BookingUi() {
 
     // Filter drivers - only approved vehicles, with location/category/AC/verified filters
     const filteredDrivers = driversWithVehicles.flatMap((driver) => {
+        if (!driver || !driver.vehicles) return [];
+
         return driver.vehicles
             .filter((vehicle) => {
+                // 0. Skip disabled drivers
+                if (driver.isDisabled === true) {
+                    return false;
+                }
+
                 // 1. Check if driver has location sharing ON in the app
                 if (!driver.isLocationActive) {
                     return false;
@@ -911,12 +918,16 @@ export default function BookingUi() {
     const handleOwnVehicleSelect = async (vehicle: VehicleLog) => {
         if (!currentUserId || !vehicle.id) return;
 
-        // Check the 24 hour cooldown
+        // Check the calendar day cooldown
         if (currentUser?.bookingVehicleLastUpdated) {
             const lastUpdated = currentUser.bookingVehicleLastUpdated.toDate();
-            const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours
-            if (Date.now() - lastUpdated.getTime() < cooldownPeriod) {
-                toast.error("You can only change your active vehicle once every 24 hours.");
+            const today = new Date();
+            if (
+                lastUpdated.getDate() === today.getDate() &&
+                lastUpdated.getMonth() === today.getMonth() &&
+                lastUpdated.getFullYear() === today.getFullYear()
+            ) {
+                toast.error("You can only change your active vehicle once per day. Try again tomorrow.");
                 return;
             }
         }

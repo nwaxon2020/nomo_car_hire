@@ -42,6 +42,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [lovedOnes, setLovedOnes] = useState<LovedOne[]>([]);
   const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [watchId, setWatchId] = useState<number | null>(null);
+  const watchIdRef = useRef<number | null>(null);
   const [newLovedOneNumber, setNewLovedOneNumber] = useState('');
   const [addingLovedOne, setAddingLovedOne] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,6 +85,12 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             if (locationData.timestamp) {
               setLastUpdate(locationData.timestamp.toDate());
             }
+            // Auto resume tracking if it was left ON
+            setTimeout(() => {
+                if (!watchIdRef.current) {
+                    startLocationSharing();
+                }
+            }, 1000);
           }
 
           // Load loved ones (both app users and WhatsApp contacts)
@@ -182,7 +189,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
     return () => {
       if (unsubscribe) unsubscribe();
-      if (watchId) navigator.geolocation.clearWatch(watchId);
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
     };
   }, [userId]);
 
@@ -276,6 +283,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   };
 
   const startLocationSharing = async () => {
+    if (watchIdRef.current) return;
     if (!navigator.geolocation) {
       setGpsErrorType("notSupported");
       setGpsModalOpen(true);
@@ -367,6 +375,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           );
 
           setWatchId(id);
+          watchIdRef.current = id;
         } catch (error) {
           console.error('Error starting sharing:', error);
           toast.error('Failed to start location sharing');
@@ -395,9 +404,10 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   };
 
   const stopLocationSharing = async () => {
-    if (watchId) {
-      navigator.geolocation.clearWatch(watchId);
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
       setWatchId(null);
+      watchIdRef.current = null;
     }
 
     try {

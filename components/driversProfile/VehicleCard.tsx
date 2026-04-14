@@ -70,7 +70,12 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                 
                 if (data.bookingVehicleLastUpdated) {
                     const lastUpdated = data.bookingVehicleLastUpdated.toDate();
-                    const locked = (Date.now() - lastUpdated.getTime()) < (24 * 60 * 60 * 1000);
+                    const today = new Date();
+                    const locked = (
+                        lastUpdated.getDate() === today.getDate() &&
+                        lastUpdated.getMonth() === today.getMonth() &&
+                        lastUpdated.getFullYear() === today.getFullYear()
+                    );
                     setIsVehicleChangeLocked(locked);
                 } else {
                     setIsVehicleChangeLocked(false);
@@ -84,7 +89,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
         e.stopPropagation();
         
         if (isVehicleChangeLocked) {
-             toast.error("You can only change your active vehicle once every 24 hours.");
+             toast.error("You can only change your active vehicle once per day. Try again tomorrow.");
              return;
         }
         
@@ -267,7 +272,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                             }`}
                         >
                             {(isVehicleChangeLocked || !vehicle.isApproved) && !isBookingVehicle ? <Clock size={14} /> : <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />}
-                            {!vehicle.isApproved ? 'Unapproved Vehicle' : settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : isVehicleChangeLocked ? 'Locked (24H)' : 'Set as Booking Vehicle'}
+                            {!vehicle.isApproved ? 'Unapproved Vehicle' : settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : isVehicleChangeLocked ? 'Locked for Today' : 'Set as Booking Vehicle'}
                         </button>
                     )}
 

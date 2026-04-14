@@ -36,7 +36,7 @@ export default function MyVehiclesSelector({
             <div className="flex items-center justify-between mb-2 px-2">
                 <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-gray-500">
                     Active Vehicle Selector
-                    {isLocked && <span className="text-[9px] text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full animate-pulse">LOCKED (24H)</span>}
+                    {isLocked && <span className="text-[9px] text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full animate-pulse">LOCKED (TODAY)</span>}
                 </h3>
                 {vehicles.length > 1 && (
                     <div className="hidden md:flex gap-2">
@@ -145,7 +145,7 @@ export default function MyVehiclesSelector({
                                         </p>
                                     ) : (
                                         <p className={`text-[8px] sm:text-[10px] font-bold uppercase ${isLocked || !isApproved ? 'text-gray-600' : 'text-gray-500'}`}>
-                                            {isPending ? "Waiting for Approval" : isRejected ? "Action Required" : isLocked ? "Selection Locked" : "Tap to Activate"}
+                                            {isPending ? "Waiting for Approval" : isRejected ? "Action Required" : isLocked ? "Locked for Today" : "Tap to Activate"}
                                         </p>
                                     )}
                                 </div>

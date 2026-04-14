@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebaseConfig';
@@ -23,6 +23,7 @@ export default function DriverLocationToggle({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
+  const watchIdRef = useRef<number | null>(null);
 
   // GPS Permission Modal State
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
@@ -84,9 +85,21 @@ export default function DriverLocationToggle({
 
         // Store the original state for comparison
         setOriginalData(initialValues);
+
+        if (data.location?.isSharing) {
+           setTimeout(() => {
+               if (!watchIdRef.current) {
+                  startLocationSharing();
+               }
+           }, 1000);
+        }
       }
     };
     loadData();
+
+    return () => {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+    }
   }, [driverId]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,17 +146,8 @@ export default function DriverLocationToggle({
     }
   };
 
-  const toggleLocation = async () => {
-    if (isLocationOn) {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-      setWatchId(null);
-      setIsLocationOn(false);
-      await updateDoc(doc(db, 'users', driverId), {
-        'location.isSharing': false,
-        isLocationActive: false
-      });
-      toast.success("Location Off");
-    } else {
+  const startLocationSharing = async () => {
+      if (watchIdRef.current) return;
       if (!navigator.geolocation) {
         setGpsErrorType("notSupported");
         setGpsModalOpen(true);
@@ -191,7 +195,6 @@ export default function DriverLocationToggle({
         (err) => {
           setIsLoading(false);
           
-          // Determine GPS error type
           if (err.code === err.PERMISSION_DENIED) {
             setGpsErrorType("denied");
           } else if (err.code === err.POSITION_UNAVAILABLE) {
@@ -207,6 +210,28 @@ export default function DriverLocationToggle({
         { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
       );
       setWatchId(id);
+      watchIdRef.current = id;
+  };
+
+  const stopLocationSharing = async () => {
+      if (watchIdRef.current) {
+         navigator.geolocation.clearWatch(watchIdRef.current);
+         setWatchId(null);
+         watchIdRef.current = null;
+      }
+      setIsLocationOn(false);
+      await updateDoc(doc(db, 'users', driverId), {
+        'location.isSharing': false,
+        isLocationActive: false
+      });
+      toast.success("Location Off");
+  };
+
+  const toggleLocation = async () => {
+    if (isLocationOn) {
+      await stopLocationSharing();
+    } else {
+      await startLocationSharing();
     }
   };
 

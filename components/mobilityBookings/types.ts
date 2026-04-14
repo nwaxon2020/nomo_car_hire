@@ -76,6 +76,7 @@ export interface Driver {
     lastLocationUpdate?: any;
     bookingVehicleId?: string;
     bookingVehicleLastUpdated?: any;
+    isDisabled?: boolean;
 }
 
 export interface DriverWithVehicle extends Driver {

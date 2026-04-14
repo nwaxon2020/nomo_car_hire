@@ -5,13 +5,14 @@ import Link from "next/link";
 import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/firestore";
 import DriverCard from "@/components/adminManageDrivers/DriverCard";
 import DriverProfileView from "@/components/adminManageDrivers/DriverProfileView";
-import { FaSearch, FaCalendarAlt } from "react-icons/fa";
+import { FaSearch, FaCalendarAlt, FaFlag } from "react-icons/fa";
 import { FiNavigation } from "react-icons/fi"
 
 export default function AdminDriversPage() {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [filterNewOnly, setFilterNewOnly] = useState(false);
+  const [filterDisabled, setFilterDisabled] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export default function AdminDriversPage() {
 
     // Existing filters
     if (filterNewOnly) passes = passes && isNew;
+    if (filterDisabled) passes = passes && (d.isDisabled === true);
 
     return passes;
   });
@@ -87,6 +89,18 @@ export default function AdminDriversPage() {
               ${filterNewOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-500 hover:border-green-400 shadow-sm'}`}
             >
               <FaCalendarAlt /> New (60D)
+            </button>
+
+            {/* DISABLED FILTER */}
+            <button
+              onClick={() => {
+                setFilterDisabled(!filterDisabled);
+                if (!filterDisabled) setFilterNewOnly(false); // Exclusive for clarity
+              }}
+              className={`px-4 py-3 md:py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border-2 
+              ${filterDisabled ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-500 hover:border-red-400 shadow-sm'}`}
+            >
+              <FaFlag /> Disabled
             </button>
 
             {/*Navigation Back*/}

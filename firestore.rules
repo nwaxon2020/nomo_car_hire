@@ -30,6 +30,12 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDriver == null);
     }
 
+    function isNotDisabled() {
+      // Admins are never considered "disabled" by this rule logic
+      return request.auth == null || isAnyAdmin() || 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDisabled != true;
+    }
+
     function isValidReviewUpdate() {
       let allowedFields = ['comments', 'ratings', 'averageRating', 'totalRatings', 'updatedAt'];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
@@ -70,7 +76,7 @@ service cloud.firestore {
       // ✅ Allow any authenticated user to read profiles (needed for tracking and ID)
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && (
+      allow update: if request.auth != null && isNotDisabled() && (
         (request.auth.uid == userId && isValidProfileUpdate()) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadChats'])) ||
         (request.auth.uid != userId && 
@@ -83,7 +89,8 @@ service cloud.firestore {
     }
 
     match /bookingRequests/{requestId} {
-      allow read, create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && isNotDisabled();
       allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO());
       allow update: if request.auth != null && (
         resource.data.userId == request.auth.uid || 
@@ -95,8 +102,8 @@ service cloud.firestore {
     match /directOffers/{offerId} {
       // ✅ Participants have full access to offer for real-time tracking
       allow read: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
+      allow create: if request.auth != null && isNotDisabled();
+      allow update: if request.auth != null && isNotDisabled() && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
       allow delete: if request.auth != null && (resource.data.driverId == request.auth.uid || resource.data.customerId == request.auth.uid || isCEO());
     }
 
@@ -165,7 +172,7 @@ service cloud.firestore {
     match /employment_applications/{appId} { allow create: if true; allow read, write: if isAnyAdmin(); }
     match /generalSiteReviews/{reviewId} { allow read: if true; allow write: if request.auth != null; }
     match /complains/{complaintId} {
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && isNotDisabled();
       allow read, update: if request.auth != null && (resource.data.userId == request.auth.uid || isAnyAdmin());
       allow delete: if isAnyAdmin();
     }
@@ -180,8 +187,8 @@ service cloud.firestore {
     match /trackingTokens/{tokenId} { allow read: if true; allow create: if request.auth != null; allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isCEO()); }
     match /trips/{tripId} {
       allow read: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
+      allow create: if request.auth != null && isNotDisabled();
+      allow update: if request.auth != null && isNotDisabled() && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid || isCEO());
       allow delete: if isAnyAdmin();
     }
 

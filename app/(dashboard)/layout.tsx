@@ -18,12 +18,13 @@ import {
   MessageSquare,
   ChevronDown,
   Bell,
-  Navigation
+  Navigation,
+  AlertCircle
 } from "lucide-react";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, onSnapshot, updateDoc, collection, query, where, QuerySnapshot } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, collection, query, where, QuerySnapshot, getDoc } from "firebase/firestore";
 import NotificationPanel from "@/components/notification/Notification";
 import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
 
@@ -40,6 +41,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [hasPendingOffer, setHasPendingOffer] = useState(false);
+  const [isDisabled, setIsDisabled] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("nomopoventures@yahoo.com");
 
   const router = useRouter();
   const pathname = usePathname();
@@ -110,6 +113,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         if (snap.exists()) {
           const data = snap.data();
           setIsDriver(data.isDriver === true);
+          setIsDisabled(data.isDisabled === true);
 
           let finalName = data.isDriver
             ? getFirstName(data.firstName)
@@ -123,6 +127,19 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
           setUnreadNotifs(unread);
         }
       });
+
+      // Fetch admin email for disabled fallback
+      const fetchAdminEmail = async () => {
+        try {
+          const configSnap = await getDoc(doc(db, "site_configs", "general"));
+          if (configSnap.exists()) {
+            setAdminEmail(configSnap.data()?.generalContact?.email || "nomopoventures@yahoo.com");
+          }
+        } catch (err) {
+          console.error("Failed to fetch admin config", err);
+        }
+      };
+      fetchAdminEmail();
 
       setAuthChecking(false);
       return () => unsubDoc();
@@ -337,15 +354,45 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         <FcmTokenHandler />
 
         {/* MAIN CONTENT AREA */}
-        <main className="flex-1 min-h-screen md:h-screen md:overflow-y-auto bg-[#F8F9FA]">
-          <div className="md:p-1 md:pb-0 max-w-7xl mx-auto">
-            {msg && (
-              <div className="bg-green-500 text-white p-4 rounded-2xl mb-6 text-center shadow-lg font-bold animate-in fade-in slide-in-from-top-4">
-                {msg}
+        <main className="flex-1 min-h-screen md:h-screen md:overflow-y-auto bg-[#F8F9FA] relative">
+          {isDisabled && pathname.startsWith("/user") ? (
+            <div className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6 text-center">
+              <div className="max-w-md w-full animate-in zoom-in-95 duration-500">
+                <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-red-100/50">
+                  <AlertCircle size={48} />
+                </div>
+                <h1 className="text-4xl font-black text-gray-900 uppercase italic tracking-tighter mb-4">Account <span className="text-red-600">Disabled</span></h1>
+                <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest leading-relaxed mb-10">
+                  Your access to the Nomopo platform has been restricted due to policy violations or multiple flags.<br />
+                  Administrative clearance is required to restore access.
+                </p>
+                <div className="space-y-4">
+                  <a
+                    href={`mailto:${adminEmail}`}
+                    className="block w-full py-4 bg-black text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg hover:bg-gray-800 transition-all outline-none"
+                  >
+                    Contact Admin Support
+                  </a>
+                  <p className="text-[10px] font-bold text-gray-400">EMAIL: {adminEmail}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="mt-8 text-gray-400 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 mx-auto"
+                >
+                  <LogOut size={14} /> Exit System
+                </button>
               </div>
-            )}
-            {children}
-          </div>
+            </div>
+          ) : (
+            <div className="md:p-1 md:pb-0 max-w-7xl mx-auto">
+              {msg && (
+                <div className="bg-green-500 text-white p-4 rounded-2xl mb-6 text-center shadow-lg font-bold animate-in fade-in slide-in-from-top-4">
+                  {msg}
+                </div>
+              )}
+              {children}
+            </div>
+          )}
         </main>
       </div>
 

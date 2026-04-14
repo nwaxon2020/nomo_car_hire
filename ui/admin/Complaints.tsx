@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from "next/link";
 import { db, auth } from '@/lib/firebaseConfig';
 import {
-  collection, query, orderBy, onSnapshot, getDoc,
+  collection, query, where, orderBy, onSnapshot, getDoc,
   updateDoc, doc, deleteDoc, arrayUnion, Timestamp
 } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiMessageSquare, FiSend,
-  FiCheckCircle, FiTrash2, FiAlertCircle, FiNavigation, FiLock
+  FiCheckCircle, FiTrash2, FiAlertCircle, FiNavigation, FiLock, FiUnlock, FiUserCheck, FiUserX
 } from 'react-icons/fi';
 import {
   FaFlag, FaWhatsapp, FaUser,
@@ -57,7 +57,7 @@ const PRESET_REASONS = [
   "Harassment", "Fraud Attempt"
 ];
 
-function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSendReply, loadingId }: any) {
+function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSendReply, loadingId, onToggle, isDisabled }: any) {
   const isDriverComplaint = complaint.targetType === "driver" || complaint.reportedBy === "customer";
   const [showFlagInput, setShowFlagInput] = useState(false);
   const [flagReason, setFlagReason] = useState("");
@@ -72,7 +72,15 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
         if (snap.exists()) {
           const d = snap.data();
           setDriverData(d);
-          setPendingFlags(d.flags || 0);
+          
+          // Calculate active flags (from last 90 days)
+          const history = d.flagHistory || [];
+          const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+          const active = history.filter((f: any) => {
+            const time = f.createdAt?.toMillis ? f.createdAt.toMillis() : new Date(f.createdAt).getTime();
+            return time > ninetyDaysAgo;
+          });
+          setPendingFlags(active.length);
         }
       });
     }
@@ -91,6 +99,17 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
   const displayEmail = complaint.targetEmail || complaint.email || "";
   const displayUid = complaint.targetUid || complaint.targetId || "";
   const reporterName = complaint.reporterName || complaint.name || "Anonymous";
+
+  const handleToggleDisabled = () => {
+    const tId = complaint.targetId || complaint.targetUid;
+    if (!tId) return toast.error("Missing Target ID");
+
+    onToggle({
+      id: tId,
+      name: displayName,
+      currentStatus: isDisabled
+    });
+  };
 
   const formatWhatsApp = (phone: string) => {
     if (!phone) return "";
@@ -152,9 +171,20 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
               <h3 className="text-white font-black text-sm leading-tight">{displayName}</h3>
             </div>
           </div>
-          <button onClick={() => onArchive(complaint.id)} className="text-white/60 hover:text-white transition-colors p-1">
-            <FiTrash2 size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            {isDriverComplaint && (
+              <button
+                onClick={handleToggleDisabled}
+                className={`p-1.5 rounded-lg transition-colors ${isDisabled ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}`}
+                title={isDisabled ? "Enable User" : "Disable User"}
+              >
+                {isDisabled ? <FiUserX size={16} /> : <FiUserCheck size={16} />}
+              </button>
+            )}
+            <button onClick={() => onArchive(complaint.id)} className="text-white/60 hover:text-white transition-colors p-1">
+              <FiTrash2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -192,9 +222,14 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
         )}
 
         {/* Current flag count (drivers only) */}
-        {isDriverComplaint && driverData && (
-          <div className="flex items-center justify-between bg-red-50 p-2 border border-red-100 rounded-lg mt-2">
-            <span className="text-[9px] font-black text-red-800 uppercase tracking-widest">Driver Flags</span>
+        {isDriverComplaint && (
+          <div className={`flex items-center justify-between p-2 border rounded-lg mt-2 ${isDisabled ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-100'}`}>
+            <div className="flex flex-col">
+              <span className={`text-[9px] font-black uppercase tracking-widest ${isDisabled ? 'text-red-800' : 'text-orange-800'}`}>
+                {isDisabled ? "Account Disabled" : "Active Flags (3M)"}
+              </span>
+              {isDisabled && <span className="text-[8px] text-red-500 font-bold">Manual override required</span>}
+            </div>
             <div className="flex items-center gap-2">
               <div className="flex gap-0.5">
                 {[1, 2, 3].map(n => (
@@ -202,17 +237,17 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
                     key={n}
                     size={12}
                     onClick={() => { setPendingFlags(n); setShowFlagInput(true); }}
-                    className={`cursor-pointer transition-colors ${(pendingFlags >= n || (driverData.flags || 0) >= n) ? "text-red-500" : "text-gray-300"}`}
+                    className={`cursor-pointer transition-colors ${(pendingFlags >= n) ? "text-red-500" : "text-gray-300"}`}
                   />
                 ))}
               </div>
-              {(driverData.flags > 0) && (
+              {pendingFlags > 0 && (
                 <button
                   onClick={async () => {
                     const tId = complaint.targetId || complaint.targetUid;
                     if (!tId) return;
-                    await updateDoc(doc(db, "users", tId), { flags: 0, flagReason: "" });
-                    setDriverData((prev: any) => ({ ...prev, flags: 0 }));
+                    await updateDoc(doc(db, "users", tId), { flagHistory: [], flags: 0, flagReason: "" });
+                    setDriverData((prev: any) => ({ ...prev, flagHistory: [], flags: 0 }));
                     setPendingFlags(0);
                     toast.success("Flags cleared");
                   }}
@@ -256,15 +291,49 @@ function ComplaintCard({ complaint, onArchive, replyText, setReplyText, handleSe
                 if (!tId) return toast.error("Missing Target ID");
                 if (pendingFlags > 0 && !flagReason.trim()) return toast.error("Provide a reason");
 
-                await updateDoc(doc(db, "users", tId), {
-                  flags: pendingFlags,
-                  flagReason: pendingFlags > 0 ? flagReason : ""
-                });
+                const newFlag = {
+                  reason: flagReason,
+                  createdAt: Timestamp.now(),
+                  complaintId: complaint.id
+                };
 
-                setDriverData((prev: any) => ({ ...prev, flags: pendingFlags, flagReason: pendingFlags > 0 ? flagReason : "" }));
+                // Get current history to calculate new status
+                const snap = await getDoc(doc(db, "users", tId));
+                const history = snap.data()?.flagHistory || [];
+                const updatedHistory = [...history, newFlag];
+
+                // Calculate active count
+                const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+                const activeCount = updatedHistory.filter((f: any) => {
+                  const time = f.createdAt?.toMillis ? f.createdAt.toMillis() : new Date(f.createdAt).getTime();
+                  return time > ninetyDaysAgo;
+                }).length;
+
+                const updatePayload: any = {
+                  flagHistory: arrayUnion(newFlag),
+                  flags: activeCount, // keep for backward compatibility
+                  flagReason: flagReason
+                };
+
+                if (activeCount >= 3) {
+                  updatePayload.isDisabled = true;
+                }
+
+                await updateDoc(doc(db, "users", tId), updatePayload);
+
+                setDriverData((prev: any) => ({
+                  ...prev,
+                  flagHistory: updatedHistory,
+                  flags: activeCount,
+                  flagReason: flagReason,
+                  isDisabled: activeCount >= 3 ? true : prev?.isDisabled
+                }));
+                
+                setPendingFlags(activeCount);
                 setShowFlagInput(false);
                 setShowPresets(false);
-                toast.success(`Driver set to ${pendingFlags} flag(s)`);
+                toast.success(`Flag added. Active flags: ${activeCount}`);
+                if (activeCount >= 3) toast.error("User automatically disabled (3 flags reached)");
               }}
               className="w-full text-[10px] bg-red-600 text-white px-3 py-2 rounded-lg font-black uppercase hover:bg-red-700 transition"
             >
@@ -327,47 +396,73 @@ const AdminComplaintsUi = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [enteredPassCode, setEnteredPassCode] = useState('');
-  const [filter, setFilter] = useState<"all" | "driver" | "customer" | "general">("all");
+  const [filter, setFilter] = useState<"all" | "driver" | "customer" | "general" | "disabled">("all");
+  const [disabledUserIds, setDisabledUserIds] = useState<Set<string>>(new Set());
+  const [confirmToggle, setConfirmToggle] = useState<{ id: string; name: string; currentStatus: boolean; complaintId: string } | null>(null);
 
   const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_KEY;
   const MASTER_PASS_CODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE;
 
   useEffect(() => {
-    let unsubscribe: () => void;
+    let unsubscribeSnap: (() => void) | undefined;
+    let unsubDisabled: (() => void) | undefined;
+
+    const checkAdminAccess = async (uid: string) => {
+      if (uid === ADMIN_UID) return true;
+      try {
+        const userSnap = await getDoc(doc(db, "users", uid));
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          if (data.admin === true || data.isAdmin === true) return true;
+        }
+        const staffSnap = await getDoc(doc(db, "adminStaffs", uid));
+        return staffSnap.exists();
+      } catch (e) {
+        console.error("Admin check failed", e);
+        return false;
+      }
+    };
 
     const initializeAuthAndData = async () => {
       const currentUser = auth.currentUser;
-      if (!currentUser) return setIsLoading(false);
+      if (!currentUser) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        const isCEO = currentUser.uid === ADMIN_UID;
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userDocRef);
-        const userData = userSnap.exists() ? userSnap.data() : null;
-        const isAdminFlag = userData?.admin === true || userData?.isAdmin === true;
-        const staffDocRef = doc(db, "adminStaffs", currentUser.uid);
-        const staffSnap = await getDoc(staffDocRef);
-
-        const canAccess = isCEO || isAdminFlag || staffSnap.exists();
+        const canAccess = await checkAdminAccess(currentUser.uid);
         setIsAuthorized(canAccess);
 
         if (canAccess) {
           const q = query(collection(db, "complains"), orderBy("createdAt", "desc"));
-          unsubscribe = onSnapshot(q, (snapshot) => {
+          unsubscribeSnap = onSnapshot(q, (snapshot) => {
             setComplaints(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Complaint)));
             setIsLoading(false);
           });
+
+          const qDisabled = query(collection(db, "users"), where("isDisabled", "==", true));
+          unsubDisabled = onSnapshot(qDisabled, (snap) => {
+            setDisabledUserIds(new Set(snap.docs.map(d => d.id)));
+          });
+        } else {
+          setIsLoading(false);
         }
       } catch (err) {
+        console.error("Auth initialization failed:", err);
         setIsLoading(false);
       }
     };
 
     initializeAuthAndData();
-    return () => { if (unsubscribe) unsubscribe(); };
+
+    return () => {
+      if (unsubscribeSnap) unsubscribeSnap();
+      if (unsubDisabled) unsubDisabled();
+    };
   }, [ADMIN_UID]);
 
-  // --- UPDATE YOUR handleSendReply TO THIS ---
+  // --- handleSendReply ---
   const handleSendReply = async (id: string) => {
     if (!replyText[id]?.trim()) return toast.error("Message required");
     setLoadingId(id);
@@ -440,11 +535,14 @@ const AdminComplaintsUi = () => {
       toast.error("Archive failed");
     }
   };
-
   const filtered = complaints.filter(c => {
-    if (filter === "all") return true;
     const isD = c.targetType === "driver" || c.reportedBy === "customer";
     const isC = c.targetType === "customer" || c.reportedBy === "driver";
+    
+    if (filter === "disabled") {
+        return (isD || isC) && disabledUserIds.has(c.targetId || c.targetUid || "");
+    }
+    if (filter === "all") return true;
     if (filter === "driver") return isD;
     if (filter === "customer") return isC;
     if (filter === "general") return !isD && !isC;
@@ -454,7 +552,16 @@ const AdminComplaintsUi = () => {
   const counts = {
     driver: complaints.filter(c => c.targetType === "driver" || c.reportedBy === "customer").length,
     customer: complaints.filter(c => c.targetType === "customer" || c.reportedBy === "driver").length,
-    general: complaints.filter(c => !c.targetType).length
+    general: complaints.filter(c => {
+        const isD = c.targetType === "driver" || c.reportedBy === "customer";
+        const isC = c.targetType === "customer" || c.reportedBy === "driver";
+        return !isD && !isC;
+    }).length,
+    disabled: complaints.filter(c => {
+        const isD = c.targetType === "driver" || c.reportedBy === "customer";
+        const isC = c.targetType === "customer" || c.reportedBy === "driver";
+        return (isD || isC) && disabledUserIds.has(c.targetId || c.targetUid || "");
+    }).length
   };
 
   if (isLoading) return (
@@ -521,17 +628,17 @@ const AdminComplaintsUi = () => {
           </div>
 
           <div className="flex flex-wrap gap-2 w-full lg:w-auto mt-4 lg:mt-0">
-            {(["all", "driver", "customer", "general"] as const).map(f => (
+            {(["all", "driver", "customer", "general", "disabled"] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`flex-1 md:flex-none px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 
                   ${filter === f
-                    ? f === "driver" ? "bg-red-50 text-red-700 border-red-500 shadow-sm" : f === "customer" ? "bg-purple-50 text-purple-700 border-purple-500 shadow-sm" : f === "general" ? "bg-blue-50 text-blue-700 border-blue-500 shadow-sm" : "bg-gray-800 border-gray-800 text-white shadow-md"
+                    ? f === "driver" ? "bg-red-50 text-red-700 border-red-500 shadow-sm" : f === "customer" ? "bg-purple-50 text-purple-700 border-purple-500 shadow-sm" : f === "general" ? "bg-blue-50 text-blue-700 border-blue-500 shadow-sm" : f === "disabled" ? "bg-black border-black text-white shadow-md" : "bg-gray-800 border-gray-800 text-white shadow-md"
                     : "bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
                   }`}
               >
-                {f === "all" ? `All (${complaints.length})` : f === "driver" ? `Drivers (${counts.driver})` : f === "customer" ? `Customers (${counts.customer})` : `General (${counts.general})`}
+                {f === "all" ? `All (${complaints.length})` : f === "driver" ? `Drivers (${counts.driver})` : f === "customer" ? `Customers (${counts.customer})` : f === "general" ? `General (${counts.general})` : `Disabled (${counts.disabled})`}
               </button>
             ))}
             <Link href="/admin" className="flex-none flex justify-center items-center px-4 py-3 bg-white rounded-xl border-2 border-gray-200 shadow-sm text-gray-500 transition-all hover:bg-gray-50 hover:text-gray-700">
@@ -551,21 +658,102 @@ const AdminComplaintsUi = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
             <AnimatePresence>
-              {filtered.map(c => (
-                <ComplaintCard
-                  key={c.id}
-                  complaint={c}
-                  onArchive={setDeleteId}
-                  replyText={replyText}
-                  setReplyText={setReplyText}
-                  handleSendReply={handleSendReply}
-                  loadingId={loadingId}
-                />
-              ))}
+              {filtered.map(c => {
+                const isD = c.targetType === "driver" || c.reportedBy === "customer";
+                const isC = c.targetType === "customer" || c.reportedBy === "driver";
+                const tId = c.targetId || c.targetUid || "";
+                
+                return (
+                  <ComplaintCard
+                    key={c.id}
+                    complaint={c}
+                    onArchive={setDeleteId}
+                    replyText={replyText}
+                    setReplyText={setReplyText}
+                    handleSendReply={handleSendReply}
+                    loadingId={loadingId}
+                    onToggle={(data: any) => setConfirmToggle({ ...data, complaintId: c.id })}
+                    isDisabled={disabledUserIds.has(tId)}
+                  />
+                );
+              })}
             </AnimatePresence>
           </div>
         )}
       </div>
+      {/* CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {confirmToggle && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmToggle(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100"
+            >
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${confirmToggle.currentStatus ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                {confirmToggle.currentStatus ? <FiUserCheck size={32} /> : <FiUserX size={32} />}
+              </div>
+              <h3 className="text-xl font-black text-center text-gray-900 uppercase tracking-tighter mb-2">
+                {confirmToggle.currentStatus ? "Enable Account?" : "Disable Account?"}
+              </h3>
+              <p className="text-center text-gray-500 text-sm font-medium leading-relaxed mb-8">
+                Are you sure you want to {confirmToggle.currentStatus ? "restore access" : "restrict access"} for <span className="text-gray-900 font-bold">{confirmToggle.name}</span>? 
+                {!confirmToggle.currentStatus && " This will block their dashboard access immediately."}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmToggle(null)}
+                  className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirmToggle) return;
+                    const targetId = confirmToggle.id;
+                    const newStatus = !confirmToggle.currentStatus;
+
+                    // OPTIMISTIC UI: Update the local set immediately so the icon flips before Firestore finishes
+                    setDisabledUserIds(prev => {
+                      const next = new Set(prev);
+                      if (newStatus) next.add(targetId);
+                      else next.delete(targetId);
+                      return next;
+                    });
+
+                    try {
+                      await updateDoc(doc(db, "users", targetId), { isDisabled: newStatus });
+                      toast.success(newStatus ? "Account Disabled" : "Account Enabled");
+                      setConfirmToggle(null);
+                    } catch (err) {
+                      toast.error("Process failed");
+                      // REVERT OPTIMISTIC UPDATE ON FAILURE
+                      setDisabledUserIds(prev => {
+                        const next = new Set(prev);
+                        if (!newStatus) next.add(targetId);
+                        else next.delete(targetId);
+                        return next;
+                      });
+                    }
+                  }}
+                  className={`flex-1 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg transition-all 
+                    ${confirmToggle.currentStatus ? 'bg-green-600 hover:bg-green-700 shadow-green-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
+                >
+                  Confirm Change
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
