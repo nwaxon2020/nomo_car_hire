@@ -2,12 +2,10 @@
 import React from 'react';
 import { FaCheckCircle, FaExclamationTriangle, FaClock, FaUserCheck } from 'react-icons/fa';
 import ModalProfileHeader from './ModalSections/ModalProfileHeader';
-import ModalTripSafety from './ModalSections/ModalTripSafety';
 import ModalVehicleGallery from './ModalSections/ModalVehicleGallery';
 import ModalVehicleInfo from './ModalSections/ModalVehicleInfo';
 import ModalReviews from './ModalSections/ModalReviews';
 import ListingStars from './ui/ListingStars';
-import TripTracker from "@/components/map/TripTracker";
 import { DriverWithVehicle, VehicleLog, Trip, Comment } from './types';
 
 interface DriverDetailsModalProps {
@@ -18,7 +16,6 @@ interface DriverDetailsModalProps {
     activeTrip: Trip | null;
     saveMessage: { text: string; type: string };
     showDeleteConfirm: { show: boolean, comment: Comment | null };
-    tripInfo: { showForm: boolean; pickupLocation: string; destination: string };
     reviewForm: { rating: number; comment: string };
     hoverRating: number;
     hasUserReviewed: boolean;
@@ -26,9 +23,6 @@ interface DriverDetailsModalProps {
     mainImage: string;
     // Handlers
     onClose: () => void;
-    onSaveDriver: () => void;
-    onStartTrip: (d: string, v: string, p: string, dest: string) => Promise<string | null>;
-    onUpdateTripStatus: (id: string, s: 'completed' | 'cancelled') => Promise<void>;
     onDeleteComment: (c: Comment) => void;
     onConfirmDeleteComment: () => void;
     onCancelDeleteComment: () => void;
@@ -37,15 +31,12 @@ interface DriverDetailsModalProps {
     onRatingClick: (r: number) => void;
     onSetHoverRating: (r: number) => void;
     onSetMainImage: (img: string) => void;
-    onSetTripInfo: (val: any) => void;
     onSetDriverInfo: (v: boolean) => void;
     onSetPreChat: (v: boolean) => void;
     isSubmittingReview: boolean;
     onPhoneCall: (p: string) => void;
     onWhatsAppMessage: (d: any, v: any) => void;
     getDriverAddress: (d: any) => string;
-    getDriverLocation: (d: any) => any;
-    canSaveDriver: (dId: string, vId: string) => { canSave: boolean };
     formatDate: (d: any) => string;
     onSetVehicle: (v: VehicleLog) => void;
 }
@@ -107,35 +98,9 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         <div>
-                            <ModalTripSafety
-                                driver={driver}
-                                vehicle={vehicle}
-                                activeTrip={props.activeTrip}
-                                tripInfo={props.tripInfo}
-                                setTripInfo={props.onSetTripInfo}
-                                startTrip={props.onStartTrip}
-                                updateTripStatus={props.onUpdateTripStatus}
-                                handleSaveDriver={props.onSaveDriver}
-                                canSaveDriver={props.canSaveDriver}
-                                setDriverInfo={props.onSetDriverInfo}
-                                getDriverLocation={props.getDriverLocation}
-                                currentUser={props.currentUser}
-                            />
-
-                            {/* Trip Tracker for Active Trip specifically for THIS driver */}
-                            {props.activeTrip && props.activeTrip.driverId === driver.uid && props.activeTrip.vehicleId === vehicle.id && (
-                                <div className="mt-6">
-                                    <TripTracker
-                                        tripId={props.activeTrip.id}
-                                        driverId={driver.uid}
-                                        customerId={props.currentUser?.uid}
-                                    />
-                                </div>
-                            )}
-
                             {/* Rating Summary */}
                             {driver.averageRating !== undefined && driver.averageRating !== null && driver.averageRating > 0 && (
-                                <div className="bg-gray-800 rounded-lg p-2 mt-6">
+                                <div className="bg-gray-800 rounded-lg p-2 mb-6">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-3">
                                             <div className="text-xl font-bold text-white">{driver.averageRating.toFixed(1)}</div>
@@ -154,8 +119,8 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                                 </div>
                             )}
 
-                            {/* ✅ NEW: Compact Reviews on the Left */}
-                            <div className="mt-6 max-h-[30rem] overflow-y-auto scrollbar-hide">
+                            {/* Compact Reviews on the Left */}
+                            <div className="max-h-[30rem] overflow-y-auto scrollbar-hide">
                                 <ModalReviews
                                     driver={driver}
                                     currentUser={props.currentUser}
