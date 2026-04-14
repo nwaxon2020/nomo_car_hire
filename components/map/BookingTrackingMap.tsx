@@ -47,8 +47,18 @@ export default function BookingTrackingMap({
     libraries: ['places']
   });
 
-  // Safety Timeout for Google Maps
+  // Safety Timeout and Error Interception for Google Maps
   useEffect(() => {
+    const originalConsoleError = console.error;
+    console.error = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('Google Maps JavaScript API error')) {
+        setLoadError(true);
+        setShowFallback(true);
+        return; // Suppress the hard error overlay
+      }
+      originalConsoleError(...args);
+    };
+
     const timer = setTimeout(() => {
       if (!isLoaded) setShowFallback(true);
     }, 7000);
@@ -58,7 +68,10 @@ export default function BookingTrackingMap({
       setShowFallback(true);
     };
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      console.error = originalConsoleError;
+    };
   }, [isLoaded]);
 
   useEffect(() => {

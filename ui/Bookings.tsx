@@ -660,6 +660,13 @@ export default function BookingUi() {
             // Save the last visible document for the next page
             setLastVisibleDoc(driversSnapshot.docs[driversSnapshot.docs.length - 1]);
 
+            // If we fetched less than 20 drivers, there are no more drivers to load
+            if (driversSnapshot.docs.length < 20) {
+                setHasMoreDrivers(false);
+            } else {
+                setHasMoreDrivers(true);
+            }
+
             // Gather required vehicle IDs
             const vehicleIdsToFetch = new Set<string>();
             const driversList: Driver[] = [];
@@ -1514,16 +1521,27 @@ export default function BookingUi() {
                 currentTripId: tripDoc.id
             });
 
-            // Update driver's customersCarried
+            // Update driver's customersCarried on a Monthly Reset basis
             const driverRef = doc(db, 'users', driverId);
             const driverDoc = await getDoc(driverRef);
-            const currentCustomers = driverDoc.data()?.customersCarried || [];
+            const driverData = driverDoc.data() || {};
+            
+            const currentCustomers = driverData.customersCarried || [];
+            const lastMonth = driverData.customersCarriedMonth || "";
+            const currentMonth = new Date().toISOString().slice(0, 7); // e.g., '2024-04'
 
-            // Add this trip directly as a unique entry to increment the passenger stats each time
+            let newCustomers = currentCustomers;
+            if (lastMonth !== currentMonth) {
+                newCustomers = []; // Clear array for the new month
+            }
+
+            // Add this trip directly as a unique entry to increment the passenger stats
             const uniqueTripEntry = `${currentUser.uid}_${tripDoc.id}`;
+            const updatedCustomers = [...newCustomers, uniqueTripEntry];
 
             await updateDoc(driverRef, {
-                customersCarried: [...currentCustomers, uniqueTripEntry]
+                customersCarried: updatedCustomers,
+                customersCarriedMonth: currentMonth
             });
 
             // Set active trip locally
@@ -1535,7 +1553,7 @@ export default function BookingUi() {
             // Update the selected driver in local state
             setSelectedDriver(prev => prev ? {
                 ...prev,
-                customersCarried: [...(prev.customersCarried || []), uniqueTripEntry]
+                customersCarried: updatedCustomers
             } : null);
 
             // Refresh drivers list to hide the unavailable vehicle
@@ -1735,6 +1753,7 @@ export default function BookingUi() {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 customerLocation: freshLoc || customerLocation,
+                driverLocation: driver.location || null, // Allow driver map tracking
                 customerImage: (currentUser?.profileImage && !currentUser.profileImage.includes("profile.png"))
                     ? currentUser.profileImage
                     : (currentUser?.photoURL || ""),

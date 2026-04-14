@@ -8,6 +8,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
 import { Toaster } from "react-hot-toast"; // 1. Import Toaster
+import GlobalDriverListener from "@/components/GlobalDriverListener";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -99,6 +100,9 @@ export default function RootLayout({
       <body className="antialiased">
         {/* 2. Add Toaster here so it works globally */}
         <Toaster position="top-center" reverseOrder={false} />
+        
+        {/* Driver Auto-Redirects for New Rides */}
+        <GlobalDriverListener />
 
         <Nav />
         <hr className="text-white" />

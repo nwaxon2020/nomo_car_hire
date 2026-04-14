@@ -82,8 +82,9 @@ service cloud.firestore {
         // 1. Users can update their own profile fields
         (request.auth.uid == userId && isValidProfileUpdate()) ||
         
-        // 2. Chat unread sync
+        // 2. Chat unread sync and Notification Triggers
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadChats'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifications', 'hasUnreadNotifications'])) ||
         
         // 3. Review logic for drivers
         (request.auth.uid != userId && 

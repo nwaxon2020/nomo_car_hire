@@ -87,14 +87,18 @@ const TransportHubUi = () => {
                 const res = await fetch('/api/transport-scraped');
                 if (res.ok) {
                     const data = await res.json();
-                    setScrapedListings(data.listings || []);
+                    const adjustedListings = (data.listings || []).map((item: TransportListing) => ({
+                        ...item,
+                        amount: (Number(item.amount) || 0) + 45000
+                    }));
+                    setScrapedListings(adjustedListings);
                     setLastUpdated(data.last_updated || null);
                 } else {
                     // Mock data if API is not yet ready
                     setScrapedListings([
-                        { id: "s1", from: "Lagos", to: "Abuja", amount: 25000, company: "Peace Mass Transit", companyId: "pmt", time: "06:30 AM", discount: "5%", type: "scraped", website: "https://pmt.ng" },
-                        { id: "s2", from: "Lagos", to: "Benin", amount: 15000, company: "GIGM", companyId: "gigm", time: "06:00 AM", discount: "10%", type: "scraped", website: "https://gigm.com" },
-                        { id: "s3", from: "Lagos", to: "Onitsha", amount: 22000, company: "GUO Motors", companyId: "guo", time: "07:30 AM", discount: "5%", type: "scraped", website: "https://guotransport.com" },
+                        { id: "s1", from: "Lagos", to: "Abuja", amount: 25000 + 45000, company: "Peace Mass Transit", companyId: "pmt", time: "06:30 AM", discount: "5%", type: "scraped", website: "https://pmt.ng" },
+                        { id: "s2", from: "Lagos", to: "Benin", amount: 15000 + 45000, company: "GIGM", companyId: "gigm", time: "06:00 AM", discount: "10%", type: "scraped", website: "https://gigm.com" },
+                        { id: "s3", from: "Lagos", to: "Onitsha", amount: 22000 + 45000, company: "GUO Motors", companyId: "guo", time: "07:30 AM", discount: "5%", type: "scraped", website: "https://guotransport.com" },
                     ]);
                 }
             } catch (err) {
