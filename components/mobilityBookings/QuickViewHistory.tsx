@@ -21,7 +21,7 @@ export default function QuickViewHistory({
     if (!quickViewHistory || driverInfo) return null;
 
     return (
-        <div className="mt-6 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="mt-6 mb-4 p-3 bg-blue-50 border border-blue-200">
             <div className="flex justify-between items-start sm:items-center">
                 <div
                     onClick={handleQuickViewClick}
