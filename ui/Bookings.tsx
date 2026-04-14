@@ -2477,11 +2477,7 @@ export default function BookingUi() {
                     activeTrip={activeTrip}
                     saveMessage={saveMessage}
                     showDeleteConfirm={showDeleteConfirm}
-                    tripInfo={{
-                        showForm: tripInfo.showForm || false,
-                        pickupLocation: tripInfo.pickupLocation,
-                        destination: tripInfo.destination
-                    }}
+                    
                     reviewForm={reviewForm}
                     hoverRating={hoverRating}
                     hasUserReviewed={hasUserReviewed || false}
