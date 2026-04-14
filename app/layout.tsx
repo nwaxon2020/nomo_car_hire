@@ -7,8 +7,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 // UI
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
-import { Toaster } from "react-hot-toast"; // 1. Import Toaster
+import { Toaster } from "react-hot-toast";
 import GlobalDriverListener from "@/components/GlobalDriverListener";
+import PWAInstallBanner from "@/components/PWAInstallBanner";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -70,8 +72,8 @@ export const metadata: Metadata = {
   },
 
   icons: {
-    icon: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
+    icon: "/favicon.png",
+    apple: "/favicon.png",
   },
 
   manifest: "/site.webmanifest",
@@ -98,9 +100,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <body className="antialiased">
-        {/* 2. Add Toaster here so it works globally */}
+        {/* Global Toasts */}
         <Toaster position="top-center" reverseOrder={false} />
-        
+
+        {/* PWA: Register service worker */}
+        <ServiceWorkerRegistrar />
+
+        {/* PWA: Install banner (shown on every page, 15s, once per install) */}
+        <PWAInstallBanner />
+
         {/* Driver Auto-Redirects for New Rides */}
         <GlobalDriverListener />
 
