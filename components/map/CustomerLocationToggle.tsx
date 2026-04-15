@@ -54,11 +54,83 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
   const [gpsErrorType, setGpsErrorType] = useState<"denied" | "unavailable" | "timeout" | "unknown" | "notSupported">("unknown");
 
+  // Optimized tracking refs
   const lastCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastUpdateTimeRef = useRef<number>(0);
+  const pendingUpdateRef = useRef<any>(null);
+  const batchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Constants for throttling
   const MIN_DISTANCE_METERS = 10;
+  const MIN_UPDATE_INTERVAL_MS = 5000; // 5 seconds minimum for customers
+  const ADDRESS_UPDATE_DISTANCE = 50; // Update address only if moved >50m
+
+  // Network and device state
+  const [isOnline, setIsOnline] = useState(true);
+  const [batterySavingMode, setBatterySavingMode] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
 
   const auth = getAuth();
   const currentUser = auth.currentUser;
+
+  // Network, Battery, and Visibility monitoring
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Battery monitoring for customers
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        const updateBatteryStatus = () => {
+          setBatterySavingMode(battery.level < 0.2 && !battery.charging);
+          if (battery.level < 0.15 && !battery.charging && isSharing) {
+            toast.error('Battery low - reducing location updates');
+          }
+        };
+        updateBatteryStatus();
+        battery.addEventListener('levelchange', updateBatteryStatus);
+        battery.addEventListener('chargingchange', updateBatteryStatus);
+      });
+    }
+
+    // Visibility monitoring - pause when app is in background
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isSharing]);
+
+  // Batch update processing
+  useEffect(() => {
+    if (!isSharing || !userId) return;
+
+    const userRef = doc(db, 'users', userId);
+    batchIntervalRef.current = setInterval(async () => {
+      if (pendingUpdateRef.current) {
+        try {
+          await updateDoc(userRef, pendingUpdateRef.current);
+          pendingUpdateRef.current = null;
+        } catch (error) {
+          console.error('Failed to flush batch update:', error);
+        }
+      }
+    }, 5000);
+
+    return () => {
+      if (batchIntervalRef.current) {
+        clearInterval(batchIntervalRef.current);
+        batchIntervalRef.current = null;
+      }
+    };
+  }, [isSharing, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -127,7 +199,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       const lovedOnesData: LovedOne[] = [];
       const emergencyContactMap: { [key: string]: any } = {};
 
-      // Create a map of emergency contacts for quick lookup
       if (emergencycontacts && Array.isArray(emergencycontacts)) {
         emergencycontacts.forEach((ec: any) => {
           emergencyContactMap[ec.id] = ec;
@@ -189,6 +260,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     return () => {
       if (unsubscribe) unsubscribe();
       if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (batchIntervalRef.current) clearInterval(batchIntervalRef.current);
     };
   }, [userId]);
 
@@ -234,11 +306,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     try {
       setSendingLinks(prev => [...prev, lovedOne.id]);
 
-      // Generate unique token
       const token = generateToken();
       const trackingLink = `${window.location.origin}/track/${userId}/${token}`;
 
-      // Store token in Firestore (valid for 24 hours)
       const tokenRef = doc(db, 'trackingTokens', token);
       await setDoc(tokenRef, {
         userId,
@@ -249,7 +319,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         isValid: true
       });
 
-      // Create WhatsApp message
       const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
       const message = `🚗 *Nomopoventures Live Tracking*\n\n` +
         `${userName} is sharing their live location with you!\n\n` +
@@ -262,7 +331,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       const formattedNumber = formatPhoneForSearch(lovedOne.whatsappNumber);
       const whatsappUrl = `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message)}`;
 
-      // Open WhatsApp
       window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error('Error sending tracking link:', error);
@@ -286,6 +354,11 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     if (!navigator.geolocation) {
       setGpsErrorType("notSupported");
       setGpsModalOpen(true);
+      return;
+    }
+
+    if (!isOnline) {
+      toast.error("No internet connection. Please check your network.");
       return;
     }
 
@@ -319,41 +392,77 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           setCurrentLocation(locationData);
           setLastUpdate(new Date());
           lastCoordsRef.current = { lat: latitude, lng: longitude };
+          lastUpdateTimeRef.current = Date.now();
 
           toast.success('📍 Live location sharing started!');
 
+          // Optimized watchPosition with time + distance throttling
           const id = navigator.geolocation.watchPosition(
             async (pos) => {
               const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+              const now = Date.now();
 
+              // Calculate dynamic interval based on battery saving mode
+              let effectiveInterval = MIN_UPDATE_INTERVAL_MS;
+              if (batterySavingMode) {
+                effectiveInterval = MIN_UPDATE_INTERVAL_MS * 2; // 10 seconds in battery save mode
+              }
+              if (!isVisible) {
+                effectiveInterval = MIN_UPDATE_INTERVAL_MS * 3; // 15 seconds in background
+              }
+
+              // Time throttle check
+              const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
+              if (timeSinceLastUpdate < effectiveInterval) {
+                return;
+              }
+
+              // Distance check for customers
+              let distanceMoved = 0;
               if (lastCoordsRef.current) {
-                const dist = getDistanceInMeters(
+                distanceMoved = getDistanceInMeters(
                   lastCoordsRef.current.lat,
                   lastCoordsRef.current.lng,
                   lat,
                   lng
                 );
-
-                if (dist < MIN_DISTANCE_METERS) return;
+                if (distanceMoved < MIN_DISTANCE_METERS) {
+                  return;
+                }
               }
 
+              // Update tracking state
+              lastUpdateTimeRef.current = now;
               lastCoordsRef.current = { lat, lng };
 
-              const newAddress = await reverseGeocode(lat, lng);
+              // Only reverse geocode if moved significantly
+              let newAddress = currentLocation?.address || '';
+              if (!currentLocation || distanceMoved > ADDRESS_UPDATE_DISTANCE) {
+                newAddress = await reverseGeocode(lat, lng);
+              }
 
-              await updateDoc(userRef, {
+              // Queue update for batching
+              pendingUpdateRef.current = {
                 'location.lat': lat,
                 'location.lng': lng,
                 'location.accuracy': accuracy,
                 'location.address': newAddress,
                 'location.timestamp': Timestamp.now(),
                 locationLastUpdated: Timestamp.now()
-              });
+              };
+
+              // Update UI immediately
+              setCurrentLocation((prev: any) => prev ? {
+                ...prev,
+                lat,
+                lng,
+                address: newAddress,
+                timestamp: Timestamp.now()
+              } : null);
             },
             (error) => {
               console.error('Location watch error:', error);
 
-              // Determine GPS error type
               if (error.code === error.PERMISSION_DENIED) {
                 setGpsErrorType("denied");
               } else if (error.code === error.POSITION_UNAVAILABLE) {
@@ -367,9 +476,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
               setGpsModalOpen(true);
             },
             {
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 5000
+              enableHighAccuracy: isVisible && !batterySavingMode,
+              timeout: isVisible ? 30000 : 60000,
+              maximumAge: isVisible ? 10000 : 30000
             }
           );
 
@@ -385,7 +494,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       (error) => {
         console.error('Geolocation error:', error);
 
-        // Determine GPS error type
         if (error.code === error.PERMISSION_DENIED) {
           setGpsErrorType("denied");
         } else if (error.code === error.POSITION_UNAVAILABLE) {
@@ -398,6 +506,11 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
         setGpsModalOpen(true);
         setLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 10000
       }
     );
   };
@@ -407,6 +520,23 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       navigator.geolocation.clearWatch(watchIdRef.current);
       setWatchId(null);
       watchIdRef.current = null;
+    }
+
+    // Clear batch interval
+    if (batchIntervalRef.current) {
+      clearInterval(batchIntervalRef.current);
+      batchIntervalRef.current = null;
+    }
+
+    // Flush any pending update
+    if (pendingUpdateRef.current && userId) {
+      try {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, pendingUpdateRef.current);
+        pendingUpdateRef.current = null;
+      } catch (error) {
+        console.error('Failed to flush final update:', error);
+      }
     }
 
     try {
@@ -420,6 +550,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       setIsSharing(false);
       setCurrentLocation(null);
       lastCoordsRef.current = null;
+      lastUpdateTimeRef.current = 0;
       toast.success('Location sharing stopped');
     } catch (error) {
       console.error('Error stopping sharing:', error);
@@ -430,13 +561,13 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const addLovedOne = async (whatsappNumber: string) => {
     const cleanedNumber = whatsappNumber.replace(/\D/g, '');
     if (!(cleanedNumber.length === 10 || cleanedNumber.length === 11)) {
+      toast.error('Please enter a valid phone number');
       return;
     }
 
     setAddingLovedOne(true);
 
     try {
-      // Check if it's an app user by phone number
       const formattedNumber = formatPhoneForSearch(whatsappNumber);
       const usersRef = collection(db, 'users');
       const possibleFormats = [
@@ -463,7 +594,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       }
 
       if (!isAppUser) {
-        // Create WhatsApp contact entry
         lovedOneId = `whatsapp_${formattedNumber}`;
         const contactRef = doc(db, 'whatsappContacts', lovedOneId);
 
@@ -475,23 +605,21 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         });
       }
 
-      // Check if already added
       if (lovedOnes.some(lo => lo.id === lovedOneId)) {
+        toast.success('Contact already added');
         return;
       }
 
-      // Add to user's loved ones
       const userRef = doc(db, 'users', userId);
       const displayName = isAppUser ? (lovedOneData.name || formatPhoneForDisplay(whatsappNumber)) : formatPhoneForDisplay(whatsappNumber);
 
-      // Create emergency contact object
       const emergencyContactObj = {
         phoneNumber: formattedNumber,
         displayPhoneNumber: formatPhoneForDisplay(whatsappNumber),
         name: displayName,
         id: lovedOneId,
         isAppUser,
-        isActive: false,
+        isActive: lovedOnes.length === 0, // Make active if first contact
         addedAt: Timestamp.now()
       };
 
@@ -507,13 +635,13 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         });
       }
 
-      // Update local state
       setLovedOnes(prev => [...prev, {
         id: lovedOneId,
         whatsappNumber: formattedNumber,
         name: displayName,
         formattedNumber: formatPhoneForDisplay(whatsappNumber),
-        isAppUser
+        isAppUser,
+        isActive: lovedOnes.length === 0
       }]);
 
       setNewLovedOneNumber('');
@@ -536,26 +664,19 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
       const userData = userDoc.data();
 
-      // Check if deleted contact was active
       const wasActive = (userData.emergencyContact || []).some(
         (contact: any) => contact.id === lovedOneId && contact.isActive
       );
 
-      // Remove from emergencyContact array by filtering
       let updatedEmergencyContacts = (userData.emergencyContact || []).filter(
         (contact: any) => contact.id !== lovedOneId
       );
 
-      // If deleted contact was active and there are other contacts, auto-select the next most recent
       if (wasActive && updatedEmergencyContacts.length > 0) {
-        // Sort by addedAt timestamp (most recent first)
         updatedEmergencyContacts = updatedEmergencyContacts.sort(
           (a: any, b: any) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0)
         );
-
-        // Set the most recent one as active
         updatedEmergencyContacts[0].isActive = true;
-
         toast.success(`Auto-selected ${updatedEmergencyContacts[0].name} as emergency contact`);
       }
 
@@ -575,7 +696,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
       setLovedOnes(prev => {
         const filtered = prev.filter(lo => lo.id !== lovedOneId);
-        // Update isActive status for remaining contacts
         return filtered.map(lo => ({
           ...lo,
           isActive: updatedEmergencyContacts.some((ec: any) => ec.id === lo.id && ec.isActive)
@@ -598,7 +718,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
       const userData = userDoc.data();
 
-      // Update emergencyContact array to mark selected as active
       const updatedEmergencyContacts = (userData.emergencyContact || []).map((contact: any) => ({
         ...contact,
         isActive: contact.id === activeContactId
@@ -608,7 +727,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         emergencyContact: updatedEmergencyContacts
       });
 
-      // Update local state
       setLovedOnes(prev => prev.map(lo => ({
         ...lo,
         isActive: lo.id === activeContactId
@@ -625,7 +743,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     try {
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
       if (!apiKey) {
-        // Fallback to OSM if key is missing
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
         const data = await res.json();
         return data.display_name || 'Location active';
@@ -671,7 +788,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     );
   }
 
-
   return (
     <div className="w-full bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       {/* Header Status */}
@@ -686,7 +802,16 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           </div>
         </div>
         <div className="flex items-center gap-2">
-
+          {!isOnline && isSharing && (
+            <span className="text-[8px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+              Offline
+            </span>
+          )}
+          {batterySavingMode && isSharing && (
+            <span className="text-[8px] font-black text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded">
+              Power Save
+            </span>
+          )}
           <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${isSharing ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
             }`}>
             <div className={`w-1 h-1 rounded-full ${isSharing ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
@@ -735,8 +860,6 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             </p>
           </motion.div>
         )}
-
-
 
         {/* Emergency Contacts Management */}
         <div className="pt-1">

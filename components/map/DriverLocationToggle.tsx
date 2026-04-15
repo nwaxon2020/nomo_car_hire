@@ -23,6 +23,22 @@ export default function DriverLocationToggle({
   const [watchId, setWatchId] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
+  // ✅ NEW: Throttling refs for driver optimization
+  const lastUpdateTimeRef = useRef<number>(0);
+  const lastHeadingRef = useRef<number>(0);
+  const lastSpeedRef = useRef<number>(0);
+  const pendingUpdateRef = useRef<any>(null);
+  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ NEW: Network state
+  const [isOnline, setIsOnline] = useState(true);
+
+  // ✅ NEW: Battery state
+  const [batterySavingMode, setBatterySavingMode] = useState(false);
+
+  // ✅ NEW: Visibility state
+  const [isVisible, setIsVisible] = useState(true);
+
   // GPS Permission Modal State
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
   const [gpsErrorType, setGpsErrorType] = useState<"denied" | "unavailable" | "timeout" | "unknown" | "notSupported">("unknown");
@@ -56,6 +72,86 @@ export default function DriverLocationToggle({
     state !== originalData.state
   );
 
+  // ✅ NEW: Helper function for distance calculation
+  const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  // ✅ NEW: Calculate dynamic update interval based on speed and battery
+  const getDynamicInterval = (speed: number) => {
+    let interval = 3000; // Default 3 seconds
+
+    if (batterySavingMode) {
+      interval = 10000; // 10 seconds when battery low
+    } else if (speed > 20) { // >72 km/h (highway)
+      interval = 2000;
+    } else if (speed > 10) { // 36-72 km/h (normal driving)
+      interval = 3000;
+    } else if (speed > 0 && speed < 5) { // 0-18 km/h (slow traffic)
+      interval = 5000;
+    } else if (speed === 0) { // Stationary
+      interval = 10000;
+    }
+
+    // App not visible? Reduce updates
+    if (!isVisible) {
+      interval = Math.min(interval * 2, 30000);
+    }
+
+    return interval;
+  };
+
+  // ✅ NEW: Process pending updates in batch
+  const flushPendingUpdate = async (driverUserRef: any) => {
+    if (pendingUpdateRef.current) {
+      try {
+        await updateDoc(driverUserRef, pendingUpdateRef.current);
+        pendingUpdateRef.current = null;
+      } catch (error) {
+        console.error('Failed to flush update:', error);
+      }
+    }
+  };
+
+  // ✅ NEW: Network and battery monitoring
+  useEffect(() => {
+    // Network monitoring
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Battery monitoring
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        const updateBatteryStatus = () => {
+          setBatterySavingMode(battery.level < 0.2 && !battery.charging);
+        };
+        updateBatteryStatus();
+        battery.addEventListener('levelchange', updateBatteryStatus);
+        battery.addEventListener('chargingchange', updateBatteryStatus);
+      });
+    }
+
+    // Visibility monitoring
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   useEffect(() => {
     if (!driverId) return;
     const loadData = async () => {
@@ -81,7 +177,6 @@ export default function DriverLocationToggle({
         setIsLocationOn(data.location?.isSharing || false);
         setCurrentLocation(data.location || null);
 
-        // Store the original state for comparison
         setOriginalData(initialValues);
 
         if (data.location?.isSharing) {
@@ -97,6 +192,7 @@ export default function DriverLocationToggle({
 
     return () => {
       if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (updateIntervalRef.current) clearInterval(updateIntervalRef.current);
     }
   }, [driverId]);
 
@@ -149,7 +245,6 @@ export default function DriverLocationToggle({
       };
       await updateDoc(doc(db, 'users', driverId), updatedFields);
 
-      // Update originalData so isDirty becomes false after save
       setOriginalData({ firstName, lastName, phoneNumber, city, state, whatsappPreferred });
 
       setIsEditingLocation(false);
@@ -161,6 +256,7 @@ export default function DriverLocationToggle({
     }
   };
 
+  // ✅ OPTIMIZED: Start location sharing with driver-specific throttling
   const startLocationSharing = async () => {
     if (watchIdRef.current) return;
     if (!navigator.geolocation) {
@@ -168,22 +264,80 @@ export default function DriverLocationToggle({
       setGpsModalOpen(true);
       return;
     }
+    if (!isOnline) {
+      toast.error("No internet connection. Please check your network.");
+      return;
+    }
+
     setIsLoading(true);
+
+    // Set up batch update interval
+    const driverUserRef = doc(db, 'users', driverId);
+    updateIntervalRef.current = setInterval(() => {
+      flushPendingUpdate(driverUserRef);
+    }, 5000);
 
     const id = navigator.geolocation.watchPosition(
       async (pos) => {
-        const { latitude, longitude, heading } = pos.coords;
+        const { latitude, longitude, heading = 0, speed = 0 } = pos.coords;
+        const now = Date.now();
+
+        // Calculate dynamic interval based on speed
+        const dynamicInterval = getDynamicInterval(speed ?? 0);
+
+        // Check time throttle
+        const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
+
+        // For drivers: also check if heading changed significantly (turning)
+        // Handle null values by defaulting to 0
+        const currentHeading = heading ?? 0;
+        const currentSpeed = speed ?? 0;
+        const lastHeading = lastHeadingRef.current ?? 0;
+        const lastSpeed = lastSpeedRef.current ?? 0;
+
+        const headingChanged = Math.abs(currentHeading - lastHeading) > 20;
+        const speedChanged = Math.abs(currentSpeed - lastSpeed) > 5; // 5 km/h change
+
+        // Skip update if:
+        // 1. Not enough time passed AND
+        // 2. No significant heading change AND
+        // 3. No significant speed change
+        if (timeSinceLastUpdate < dynamicInterval && !headingChanged && !speedChanged) {
+          return;
+        }
+
+        lastUpdateTimeRef.current = now;
+        lastHeadingRef.current = currentHeading;
+        lastSpeedRef.current = currentSpeed;
+
         try {
-          const response = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-          );
-          const data = await response.json();
-          const areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
+          // Only reverse geocode if address changed significantly
+          let areaName = currentLocation?.address || '';
+          const shouldUpdateAddress = !currentLocation ||
+            getDistanceInMeters(
+              currentLocation.lat,
+              currentLocation.lng,
+              latitude,
+              longitude
+            ) > 100; // Only update address if moved >100m
+
+          if (shouldUpdateAddress) {
+            try {
+              const response = await fetch(
+                `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+              );
+              const data = await response.json();
+              areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
+            } catch (error) {
+              areaName = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            }
+          }
 
           const loc = {
             lat: latitude,
             lng: longitude,
-            heading: heading || 0,
+            heading: currentHeading,
+            speed: currentSpeed,
             isSharing: true,
             address: areaName,
             timestamp: Timestamp.now()
@@ -192,37 +346,26 @@ export default function DriverLocationToggle({
           const searchableLocations = buildSearchableLocations(city, state, areaName);
 
           setCurrentLocation(loc);
-          await updateDoc(doc(db, 'users', driverId), { 
-            location: loc, 
+
+          // Queue update instead of immediate write
+          pendingUpdateRef.current = {
+            location: loc,
             isLocationActive: true,
-            searchableLocations 
-          });
-          setIsLocationOn(true);
+            searchableLocations,
+            locationLastUpdated: Timestamp.now()
+          };
+
+          if (isLocationOn === false) {
+            setIsLocationOn(true);
+          }
           setIsLoading(false);
         } catch (error) {
-          const fallbackAddress = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-          const loc = {
-            lat: latitude,
-            lng: longitude,
-            isSharing: true,
-            address: fallbackAddress,
-            timestamp: Timestamp.now()
-          };
-          
-          const searchableLocations = buildSearchableLocations(city, state, fallbackAddress);
-
-          setCurrentLocation(loc);
-          await updateDoc(doc(db, 'users', driverId), { 
-            location: loc, 
-            isLocationActive: true,
-            searchableLocations 
-          });
-          setIsLocationOn(true);
-          setIsLoading(false);
+          console.error('Location update error:', error);
         }
       },
       (err) => {
         setIsLoading(false);
+        console.warn('GPS error:', err);
 
         if (err.code === err.PERMISSION_DENIED) {
           setGpsErrorType("denied");
@@ -236,8 +379,13 @@ export default function DriverLocationToggle({
 
         setGpsModalOpen(true);
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+      {
+        enableHighAccuracy: isVisible, // Only high accuracy when app is visible
+        maximumAge: isVisible ? 0 : 10000,
+        timeout: isVisible ? 10000 : 30000
+      }
     );
+
     setWatchId(id);
     watchIdRef.current = id;
   };
@@ -248,6 +396,15 @@ export default function DriverLocationToggle({
       setWatchId(null);
       watchIdRef.current = null;
     }
+    if (updateIntervalRef.current) {
+      clearInterval(updateIntervalRef.current);
+      updateIntervalRef.current = null;
+    }
+
+    // Flush any pending update before stopping
+    const driverUserRef = doc(db, 'users', driverId);
+    await flushPendingUpdate(driverUserRef);
+
     setIsLocationOn(false);
     await updateDoc(doc(db, 'users', driverId), {
       'location.isSharing': false,
@@ -257,6 +414,11 @@ export default function DriverLocationToggle({
   };
 
   const toggleLocation = async () => {
+    if (!isOnline && !isLocationOn) {
+      toast.error("No internet connection. Please check your network.");
+      return;
+    }
+
     if (isLocationOn) {
       await stopLocationSharing();
     } else {
@@ -276,10 +438,19 @@ export default function DriverLocationToggle({
             <span className="text-[10px] font-bold uppercase text-slate-300">
               {isLocationOn ? 'Live' : 'Offline'}
             </span>
+            {!isOnline && (
+              <span className="text-[8px] font-black text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                No Network
+              </span>
+            )}
+            {batterySavingMode && isLocationOn && (
+              <span className="text-[8px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                Power Save
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* DIRTY INDICATOR ON MAIN WIDGET */}
             {isDirty && (
               <div className="flex items-center gap-1 text-[9px] font-black text-amber-500 uppercase bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 animate-pulse">
                 <FaExclamationCircle /> Unsaved
@@ -301,7 +472,7 @@ export default function DriverLocationToggle({
         </div>
       </div>
 
-      {/* SETTINGS OVERLAY */}
+      {/* SETTINGS OVERLAY - Same as original, no changes needed */}
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-0">
           <div className="bg-slate-900 w-full max-w-lg rounded-t-xl md:rounded-xl border-t md:border border-emerald-500/20 shadow-2xl max-h-[95vh] overflow-y-auto">
@@ -320,7 +491,6 @@ export default function DriverLocationToggle({
                   </label>
                 </div>
 
-                {/* DIRTY STATUS TEXT */}
                 <div className="flex flex-col items-center">
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Driver Photo</p>
                   {isDirty && <span className="text-[9px] font-black text-amber-500 mt-1 flex items-center gap-1"><FaExclamationCircle /> You have unsaved changes</span>}
@@ -334,6 +504,9 @@ export default function DriverLocationToggle({
                     <div>
                       <p className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Active Live Location</p>
                       <p className="text-xs text-slate-200 leading-tight mt-1">{currentLocation.address}</p>
+                      {currentLocation.speed !== undefined && (
+                        <p className="text-[8px] text-slate-400 mt-1">Speed: {Math.round(currentLocation.speed * 3.6)} km/h</p>
+                      )}
                     </div>
                   </div>
                 </div>

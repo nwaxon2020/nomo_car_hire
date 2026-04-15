@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, onSnapshot, updateDoc, Timestamp } from "firebase/firestore";
-import { motion, AnimatePresence } from "framer-motion";
+import { doc, onSnapshot } from "firebase/firestore";
+import { motion } from "framer-motion";
 import { FaMapMarkerAlt, FaShieldAlt, FaChevronRight } from "react-icons/fa";
 
 interface LocationGuardProps {
@@ -41,57 +41,9 @@ export default function LocationGuard({ children }: LocationGuardProps) {
     return () => unsubscribeAuth();
   }, [router]);
 
-  // ✅ Auto-resume tracking if location is active! 
-  // Prevents the GPS from freezing when users navigate away from the mobility hub.
-  useEffect(() => {
-    let watchId: number | null = null;
-    let lastCoords: { lat: number; lng: number } | null = null;
-
-    const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-      const R = 6371000;
-      const dLat = ((lat2 - lat1) * Math.PI) / 180;
-      const dLon = ((lon2 - lon1) * Math.PI) / 180;
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
-
-    if (isLocationActive && userId) {
-      if ("geolocation" in navigator) {
-        watchId = navigator.geolocation.watchPosition(
-          async (pos) => {
-            const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-
-            if (lastCoords) {
-              const dist = getDistanceInMeters(lastCoords.lat, lastCoords.lng, lat, lng);
-              if (dist < 10) return; // Only update DB if moved > 10m to save writes
-            }
-            lastCoords = { lat, lng };
-
-            const userRef = doc(db, "users", userId);
-            try {
-              await updateDoc(userRef, {
-                'location.lat': lat,
-                'location.lng': lng,
-                'location.accuracy': accuracy,
-                'location.timestamp': Timestamp.now(),
-                locationLastUpdated: Timestamp.now()
-              });
-            } catch (error) {
-              console.error("LocationGuard auto-tracking error:", error);
-            }
-          },
-          (err) => console.warn("LocationGuard GPS error:", err),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
-        );
-      }
-    }
-
-    return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    };
-  }, [isLocationActive, userId]);
+  // ✅ REMOVED: Auto-resume tracking useEffect
+  // Location is now only turned on manually via CustomerLocationToggle/DriverLocationToggle
+  // This prevents multiple devices from tracking simultaneously
 
   if (loading) {
     return (
@@ -112,12 +64,12 @@ export default function LocationGuard({ children }: LocationGuardProps) {
           <div className="w-16 h-16 bg-blue-600/10 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
             <FaMapMarkerAlt className="text-2xl animate-bounce" />
           </div>
-          
+
           <div className="flex items-center justify-center gap-2 mb-2">
             <FaShieldAlt className="text-blue-500 text-xs" />
             <h2 className="text-xl font-black text-white tracking-tight uppercase">Location Required</h2>
           </div>
-          
+
           <p className="text-xs text-gray-400 font-medium mb-8 leading-relaxed uppercase tracking-wider">
             Access to mobility services requires your live location for security, real-time coordination, and safety tracking.
           </p>
