@@ -9,7 +9,7 @@ import Nav from "@/components/nav";
 import Footer from "@/components/footer";
 import { Toaster } from "react-hot-toast";
 import GlobalDriverListener from "@/components/GlobalDriverListener";
-import { PWAProvider, PWAInstallBanner } from "@/components/PWA";
+import PWAInstallBanner from "@/components/PWA/PWAInstallBanner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const geistSans = Geist({
@@ -100,25 +100,22 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <body className="antialiased">
-        {/* PWA Provider - MUST be at top level to provide context to all components */}
-        <PWAProvider>
-          {/* Global Toasts */}
-          <Toaster position="top-center" reverseOrder={false} />
+        {/* Global Toasts */}
+        <Toaster position="top-center" reverseOrder={false} />
 
-          {/* PWA: Register service worker */}
-          <ServiceWorkerRegistrar />
+        {/* PWA: Register service worker */}
+        <ServiceWorkerRegistrar />
 
-          {/* PWA: Install banner (shown on every page, 15s, once per install) */}
-          <PWAInstallBanner />
+        {/* PWA: Install banner (shown on every page, 15s, once per install) */}
+        <PWAInstallBanner />
 
-          {/* Driver Auto-Redirects for New Rides */}
-          <GlobalDriverListener />
+        {/* Driver Auto-Redirects for New Rides */}
+        <GlobalDriverListener />
 
-          <Nav />
-          <hr className="text-white" />
-          <main>{children}</main>
-          <Footer />
-        </PWAProvider>
+        <Nav />
+        <hr className="text-white" />
+        <main>{children}</main>
+        <Footer />
       </body>
     </html>
   );

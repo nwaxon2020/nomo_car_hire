@@ -13,7 +13,6 @@ import {
 } from "react-icons/fa";
 import SiteReviews from "@/components/Reviews";
 import NewsPageUi from '@/components/transportNews';
-import { usePWA } from "@/components/PWA";
 
 // --- CONFIGURATION: Add paths here where you want the News to show ---
 const showNewsPaths = ["/", "/location", "/user/profile", "/user/driver-profile",
@@ -57,6 +56,8 @@ export default function Footer() {
   const [isDriver, setIsDriver] = useState(false);
   const [loading, setLoading] = useState(true);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [installing, setInstalling] = useState(false);
   const [config, setConfig] = useState<any>({
     siteNameMain: "Nomo",
     siteNameSub: "Cars",
@@ -66,10 +67,39 @@ export default function Footer() {
     socials: []
   });
 
-  // Use shared PWA hook instead of local state
-  const { installApp, installing } = usePWA();
+  // Listen for PWA install prompt
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener("beforeinstallprompt", handler);
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) {
+      // Fallback: Show a message telling user how to install manually
+      alert("To install this app on your device:\n\n• Android: Tap the menu (3 dots) → 'Install app'\n• iPhone: Tap Share → 'Add to Home Screen'");
+      return;
+    }
+
+    setInstalling(true);
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+
+    if (outcome === "accepted") {
+      console.log("User accepted the install prompt");
+    }
+
+    setDeferredPrompt(null);
+    setInstalling(false);
+  };
 
   useEffect(() => {
+    // 1. Real-time Listener for Site Config
     const configRef = doc(db, "site_configs", "general");
     const unsubConfig = onSnapshot(configRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -79,6 +109,7 @@ export default function Footer() {
       console.error("Error fetching real-time footer config:", err);
     });
 
+    // 2. Auth State Listener
     const unsubAuth = auth.onAuthStateChanged(async (u) => {
       setUser(u);
       if (u) {
@@ -88,6 +119,7 @@ export default function Footer() {
       setLoading(false);
     });
 
+    // Cleanup both listeners when the component unmounts
     return () => {
       unsubConfig();
       unsubAuth();
@@ -100,6 +132,7 @@ export default function Footer() {
 
   if (pathName === "/user/chat") return null;
 
+  // Logic to determine if news should be displayed
   const shouldShowNews = showNewsPaths.some(path =>
     path === "/" ? pathName === "/" : pathName.startsWith(path)
   );
@@ -107,17 +140,20 @@ export default function Footer() {
   return (
     <footer className="w-full bg-white">
 
+      {/* NEWS SECTION - Conditioned by showNewsPaths */}
       {shouldShowNews && (
         <div className='pt-12 pb-8 md:pt-0'>
           <NewsPageUi />
         </div>
       )}
 
+      {/*REVIEWS*/}
       <div className="mb-1">
         <SiteReviews />
       </div>
 
       <div className="max-w-7xl mx-auto px-6 pb-10">
+        {/* Links Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 border-t border-gray-100 pt-10 px-2">
           {/* Branding */}
           <div>
@@ -132,6 +168,7 @@ export default function Footer() {
               {config.goalStatement}
             </p>
 
+            {/* Dynamic Socials */}
             <div className="flex gap-4 mt-6">
               {config.socials?.map((social: any, i: number) => (
                 <a key={i} href={social.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-all text-xl">
@@ -172,6 +209,7 @@ export default function Footer() {
                   <FaChevronDown className={`text-[10px] transition-transform duration-300 ${aboutOpen ? 'rotate-180' : ''}`} />
                 </button>
 
+                {/* Dropdown Menu */}
                 <div className={`
                   md:absolute left-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 transition-all duration-300
                   ${aboutOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2 md:h-auto h-0 overflow-hidden'}
@@ -192,6 +230,26 @@ export default function Footer() {
                         <FaMapMarkerAlt className="text-blue-500" /> Location
                       </Link>
                     </li>
+                    {/* INSTALL APP BUTTON - Always visible in dropdown */}
+                    <li className="border-t border-gray-100 mt-1 pt-1">
+                      <button
+                        onClick={handleInstall}
+                        disabled={installing}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-emerald-50 rounded-lg text-xs font-medium transition-colors text-emerald-600"
+                      >
+                        {installing ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                            Installing...
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2 text-blue-600 font-semibld hover:text-black">
+                            <FaDownload />
+                            <span>Install App</span>
+                          </div>
+                        )}
+                      </button>
+                    </li>
                   </ul>
                 </div>
               </li>
@@ -199,29 +257,7 @@ export default function Footer() {
               <li><Link href="/join-us" className="flex items-center gap-2 hover:text-blue-600 text-sm"><FaUsers /> Join our team</Link></li>
 
               {user && <li><Link href={isDriver ? `/user/driver-profile/${user.uid}` : `/user/profile/${user.uid}`} className="flex items-center gap-2 hover:text-blue-600 text-sm"><FaTachometerAlt /> Dashboard</Link></li>}
-
               <li><Link href={`mailto:${config.generalContact.email}`} className="flex items-center gap-2 hover:text-blue-600 text-sm"><FaMobileAlt /> Contact Us</Link></li>
-
-              {/* INSTALL APP BUTTON - Using shared PWA hook */}
-              <li>
-                <button
-                  onClick={installApp}
-                  disabled={installing}
-                  className="flex items-center gap-2 text-gray-700 hover:text-blue-600 text-sm transition-colors w-full"
-                >
-                  {installing ? (
-                    <>
-                      <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      <span>Installing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaDownload className="text-blue-500" />
-                      <span>Install App</span>
-                    </>
-                  )}
-                </button>
-              </li>
             </ul>
           </div>
 

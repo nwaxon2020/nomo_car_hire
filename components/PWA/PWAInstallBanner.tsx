@@ -1,55 +1,78 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, X, Smartphone } from "lucide-react";
-import { usePWA } from "./PWAProvider";
 
-const STORAGE_KEY = "nomo_pwa_banner_dismissed";
+const STORAGE_KEY = "nomo_pwa_installed";
+
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  readonly userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+  prompt(): Promise<void>;
+}
 
 export default function PWAInstallBanner() {
-  const { installApp, installing } = usePWA();
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
-  const [permanentlyDismissed, setPermanentlyDismissed] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   useEffect(() => {
-    // Check if user permanently dismissed
-    const dismissed = localStorage.getItem(STORAGE_KEY);
-    if (dismissed === "true") {
-      setPermanentlyDismissed(true);
+    // Check if already installed
+    const alreadyInstalled = localStorage.getItem(STORAGE_KEY);
+    if (alreadyInstalled === "true") {
+      setIsInstalled(true);
       return;
     }
 
-    // Check if already installed (standalone mode)
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
-    const isInstalled = localStorage.getItem("pwa_installed") === "true";
-
-    if (isStandalone || isInstalled) {
+    // Also hide if running as standalone PWA already
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      localStorage.setItem(STORAGE_KEY, "true");
+      setIsInstalled(true);
       return;
     }
 
-    // ✅ SHOW BANNER IMMEDIATELY - Don't wait for event!
-    // This is what your original did and why it worked everywhere
-    setShowBanner(true);
+    // Listen for the browser install prompt event
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setShowBanner(true);
 
-    // Auto-hide after 15 seconds
-    const timer = setTimeout(() => {
-      setShowBanner(false);
-    }, 15000);
+      // Auto-hide after 15 seconds
+      setTimeout(() => {
+        setShowBanner(false);
+      }, 15000);
+    };
 
-    return () => clearTimeout(timer);
+    window.addEventListener("beforeinstallprompt", handler);
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    setInstalling(true);
+
+    await deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+
+    if (outcome === "accepted") {
+      localStorage.setItem(STORAGE_KEY, "true");
+      setIsInstalled(true);
+    }
+
+    setDeferredPrompt(null);
+    setShowBanner(false);
+    setInstalling(false);
+  };
 
   const handleDismiss = () => {
     setShowBanner(false);
   };
 
-  const handlePermanentDismiss = () => {
-    localStorage.setItem(STORAGE_KEY, "true");
-    setPermanentlyDismissed(true);
-    setShowBanner(false);
-  };
-
-  if (permanentlyDismissed) return null;
+  // Don't render anything if already installed or not triggered
+  if (isInstalled || !showBanner) return null;
 
   return (
     <AnimatePresence>
@@ -62,10 +85,12 @@ export default function PWAInstallBanner() {
           className="fixed top-4 right-4 z-[9999] max-w-sm w-[calc(100vw-2rem)] sm:w-auto"
         >
           <div className="relative bg-gradient-to-br from-[#0d1b35] to-[#091426] border border-blue-500/30 rounded-2xl shadow-2xl shadow-blue-900/40 backdrop-blur-xl overflow-hidden">
+            {/* Glowing accent bar */}
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-emerald-400 to-blue-500" />
 
             <div className="p-4 pr-10">
               <div className="flex items-center gap-3">
+                {/* Icon */}
                 <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
                   <Smartphone size={16} className="text-blue-400" />
                 </div>
@@ -77,8 +102,9 @@ export default function PWAInstallBanner() {
                 </div>
               </div>
 
+              {/* Install button */}
               <button
-                onClick={installApp}
+                onClick={handleInstall}
                 disabled={installing}
                 className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-600/30"
               >
@@ -94,23 +120,9 @@ export default function PWAInstallBanner() {
                   </>
                 )}
               </button>
-
-              <div className="flex justify-end gap-3 mt-2">
-                <button
-                  onClick={handleDismiss}
-                  className="text-[9px] text-slate-500 hover:text-slate-300 transition-colors"
-                >
-                  Remind Later
-                </button>
-                <button
-                  onClick={handlePermanentDismiss}
-                  className="text-[9px] text-slate-500 hover:text-slate-300 transition-colors"
-                >
-                  Don't Show Again
-                </button>
-              </div>
             </div>
 
+            {/* Dismiss button */}
             <button
               onClick={handleDismiss}
               className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
@@ -119,6 +131,7 @@ export default function PWAInstallBanner() {
               <X size={12} />
             </button>
 
+            {/* 15s countdown pulse bar */}
             <motion.div
               initial={{ scaleX: 1 }}
               animate={{ scaleX: 0 }}
