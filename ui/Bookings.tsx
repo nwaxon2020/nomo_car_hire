@@ -2271,7 +2271,7 @@ export default function BookingUi() {
                 )}
 
                 {/* Main Content Area ////////////////////////////////////////////////////////////////////////////////////////////*/}
-                <div className="pt-0 pb-20 px-2  mx-auto bg-white shadow-md min-h-[40rem]">
+                <div className="pt-0 pb-20 mx-auto bg-white shadow-md min-h-[40rem]">
 
                     {viewMode === 'customer' ? (
                         <>
