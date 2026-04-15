@@ -353,7 +353,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                         // Install App Button
                         <button
                           key="install-app"
-                          onClick={handleInstall}
+                          onClick={() => { setSidebarOpen(false); handleInstall() }}
+
                           disabled={installing}
                           className="w-full flex items-center gap-3 pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors text-gray-400 hover:text-white hover:bg-white/5"
                         >
