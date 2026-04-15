@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react"; // Added useRef
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 import Script from "next/script";
@@ -19,7 +19,8 @@ import {
   ChevronDown,
   Bell,
   Navigation,
-  AlertCircle
+  AlertCircle,
+  Download
 } from "lucide-react";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -44,16 +45,49 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [isDisabled, setIsDisabled] = useState(false);
   const [adminEmail, setAdminEmail] = useState("nomopoventures@yahoo.com");
 
+  // PWA Install states
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [installing, setInstalling] = useState(false);
+
   const router = useRouter();
   const pathname = usePathname();
   const { unreadCount } = useUnreadChats();
 
+  // Listen for PWA install prompt
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener("beforeinstallprompt", handler);
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) {
+      alert("To install this app on your device:\n\n• Android: Tap the menu (3 dots) → 'Install app'\n• iPhone: Tap Share → 'Add to Home Screen'");
+      return;
+    }
+
+    setInstalling(true);
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+
+    if (outcome === "accepted") {
+      console.log("User accepted the install prompt");
+    }
+
+    setDeferredPrompt(null);
+    setInstalling(false);
+  };
+
   // --- AUTO-CLOSE LOGIC ---
-  const CLOSE_TIMER = 15000; // 15 seconds
+  const CLOSE_TIMER = 15000;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Function to start/reset the idle timer
     const startIdleTimer = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (sidebarOpen) {
@@ -63,7 +97,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       }
     };
 
-    // Events that count as "activity" to reset the timer
     const activityEvents = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
 
     if (sidebarOpen) {
@@ -80,9 +113,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       });
     };
   }, [sidebarOpen]);
-  // -------------------------
 
-  // Combine counts for the mobile bubble
   const totalUnreadMobile = Number(unreadCount) + unreadNotifs;
 
   const getFirstName = (name: string | null | undefined) => {
@@ -128,7 +159,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         }
       });
 
-      // Fetch admin email for disabled fallback
       const fetchAdminEmail = async () => {
         try {
           const configSnap = await getDoc(doc(db, "site_configs", "general"));
@@ -148,7 +178,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsub();
   }, [router, pathname]);
 
-  // ✅ NEW: Listen for incoming booking offers for sidebar pulse
   useEffect(() => {
     if (!userId || !isDriver) {
       setHasPendingOffer(false);
@@ -210,6 +239,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         { name: "About Us", href: "/about" },
         { name: "FAQ", href: "/faq" },
         { name: "Location", href: "/location" },
+        { name: "Install App", isInstall: true } // ← NEW install item
       ]
     },
     { name: "Logout", icon: <LogOut size={20} /> },
@@ -242,7 +272,6 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
         {/* Mobile Toggle Button Container */}
         <div className="md:hidden absolute top-6 right-4 z-[60] flex items-center gap-2">
-          {/* Bubble to the left of the Menu button */}
           {!sidebarOpen && totalUnreadMobile > 0 && (
             <div className="h-6 min-w-[24px] px-1.5 bg-red-600 text-white text-[11px] font-black rounded-full flex items-center justify-center shadow-lg animate-bounce border border-white/20">
               {totalUnreadMobile}
@@ -320,17 +349,39 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                 {item.isDropdown && aboutOpen && (
                   <div className="mt-1 space-y-1 bg-white/5 rounded-xl overflow-hidden py-1 mx-2">
                     {item.subItems.map((sub: any) => (
-                      <button
-                        key={sub.name}
-                        onClick={() => {
-                          router.push(sub.href);
-                          setSidebarOpen(false);
-                          setAboutOpen(false);
-                        }}
-                        className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === sub.href ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
-                      >
-                        {sub.name}
-                      </button>
+                      sub.isInstall ? (
+                        // Install App Button
+                        <button
+                          key="install-app"
+                          onClick={handleInstall}
+                          disabled={installing}
+                          className="w-full flex items-center gap-3 pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors text-gray-400 hover:text-white hover:bg-white/5"
+                        >
+                          {installing ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                              <span>Installing...</span>
+                            </>
+                          ) : (
+                            <div className="text-green-400 hover:text-white flex items-center gap-2">
+                              <Download size={16} />
+                              <span>Install App</span>
+                            </div>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          key={sub.name}
+                          onClick={() => {
+                            router.push(sub.href);
+                            setSidebarOpen(false);
+                            setAboutOpen(false);
+                          }}
+                          className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === sub.href ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                        >
+                          {sub.name}
+                        </button>
+                      )
                     ))}
                   </div>
                 )}
