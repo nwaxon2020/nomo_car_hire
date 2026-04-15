@@ -134,7 +134,7 @@ export default function BookingUi() {
 
     // State for drivers with vehicles
     const [driversWithVehicles, setDriversWithVehicles] = useState<DriverWithVehicle[]>([])
-    
+
     // Server-side pagination states
     const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null)
     const [hasMoreDrivers, setHasMoreDrivers] = useState(true)
@@ -723,7 +723,7 @@ export default function BookingUi() {
             // Fetch exactly ONLY those vehicles instead of the whole vehicleLog collection
             const vehicleMap = new Map<string, VehicleLog>();
             const vIds = Array.from(vehicleIdsToFetch);
-            
+
             // Note: 'in' queries natively support up to 30 items, so vIds.length <= 20 is safe
             if (vIds.length > 0) {
                 const vehiclesQuery = query(collection(db, "vehicleLog"), where("__name__", "in", vIds));
@@ -832,7 +832,7 @@ export default function BookingUi() {
         return driver.vehicles
             .filter((vehicle) => {
                 // Secondary runtime filters that can be done client-side cheaply
-                
+
                 let categoryMatch = true;
                 if (selectedCategory !== "all") {
                     categoryMatch = vehicle.carType?.toLowerCase() === selectedCategory.toLowerCase();
@@ -1525,7 +1525,7 @@ export default function BookingUi() {
             const driverRef = doc(db, 'users', driverId);
             const driverDoc = await getDoc(driverRef);
             const driverData = driverDoc.data() || {};
-            
+
             const currentCustomers = driverData.customersCarried || [];
             const lastMonth = driverData.customersCarriedMonth || "";
             const currentMonth = new Date().toISOString().slice(0, 7); // e.g., '2024-04'
@@ -2243,7 +2243,7 @@ export default function BookingUi() {
                 </div>
             )}
 
-            <div className="px-2 md:px-4 pt-4 relative bg-[#F9FAF9]">
+            <div className="px-2 pt-4 md:px-4 md:pt-2 relative bg-[#F9FAF9]">
                 {/* ✅ NEW: View Mode Toggles */}
                 {isDriver && (
                     <div className="max-w-6xl mx-auto mb- flex justify-center md:justify-start flex-row gap-2 md:inline-flex w-full md:w-auto">
@@ -2310,7 +2310,7 @@ export default function BookingUi() {
                                     onCall={handlePhoneCall}
                                     onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
                                 />
-                                
+
                                 {hasMoreDrivers && (
                                     <div className="flex justify-center mt-8">
                                         <button
@@ -2477,16 +2477,13 @@ export default function BookingUi() {
                     activeTrip={activeTrip}
                     saveMessage={saveMessage}
                     showDeleteConfirm={showDeleteConfirm}
-                    
+
                     reviewForm={reviewForm}
                     hoverRating={hoverRating}
                     hasUserReviewed={hasUserReviewed || false}
                     currentUserId={currentUserId}
                     mainImage={mainImage}
                     onClose={handleCloseDriverInfo}
-                    onSaveDriver={handleSaveDriver}
-                    onStartTrip={startTrip}
-                    onUpdateTripStatus={updateTripStatus}
                     onDeleteComment={handleDeleteComment}
                     onConfirmDeleteComment={confirmDeleteComment}
                     onCancelDeleteComment={cancelDeleteComment}
@@ -2495,15 +2492,12 @@ export default function BookingUi() {
                     onRatingClick={handleRatingClick}
                     onSetHoverRating={setHoverRating}
                     onSetMainImage={setMainImage}
-                    onSetTripInfo={setTripInfo}
                     onSetDriverInfo={setDriverInfo}
                     onSetPreChat={setShowPreChat}
                     isSubmittingReview={isSubmittingReview}
                     onPhoneCall={handlePhoneCall}
                     onWhatsAppMessage={handleWhatsAppMessage}
                     getDriverAddress={getDriverAddress}
-                    getDriverLocation={getDriverLocation}
-                    canSaveDriver={canSaveDriver}
                     formatDate={formatDate}
                     onSetVehicle={setSelectedVehicle}
                 />

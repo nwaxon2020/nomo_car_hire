@@ -59,9 +59,10 @@ export default function BookingTrackingMap({
       originalConsoleError(...args);
     };
 
+    // Increased to 15s — mobile connections load Maps slower than desktop
     const timer = setTimeout(() => {
       if (!isLoaded) setShowFallback(true);
-    }, 7000);
+    }, 15000);
 
     (window as any).gm_authFailure = () => {
       setLoadError(true);
@@ -73,6 +74,14 @@ export default function BookingTrackingMap({
       console.error = originalConsoleError;
     };
   }, [isLoaded]);
+
+  // ✅ If Google Maps successfully loaded, clear any fallback triggered prematurely by the timeout
+  useEffect(() => {
+    if (isLoaded && !googleLoadError) {
+      setShowFallback(false);
+      setLoadError(false);
+    }
+  }, [isLoaded, googleLoadError]);
 
   useEffect(() => {
     if (googleLoadError) {

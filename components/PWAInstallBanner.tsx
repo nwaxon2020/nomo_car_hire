@@ -92,7 +92,7 @@ export default function PWAInstallBanner() {
               <div className="flex items-center gap-3">
                 {/* Icon */}
                 <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-                  <Smartphone size={18} className="text-blue-400" />
+                  <Smartphone size={16} className="text-blue-400" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-white font-black text-sm leading-tight">Install Nomo Cars</p>
