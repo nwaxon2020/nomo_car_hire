@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 import SiteReviews from "@/components/Reviews";
 import NewsPageUi from '@/components/transportNews';
+import { usePWA } from "@/components/PWA";
 
 // --- CONFIGURATION: Add paths here where you want the News to show ---
 const showNewsPaths = ["/", "/location", "/user/profile", "/user/driver-profile",
@@ -56,8 +57,6 @@ export default function Footer() {
   const [isDriver, setIsDriver] = useState(false);
   const [loading, setLoading] = useState(true);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [installing, setInstalling] = useState(false);
   const [config, setConfig] = useState<any>({
     siteNameMain: "Nomo",
     siteNameSub: "Cars",
@@ -67,35 +66,8 @@ export default function Footer() {
     socials: []
   });
 
-  // Listen for PWA install prompt
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
-
-  const handleInstall = async () => {
-    if (!deferredPrompt) {
-      alert("To install this app on your device:\n\n• Android: Tap the menu (3 dots) → 'Install app'\n• iPhone: Tap Share → 'Add to Home Screen'");
-      return;
-    }
-
-    setInstalling(true);
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === "accepted") {
-      console.log("User accepted the install prompt");
-    }
-
-    setDeferredPrompt(null);
-    setInstalling(false);
-  };
+  // Use shared PWA hook instead of local state
+  const { installApp, installing } = usePWA();
 
   useEffect(() => {
     const configRef = doc(db, "site_configs", "general");
@@ -186,7 +158,7 @@ export default function Footer() {
             <ul className="flex flex-col gap-3 text-gray-700">
               <li><Link href="/" className="flex items-center gap-2 hover:text-blue-600 text-sm"><FaHome /> Home</Link></li>
 
-              {/* About Dropdown - NO INSTALL BUTTON INSIDE */}
+              {/* About Dropdown */}
               <li
                 className="relative group"
                 onMouseEnter={() => setAboutOpen(true)}
@@ -230,23 +202,23 @@ export default function Footer() {
 
               <li><Link href={`mailto:${config.generalContact.email}`} className="flex items-center gap-2 hover:text-blue-600 text-sm"><FaMobileAlt /> Contact Us</Link></li>
 
-              {/* INSTALL APP BUTTON - Standalone under Contact Us */}
+              {/* INSTALL APP BUTTON - Using shared PWA hook */}
               <li>
                 <button
-                  onClick={handleInstall}
+                  onClick={installApp}
                   disabled={installing}
                   className="flex items-center gap-2 text-gray-700 hover:text-blue-600 text-sm transition-colors w-full"
                 >
                   {installing ? (
                     <>
                       <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      Installing...
+                      <span>Installing...</span>
                     </>
                   ) : (
-                    <div className="text-blue-600 font-semibold hover:text-black flex items-center gap-2">
-                      <FaDownload />
+                    <>
+                      <FaDownload className="text-blue-500" />
                       <span>Install App</span>
-                    </div>
+                    </>
                   )}
                 </button>
               </li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useUnreadChats } from "@/lib/hooks/useUnreadChats";
 import Script from "next/script";
@@ -28,6 +28,13 @@ import { auth, db } from "@/lib/firebaseConfig";
 import { doc, onSnapshot, updateDoc, collection, query, where, QuerySnapshot, getDoc } from "firebase/firestore";
 import NotificationPanel from "@/components/notification/Notification";
 import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
+import { PWAContext } from "@/components/PWA/PWAProvider";
+
+// Safe hook that doesn't throw error
+const usePWASafe = () => {
+  const context = useContext(PWAContext);
+  return context;
+};
 
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -45,43 +52,15 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [isDisabled, setIsDisabled] = useState(false);
   const [adminEmail, setAdminEmail] = useState("nomopoventures@yahoo.com");
 
-  // PWA Install states
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [installing, setInstalling] = useState(false);
+  // ✅ SAFE PWA HOOK - won't crash if provider is missing
+  const pwa = usePWASafe();
+  const installApp = pwa?.installApp || (() => alert("To install: Tap browser menu (⋮) → Install app"));
+  const installing = pwa?.installing || false;
+  const isInstallable = pwa?.isInstallable || false;
 
   const router = useRouter();
   const pathname = usePathname();
   const { unreadCount } = useUnreadChats();
-
-  // Listen for PWA install prompt
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
-
-  const handleInstall = async () => {
-    if (!deferredPrompt) {
-      alert("To install this app on your device:\n\n• Android: Tap the menu (3 dots) → 'Install app'\n• iPhone: Tap Share → 'Add to Home Screen'");
-      return;
-    }
-
-    setInstalling(true);
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === "accepted") {
-      console.log("User accepted the install prompt");
-    }
-
-    setDeferredPrompt(null);
-    setInstalling(false);
-  };
 
   // --- AUTO-CLOSE LOGIC ---
   const CLOSE_TIMER = 15000;
@@ -239,7 +218,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
         { name: "About Us", href: "/about" },
         { name: "FAQ", href: "/faq" },
         { name: "Location", href: "/location" },
-        { name: "Install App", isInstall: true } // ← NEW install item
+        { name: "Install App", isInstall: true }
       ]
     },
     { name: "Logout", icon: <LogOut size={20} /> },
@@ -348,41 +327,57 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
                 {item.isDropdown && aboutOpen && (
                   <div className="mt-1 space-y-1 bg-white/5 rounded-xl overflow-hidden py-1 mx-2">
-                    {item.subItems.map((sub: any) => (
-                      sub.isInstall ? (
-                        // Install App Button
-                        <button
-                          key="install-app"
-                          onClick={handleInstall}
-                          disabled={installing}
-                          className="w-full flex items-center gap-3 pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors text-gray-400 hover:text-white hover:bg-white/5"
-                        >
-                          {installing ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-                              <span>Installing...</span>
-                            </>
-                          ) : (
-                            <div className="text-green-400 hover:text-white flex items-center gap-2">
-                              <Download size={16} />
-                              <span>Install App</span>
-                            </div>
-                          )}
-                        </button>
+                    <button
+                      onClick={() => {
+                        router.push("/about");
+                        setSidebarOpen(false);
+                        setAboutOpen(false);
+                      }}
+                      className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === "/about" ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                    >
+                      About Us
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        router.push("/faq");
+                        setSidebarOpen(false);
+                        setAboutOpen(false);
+                      }}
+                      className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === "/faq" ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                    >
+                      FAQ
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        router.push("/location");
+                        setSidebarOpen(false);
+                        setAboutOpen(false);
+                      }}
+                      className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === "/location" ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                    >
+                      Location
+                    </button>
+
+                    {/* Install App Button - Safe version */}
+                    <button
+                      onClick={installApp}
+                      disabled={installing}
+                      className="w-full flex items-center gap-3 pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors text-gray-400 hover:text-white hover:bg-white/5"
+                    >
+                      {installing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                          <span>Installing...</span>
+                        </>
                       ) : (
-                        <button
-                          key={sub.name}
-                          onClick={() => {
-                            router.push(sub.href);
-                            setSidebarOpen(false);
-                            setAboutOpen(false);
-                          }}
-                          className={`w-full pl-10 pr-4 py-2.5 text-[13px] text-left transition-colors ${pathname === sub.href ? "text-green-400 font-bold bg-green-400/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
-                        >
-                          {sub.name}
-                        </button>
-                      )
-                    ))}
+                        <>
+                          <Download size={16} className="text-green-400" />
+                          <span>Install App</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
               </div>
