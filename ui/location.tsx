@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fi';
 import { db } from '@/lib/firebaseConfig';
 import { doc, onSnapshot } from 'firebase/firestore';
-import LiveTracking from '@/components/map/LiveTracking';
+// Static map import removed - using iframe for office location
 
 const LocationUi = () => {
   const router = useRouter();
@@ -178,7 +178,16 @@ const LocationUi = () => {
                   If you just want the HQ map, keep the iframe.
                 */}
 
-                <LiveTracking driverId="REPLACE_WITH_ACTUAL_DRIVER_ID" />
+                <iframe
+                  src={mapSource}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="w-full h-full"
+                ></iframe>
 
                 {/* Overlay decoration to keep the premium look */}
                 <div className="absolute inset-0 pointer-events-none border-4 border-[#0a0a0a]/50 rounded-lg shadow-inner" />
