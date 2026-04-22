@@ -276,17 +276,17 @@ export default function AnalysisPageUi() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
       {/* Header */}
-      <div className="pt-8 mb-10 px-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/admin" className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:scale-110 transition-all text-[#0B2A4A]">
-              <FiArrowLeft size={20} />
+      <div className="pt-6 sm:pt-8 mb-6 sm:mb-10 px-4 sm:px-6 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <Link href="/admin" className="p-3 sm:p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:scale-110 transition-all text-[#0B2A4A]">
+              <FiArrowLeft size={18} />
             </Link>
             <div>
-              <h1 className="text-3xl font-black text-[#0B2A4A] uppercase italic leading-none">
+              <h1 className="text-2xl sm:text-3xl font-black text-[#0B2A4A] uppercase italic leading-none">
                 System <span className="text-blue-600">Analysis</span>
               </h1>
-              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2 flex items-center gap-2">
+              <p className="text-[9px] sm:text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2 flex items-center gap-2">
                 <FiClock className="text-blue-500" /> Real-time Mobility Insights
               </p>
             </div>
@@ -294,16 +294,16 @@ export default function AnalysisPageUi() {
 
           <button
             onClick={() => setShowResetModal(true)}
-            className="px-6 py-3 bg-red-50 text-red-600 rounded-xl font-black uppercase italic text-[10px] border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center gap-2 group"
+            className="w-full sm:w-auto px-6 py-3 bg-red-50 text-red-600 rounded-xl font-black uppercase italic text-[10px] border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2 group"
           >
             <FiRotateCcw className="group-hover:rotate-180 transition-transform duration-500" /> Reset System
           </button>
         </div>
       </div>
 
-      <div className="px-6 max-w-7xl mx-auto space-y-8">
+      <div className="px-4 sm:px-6 max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* Top Tier: Finance Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <StatCard
             title="Weekly Income"
             value={`₦${data.income.weekly.toLocaleString()}`}
@@ -328,27 +328,27 @@ export default function AnalysisPageUi() {
         </div>
 
         {/* Second Tier: Graphs */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           {/* Page Visits Chart */}
-          <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
+          <section className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-6 sm:mb-8">
               <div>
-                <h3 className="font-black uppercase italic text-[#0B2A4A] flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-black uppercase italic text-[#0B2A4A] flex items-center gap-2">
                   <FiPieChart className="text-blue-600" /> Top Destinations
                 </h3>
-                <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Daily Traffic distribution per module</p>
+                <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase mt-1">Daily Traffic distribution per module</p>
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-5 sm:space-y-6">
               {visitEntries.length > 0 ? (
                 visitEntries.map(([name, count], index) => (
                   <div key={name} className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-black uppercase italic text-gray-600">
+                    <div className="flex justify-between text-[9px] sm:text-[10px] font-black uppercase italic text-gray-600">
                       <span>{name.replace("-", " ")}</span>
                       <span>{count} Visits</span>
                     </div>
-                    <div className="h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                    <div className="h-2.5 sm:h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(count / maxVisits) * 100}%` }}
@@ -361,7 +361,7 @@ export default function AnalysisPageUi() {
                   </div>
                 ))
               ) : (
-                <div className="py-10 text-center text-gray-400 text-[10px] font-bold uppercase tracking-widest">
+                <div className="py-10 text-center text-gray-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">
                   No Traffic Recorded Today
                 </div>
               )}
@@ -369,24 +369,24 @@ export default function AnalysisPageUi() {
           </section>
 
           {/* Revenue Streams Chart */}
-          <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
+          <section className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-6 sm:mb-8">
               <div>
-                <h3 className="font-black uppercase italic text-[#0B2A4A] flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-black uppercase italic text-[#0B2A4A] flex items-center gap-2">
                   <FiDollarSign className="text-emerald-600" /> Revenue Streams
                 </h3>
-                <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Total income distribution per service</p>
+                <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase mt-1">Total income distribution per service</p>
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-5 sm:space-y-6">
               {purchaseEntries.map(([name, amount], index) => (
                 <div key={name} className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-black uppercase italic text-gray-600">
+                  <div className="flex justify-between text-[9px] sm:text-[10px] font-black uppercase italic text-gray-600">
                     <span>{name === 'vip' ? 'VIP Purchases' : name === 'tickets' ? 'Daily Tickets' : 'Transport Registrations'}</span>
                     <span>₦{amount.toLocaleString()}</span>
                   </div>
-                  <div className="h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                  <div className="h-2.5 sm:h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${(amount / maxPurchases) * 100}%` }}
@@ -403,7 +403,7 @@ export default function AnalysisPageUi() {
         </div>
 
         {/* Third Tier: Customer Status */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <StatusCard
             title="Qualifying"
             value={data.customers.qualifying}
