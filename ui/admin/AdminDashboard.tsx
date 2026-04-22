@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { auth, db } from '@/lib/firebaseConfig';
 import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { FiSettings, FiShield, FiUserPlus, FiBriefcase, FiDollarSign, FiUsers } from 'react-icons/fi';
+import { FiSettings, FiShield, FiUserPlus, FiBriefcase, FiDollarSign, FiUsers, FiBarChart2 } from 'react-icons/fi';
 import { FaCar } from "react-icons/fa";
 import AdminStatistics from '@/components/admin/AdminStatistics';
 
@@ -188,6 +188,7 @@ export default function AdminDashboardUi() {
   const allCards = [
     { title: "Manage Drivers", icon: <FaCar />, link: "/admin/manage-driver", badge: driverBadgeCount },
     { title: "Manage Transport Hub", icon: <FiBriefcase />, link: "/admin/manage-transport", badge: 0 },
+    { title: "Analysis", icon: <FiBarChart2 />, link: "/admin/analysis", badge: 0, ceoOnly: true },
     { title: "Applicants", icon: <FiBriefcase />, link: "/admin/applicants", badge: unreadCounts.applicants },
     { title: "Broadcast", icon: <FiBriefcase />, link: "/admin/broadcast", badge: 0 },
     { title: "Complaints", icon: <FiUserPlus />, link: "/admin/complaints", badge: unreadCounts.complaints },

@@ -29,6 +29,12 @@ import { doc, onSnapshot, updateDoc, collection, query, where, QuerySnapshot, ge
 import NotificationPanel from "@/components/notification/Notification";
 import FcmTokenHandler from "@/components/notification/FcmTokenHandler";
 
+// Helper: today as YYYY-MM-DD
+const getTodayStr = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+};
+
 export default function SidebarPageUi({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -44,6 +50,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [hasPendingOffer, setHasPendingOffer] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
   const [adminEmail, setAdminEmail] = useState("nomopoventures@yahoo.com");
+  const [hasFullyBookedLoad, setHasFullyBookedLoad] = useState(false); // Load Booking full-seat alert
 
   // PWA Install states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -197,6 +204,35 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsubscribe();
   }, [userId, isDriver]);
 
+  // Listen for driver's fully-booked load session
+  useEffect(() => {
+    if (!userId || !isDriver) {
+      setHasFullyBookedLoad(false);
+      return;
+    }
+
+    const today = getTodayStr();
+    const qLoad = query(
+      collection(db, "loadBookings"),
+      where("driverId", "==", userId),
+      where("status", "==", "active"),
+      where("date", "==", today)
+    );
+
+    const unsubLoad = onSnapshot(qLoad, (snapshot: QuerySnapshot) => {
+      if (snapshot.empty) {
+        setHasFullyBookedLoad(false);
+        return;
+      }
+      const bookingData = snapshot.docs[0].data();
+      setHasFullyBookedLoad(
+        (bookingData.bookedCount ?? 0) >= (bookingData.totalSeats ?? 1)
+      );
+    });
+
+    return () => unsubLoad();
+  }, [userId, isDriver]);
+
   const handleOpenNotifs = async () => {
     setNotifOpen(true);
     if (userId) {
@@ -322,7 +358,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                     else if (item.isDropdown) setAboutOpen(!aboutOpen);
                     else if (item.href) { router.push(item.href); setSidebarOpen(false); }
                   }}
-                  className={`flex items-center w-full px-4 py-3.5 rounded-xl hover:bg-green-800 transition-all group relative ${pathname === item.href ? "bg-gray-800 text-green-400 font-semibold" : "text-gray-300 hover:text-white"} ${item.name === "Bookings" && hasPendingOffer ? "border border-orange-500 animate-pulse-orange" : ""}`}
+                  className={`flex items-center w-full px-4 py-3.5 rounded-xl hover:bg-green-800 transition-all group relative ${pathname === item.href ? "bg-gray-800 text-green-400 font-semibold" : "text-gray-300 hover:text-white"} ${item.name === "Bookings" && hasPendingOffer ? "border border-orange-500 animate-pulse-orange" : ""} ${item.name === "Load Booking" && hasFullyBookedLoad ? "border border-green-500 animate-pulse-orange" : ""}`}
                 >
                   <span className={`mr-3 transition-colors ${pathname === item.href ? "text-green-400" : "text-gray-500 group-hover:text-white"}`}>
                     {item.icon}
@@ -338,6 +374,12 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
                   {item.name === "Bookings" && hasPendingOffer && (
                     <span className="absolute right-4 bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">
                       New
+                    </span>
+                  )}
+
+                  {item.name === "Load Booking" && hasFullyBookedLoad && (
+                    <span className="absolute right-4 bg-green-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase animate-pulse">
+                      Full!
                     </span>
                   )}
 

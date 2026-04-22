@@ -13,6 +13,7 @@ import {
 import { auth } from "@/lib/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { logFeatureUsage } from "@/lib/analytics";
 
 import CreateRequest from "../components/carHireBookings/CreateRequest";
 import ViewRequests from "../components/carHireBookings/ViewRequests";
@@ -58,6 +59,10 @@ export default function CarHireUi({
 
     return () => unsubscribe();
   }, [userId, router]);
+
+  useEffect(() => {
+    logFeatureUsage("car-hire");
+  }, []);
 
   /* --------------------------------------------
    🔥 Fetch main user data

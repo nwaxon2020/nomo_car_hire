@@ -1,8 +1,109 @@
 const { onCall } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { logger } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
+
+/**
+ * ── MONTHLY TRUST RESET ──
+ * Resets all user trust scores to 100% on the 1st of every month.
+ */
+exports.resetMonthlyTrust = onSchedule("0 0 1 * *", async (event) => {
+    logger.log("=== STARTING MONTHLY TRUST RESET ===");
+    const db = admin.firestore();
+    const usersRef = db.collection("users");
+    
+    try {
+        const snapshot = await usersRef.where("isDriver", "==", true).get();
+        if (snapshot.empty) {
+            logger.log("No drivers found to reset.");
+            return;
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+                trustScore: 100,
+                trustCancels: 0,
+                trustLastReset: admin.firestore.FieldValue.serverTimestamp(),
+                trustExhaustedAt: null,
+                loadOnceAllowed: false,
+                loadOnceUsedDate: null,
+                loadBlockedUntil: null,
+            });
+        });
+
+        await batch.commit();
+        logger.log(`✅ Successfully reset trust for ${snapshot.size} drivers.`);
+    } catch (error) {
+        logger.error("❌ Monthly trust reset failed:", error);
+    }
+});
+
+/**
+ * ── MAINTENANCE MODE START (Sunday 12:00 AM) ──
+ */
+exports.startMaintenanceMode = onSchedule("0 0 * * 0", async (event) => {
+    logger.log("=== ENABLING MAINTENANCE MODE ===");
+    const db = admin.firestore();
+    try {
+        await db.collection("config").doc("mobility").set({
+            isMaintenance: true,
+            maintenanceMessage: "Weekly server optimization in progress.",
+            reopensAt: "6:00 PM Today",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        logger.log("✅ Maintenance mode enabled.");
+    } catch (error) {
+        logger.error("❌ Failed to enable maintenance mode:", error);
+    }
+});
+
+/**
+ * ── MAINTENANCE MODE END (Sunday 6:00 PM) ──
+ */
+exports.endMaintenanceMode = onSchedule("0 18 * * 0", async (event) => {
+    logger.log("=== DISABLING MAINTENANCE MODE ===");
+    const db = admin.firestore();
+    try {
+        await db.collection("config").doc("mobility").set({
+            isMaintenance: false,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        logger.log("✅ Maintenance mode disabled.");
+    } catch (error) {
+        logger.error("❌ Failed to disable maintenance mode:", error);
+    }
+});
+
+/**
+ * ── FEATURE USAGE ANALYTICS ──
+ * Logs whenever a user accesses a major feature.
+ */
+exports.logFeatureUsage = onCall(async (request) => {
+    if (!request.auth) throw new Error("Unauthenticated");
+    
+    const { featureName } = request.data;
+    if (!featureName) throw new Error("Missing featureName");
+
+    const db = admin.firestore();
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    
+    try {
+        const analyticsRef = db.collection("analytics").doc("features").collection(today).doc(featureName);
+        await analyticsRef.set({
+            count: admin.firestore.FieldValue.increment(1),
+            lastAccessed: admin.firestore.FieldValue.serverTimestamp(),
+            feature: featureName
+        }, { merge: true });
+        
+        return { success: true };
+    } catch (error) {
+        logger.error("❌ Analytics logging failed:", error);
+        return { success: false };
+    }
+});
 
 exports.deleteUserAndData = onCall(
     {

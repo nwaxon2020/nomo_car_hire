@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, Calendar, MapPin, MessageCircle, AlertCircle, Trash2, Eye } from 'lucide-react';
+import { Car, Calendar, MapPin, MessageCircle, AlertCircle, Trash2, Eye, Crown } from 'lucide-react';
 
 interface CustomerRequestsProps {
     requests: any[];
@@ -45,8 +45,8 @@ export default function CustomerRequests({
                             key={request.id}
                             onClick={() => setViewingRequest(request)}
                             className={`w-full relative overflow-hidden rounded-xl shadow-lg transition-all cursor-pointer p-3 sm:p-4 group bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900 border ${request.hasNewBid && isCustomerRequest
-                                    ? 'border-2 border-green-500'
-                                    : 'border-purple-500/30 hover:border-purple-400'
+                                ? 'border-2 border-green-500'
+                                : 'border-purple-500/30 hover:border-purple-400'
                                 }`}
                         >
                             {/* Green pulse border effect for new bids - only border animation, no background change */}
@@ -81,6 +81,11 @@ export default function CustomerRequests({
                                     <span className="px-2 py-0.5 bg-white/10 text-gray-200 text-[9px] sm:text-[10px] font-bold rounded uppercase leading-none border border-white/20">
                                         {request.tripType?.split(':')[0] || 'Ride'}
                                     </span>
+                                    {(request.vipLevel || 0) > 0 && (
+                                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-[9px] sm:text-[10px] font-black rounded flex items-center gap-1 leading-none border border-amber-500/40">
+                                            <Crown className="w-2.5 h-2.5" /> VIP
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Vehicle Icon & Car Type */}

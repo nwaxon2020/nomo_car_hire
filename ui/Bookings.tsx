@@ -16,6 +16,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from "react-hot-toast"
 import { triggerNotification } from "@/lib/notifications"
+import { logFeatureUsage } from "@/lib/analytics";
 
 // NEW: Imports From components 
 import PreChat from "@/components/PreChat"
@@ -253,6 +254,10 @@ export default function BookingUi() {
 
         return () => unsubscribe()
     }, [])
+
+    useEffect(() => {
+        logFeatureUsage("bookings");
+    }, []);
 
     // New function to load notification data
     const loadNotificationData = async (userId: string) => {

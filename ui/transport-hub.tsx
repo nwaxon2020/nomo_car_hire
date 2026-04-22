@@ -8,6 +8,7 @@ import { collection, query, where, getDocs, onSnapshot, doc, getDoc, setDoc, inc
 import RegistrationForm from '@/components/transportHub/RegistrationForm';
 import CompanyDashboard from '@/components/transportHub/CompanyDashboard';
 import LoadingRound from '@/components/re-useable-loading';
+import { logFeatureUsage } from "@/lib/analytics";
 
 import { Timestamp } from "firebase/firestore";
 
@@ -46,6 +47,11 @@ const TransportHubUi = () => {
     const [searchFrom, setSearchFrom] = useState("");
     const [searchTo, setSearchTo] = useState("");
     const [hiddenCompanies, setHiddenCompanies] = useState<Set<string>>(new Set());
+    const [visibleCount, setVisibleCount] = useState(20);
+
+    useEffect(() => {
+        logFeatureUsage("transport-hub");
+    }, []);
 
     useEffect(() => {
         // Fetch statuses of all companies to filter listings
@@ -244,13 +250,26 @@ const TransportHubUi = () => {
                 {loading ? (
                     <div className="py-20 flex justify-center"><LoadingRound /></div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <AnimatePresence>
-                            {allListings.map((item, idx) => (
-                                <ListingCard key={item.id || idx} item={item} />
-                            ))}
-                        </AnimatePresence>
-                    </div>
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <AnimatePresence>
+                                {allListings.slice(0, visibleCount).map((item, idx) => (
+                                    <ListingCard key={item.id || idx} item={item} />
+                                ))}
+                            </AnimatePresence>
+                        </div>
+
+                        {allListings.length > visibleCount && (
+                            <div className="mt-12 flex justify-center">
+                                <button
+                                    onClick={() => setVisibleCount(prev => prev + 20)}
+                                    className="px-10 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-[0.2em] text-blue-400 hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-all active:scale-95 shadow-xl"
+                                >
+                                    Load More Routes
+                                </button>
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {allListings.length === 0 && !loading && (

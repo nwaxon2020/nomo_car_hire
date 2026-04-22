@@ -129,6 +129,7 @@ export default function ViewRequests({
 
   // Track if warning has been shown in this session
   const [warningShown, setWarningShown] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
 
   // Add this useEffect after the existing useEffects to listen for real-time request count changes
   useEffect(() => {
@@ -405,6 +406,9 @@ export default function ViewRequests({
             const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
             return dateB.getTime() - dateA.getTime();
           });
+
+          setRequests(sortedRequests);
+          setVisibleCount(20); // Reset on filter change
 
           let finalFiltered = sortedRequests;
 
@@ -1096,7 +1100,7 @@ export default function ViewRequests({
       {/* Conditional Rendering for Customer vs Driver */}
       {!isDriver ? (
         <CustomerRequests
-          requests={requests}
+          requests={requests.slice(0, visibleCount)}
           userId={userId}
           formatDate={formatDate}
           openOfferCard={openOfferCard}
@@ -1106,7 +1110,7 @@ export default function ViewRequests({
         />
       ) : (
         <DriverRequests
-          requests={requests}
+          requests={requests.slice(0, visibleCount)}
           userId={userId}
           formatDate={formatDate}
           openOfferCard={openOfferCard}
@@ -1117,6 +1121,18 @@ export default function ViewRequests({
           driverVehicles={driverVehicles}
           onFlagCustomer={(customer) => setFlagOverlay({ show: true, targetUser: { ...customer, type: "customer" } })}
         />
+      )}
+
+      {/* Load More Button */}
+      {requests.length > visibleCount && (
+        <div className="mt-8 flex justify-center pb-10">
+          <button
+            onClick={() => setVisibleCount(prev => prev + 20)}
+            className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-500 transition-all shadow-xl active:scale-95"
+          >
+            Load More Requests
+          </button>
+        </div>
       )}
 
       {/* Viewing Details Modal */}
