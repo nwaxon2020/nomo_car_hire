@@ -256,6 +256,37 @@ export default function DriverLocationToggle({
     }
   };
 
+  // ✅ NEW: Reverse geocode using Google Maps API first, BigDataCloud as fallback
+  const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    // Primary: Google Maps Geocoding API
+    if (apiKey) {
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          return data.results[0].formatted_address;
+        }
+      } catch (err) {
+        console.warn('Google Geocoding failed, trying fallback:', err);
+      }
+    }
+
+    // Fallback: BigDataCloud (free, no key needed)
+    try {
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+      );
+      const data = await response.json();
+      return `${data.city || data.locality || ''}, ${data.principalSubdivision || ''}`.trim().replace(/^,\s*/, '') || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    } catch (err) {
+      return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    }
+  };
+
   // ✅ OPTIMIZED: Start location sharing with driver-specific throttling
   const startLocationSharing = async () => {
     if (watchIdRef.current) return;
@@ -322,15 +353,8 @@ export default function DriverLocationToggle({
             ) > 100; // Only update address if moved >100m
 
           if (shouldUpdateAddress) {
-            try {
-              const response = await fetch(
-                `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-              );
-              const data = await response.json();
-              areaName = `${data.city || data.locality}, ${data.principalSubdivision}`;
-            } catch (error) {
-              areaName = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-            }
+            // Use our helper: Google Maps API first, BigDataCloud as fallback
+            areaName = await reverseGeocode(latitude, longitude);
           }
 
           const loc = {

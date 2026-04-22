@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
-import { FaLocationArrow, FaExternalLinkAlt, FaExclamationTriangle, FaWifi } from 'react-icons/fa';
+import { FaLocationArrow, FaExternalLinkAlt, FaWifi } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 
 interface LocationData {
     lat: number;
@@ -15,51 +16,99 @@ interface LocationData {
     timestamp?: any;
 }
 
+// ─── Luxury Dark Theme ────────────────────────────────────────────────────────
+const luxuryDarkStyle: google.maps.MapTypeStyle[] = [
+    { elementType: 'geometry', stylers: [{ color: '#0a0a0a' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#747474' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative.land_parcel', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a1a1a' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#2a2a2a' }] },
+    { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#2a2a2a' }] },
+];
+
+const defaultCenter = { lat: 6.5244, lng: 3.3792 }; // Lagos
+
+// Shared libraries array (defined outside component to avoid re-renders)
+const LIBRARIES: ('places' | 'geometry')[] = ['places'];
+
 export default function LiveTracking({ driverId }: { driverId: string }) {
-    const mapRef = useRef<HTMLDivElement>(null);
     const googleMap = useRef<google.maps.Map | null>(null);
-    const driverMarker = useRef<google.maps.Marker | null>(null);
+    const driverMarkerRef = useRef<google.maps.Marker | null>(null);
     const animationFrameRef = useRef<number | null>(null);
-    const retryCountRef = useRef<number>(0);
     const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
 
     const [locationData, setLocationData] = useState<LocationData | null>(null);
     const [driverName, setDriverName] = useState('Nomo Driver');
     const [status, setStatus] = useState('Connecting...');
     const [isOnline, setIsOnline] = useState(true);
-    const [loadError, setLoadError] = useState(false);
-    const [retrying, setRetrying] = useState(false);
-    const [mapLoaded, setMapLoaded] = useState(false);
+    const [showFallback, setShowFallback] = useState(false);
+    const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Network monitoring
+    // ─── Load Google Maps API via useJsApiLoader (fixes Bug A & B) ────────────
+    const { isLoaded, loadError } = useJsApiLoader({
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+        libraries: LIBRARIES,
+    });
+
+    // ─── Fallback: if Google Maps errors or takes > 15s, show OSM ────────────
+    useEffect(() => {
+        if (loadError) {
+            setShowFallback(true);
+            setStatus('Backup Map Active');
+            return;
+        }
+
+        // Safety timeout: show OSM fallback if Maps takes too long on slow connections
+        fallbackTimerRef.current = setTimeout(() => {
+            if (!isLoaded) {
+                setShowFallback(true);
+                setStatus('Backup Map Active');
+            }
+        }, 15000);
+
+        return () => {
+            if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        };
+    }, [loadError, isLoaded]);
+
+    // ─── Clear fallback once Maps loads successfully ──────────────────────────
+    useEffect(() => {
+        if (isLoaded && !loadError) {
+            setShowFallback(false);
+            if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        }
+    }, [isLoaded, loadError]);
+
+    // ─── Network monitoring ────────────────────────────────────────────────────
     useEffect(() => {
         const handleOnline = () => {
             setIsOnline(true);
             toast.success('Network restored');
             setStatus('Reconnecting...');
-            if (loadError) {
-                window.location.reload();
-            }
         };
         const handleOffline = () => {
             setIsOnline(false);
             setStatus('No Internet');
             toast.error('Network connection lost');
         };
-
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
-
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [loadError]);
+    }, []);
 
-    // Smooth animation for car movement
+    // ─── Smooth animation for car movement ────────────────────────────────────
     const animateCarMovement = (newPos: { lat: number; lng: number }) => {
-        if (!driverMarker.current || !lastPositionRef.current) {
-            driverMarker.current?.setPosition(newPos);
+        if (!driverMarkerRef.current || !lastPositionRef.current) {
+            driverMarkerRef.current?.setPosition(newPos);
             lastPositionRef.current = newPos;
             return;
         }
@@ -81,7 +130,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
             const lat = startPos.lat + (endPos.lat - startPos.lat) * easeProgress;
             const lng = startPos.lng + (endPos.lng - startPos.lng) * easeProgress;
 
-            driverMarker.current?.setPosition({ lat, lng });
+            driverMarkerRef.current?.setPosition({ lat, lng });
 
             if (progress < 1) {
                 animationFrameRef.current = requestAnimationFrame(animate);
@@ -94,214 +143,166 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
         animationFrameRef.current = requestAnimationFrame(animate);
     };
 
-    // Retry loading map
-    const retryLoadMap = () => {
-        setRetrying(true);
-        setLoadError(false);
-        setStatus('Retrying...');
-        setTimeout(() => {
-            window.location.reload();
-        }, 1000);
-    };
-
-    // Initialize Google Maps using the new functional API
-    const initMap = async () => {
-        if (!mapRef.current) return;
-
-        try {
-            // Load the Google Maps API using the new functional approach
-            const { Map } = (await google.maps.importLibrary("maps")) as google.maps.MapsLibrary;
-            const { Marker } = (await google.maps.importLibrary("marker")) as google.maps.MarkerLibrary;
-
-            // Initialize Map with Nomo Luxury Dark Theme
-            googleMap.current = new Map(mapRef.current, {
-                center: { lat: 6.5244, lng: 3.3792 },
-                zoom: 16,
-                styles: luxuryDarkStyle,
-                disableDefaultUI: true,
-                zoomControl: true,
-                zoomControlOptions: {
-                    position: google.maps.ControlPosition.RIGHT_BOTTOM,
-                },
-                mapTypeControl: false,
-                fullscreenControl: true,
-                fullscreenControlOptions: {
-                    position: google.maps.ControlPosition.RIGHT_BOTTOM,
-                },
-            });
-
-            setMapLoaded(true);
-            setStatus('Waiting for driver...');
-            setLoadError(false);
-        } catch (error) {
-            console.error("Map Load Error:", error);
-            setLoadError(true);
-            setStatus("Map Failed to Load");
-            toast.error("Unable to load map. Please check your connection.");
-        }
-    };
-
-    // Load Google Maps API script
+    // ─── Firebase listener for driver location ────────────────────────────────
     useEffect(() => {
-        if (!isOnline) return;
-
-        const loadGoogleMaps = () => {
-            // Check if API is already loaded
-            if (window.google && window.google.maps) {
-                initMap();
-                return;
-            }
-
-            // Create script element to load Google Maps
-            const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places,maps,marker&v=weekly`;
-            script.async = true;
-            script.defer = true;
-            script.onload = () => {
-                initMap();
-            };
-            script.onerror = () => {
-                setLoadError(true);
-                setStatus("Map Failed to Load");
-                toast.error("Unable to load map. Please check your connection.");
-            };
-            document.head.appendChild(script);
-        };
-
-        loadGoogleMaps();
-    }, [isOnline]);
-
-    // Firebase listener for driver location
-    useEffect(() => {
-        if (!driverId || !mapLoaded || !googleMap.current) return;
+        if (!driverId) return;
 
         let unsub: (() => void) | undefined;
-        let timeoutId: NodeJS.Timeout;
 
-        const driverRef = doc(db, "users", driverId);
-        unsub = onSnapshot(driverRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                const loc = data.location;
+        const driverRef = doc(db, 'users', driverId);
+        unsub = onSnapshot(
+            driverRef,
+            (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const loc = data.location;
 
-                const firstName = data.firstName || '';
-                const lastName = data.lastName || '';
-                setDriverName(`${firstName} ${lastName}`.trim() || 'Nomo Driver');
+                    const firstName = data.firstName || '';
+                    const lastName = data.lastName || '';
+                    setDriverName(`${firstName} ${lastName}`.trim() || 'Nomo Driver');
 
-                if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
-                    const newPos = { lat: loc.lat, lng: loc.lng };
-                    setLocationData(loc);
+                    if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+                        const newPos = { lat: loc.lat, lng: loc.lng };
+                        setLocationData(loc);
 
-                    if (!driverMarker.current && googleMap.current) {
-                        // Create marker using the new Marker API
-                        const { Marker } = google.maps.importLibrary("marker") as any;
-                        driverMarker.current = new Marker({
-                            position: newPos,
-                            map: googleMap.current,
-                            title: `${driverName} - Driver Location`,
-                            icon: {
-                                url: "/car-icon.png",
-                                scaledSize: new google.maps.Size(50, 50),
-                                anchor: new google.maps.Point(25, 25),
-                                ...(loc.heading && { rotation: loc.heading }),
-                            },
-                            optimized: true,
-                        });
-                        lastPositionRef.current = newPos;
-                    } else if (driverMarker.current) {
-                        animateCarMovement(newPos);
+                        // Update marker position (smooth animation)
+                        if (driverMarkerRef.current) {
+                            animateCarMovement(newPos);
 
-                        if (loc.heading) {
-                            driverMarker.current.setIcon({
-                                url: "/car-icon.png",
-                                scaledSize: new google.maps.Size(50, 50),
-                                anchor: new google.maps.Point(25, 25),
-                                rotation: loc.heading,
-                            });
+                            // Update heading icon if available
+                            if (loc.heading) {
+                                driverMarkerRef.current.setIcon({
+                                    url: '/car-icon.svg',
+                                    scaledSize: new google.maps.Size(50, 50),
+                                    anchor: new google.maps.Point(25, 25),
+                                });
+                            }
                         }
-                    }
 
-                    if (googleMap.current) {
-                        googleMap.current.panTo(newPos);
-                    }
+                        // Pan map to new position
+                        if (googleMap.current) {
+                            googleMap.current.panTo(newPos);
+                        }
 
-                    setStatus("Live Tracking Active");
-                    retryCountRef.current = 0;
+                        setStatus('Live Tracking Active');
+                    } else {
+                        setStatus('Waiting for GPS signal...');
+                    }
                 } else {
-                    setStatus("Waiting for GPS signal...");
+                    setStatus('Driver not found');
                 }
-            } else {
-                setStatus("Driver not found");
+            },
+            (error) => {
+                console.error('Firestore error:', error);
+                setStatus('Connection error');
+                toast.error('Lost connection to tracking service');
             }
-        }, (error) => {
-            console.error("Firestore error:", error);
-            setStatus("Connection error");
-            toast.error("Lost connection to tracking service");
-        });
+        );
 
-        timeoutId = setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             if (!locationData) {
-                setStatus("Waiting for driver to share location");
+                setStatus('Waiting for driver to share location');
             }
         }, 10000);
 
         return () => {
             if (unsub) unsub();
-            if (timeoutId) clearTimeout(timeoutId);
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-            if (driverMarker.current) {
-                driverMarker.current.setMap(null);
-            }
+            clearTimeout(timeoutId);
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
         };
-    }, [driverId, mapLoaded, driverName, locationData]);
+    }, [driverId]);
 
-    // External Navigation Links
+    // ─── External navigation links ─────────────────────────────────────────────
     const googleMapsLink = locationData
         ? `https://www.google.com/maps/search/?api=1&query=${locationData.lat},${locationData.lng}`
-        : "#";
-
+        : '#';
     const wazeLink = locationData
         ? `https://www.waze.com/ul?ll=${locationData.lat},${locationData.lng}&navigate=yes`
-        : "#";
+        : '#';
 
+    // ─── OpenStreetMap fallback bbox ──────────────────────────────────────────
+    const osmSrc = locationData
+        ? `https://www.openstreetmap.org/export/embed.html?bbox=${locationData.lng - 0.02}%2C${locationData.lat - 0.02}%2C${locationData.lng + 0.02}%2C${locationData.lat + 0.02}&layer=mapnik&marker=${locationData.lat}%2C${locationData.lng}`
+        : `https://www.openstreetmap.org/export/embed.html?bbox=3.3592%2C6.5044%2C3.3992%2C6.5444&layer=mapnik`;
+
+    // ─── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="py-4 md:py-10 relative w-full rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-[#0a0a0a] group">
-            {/* The Map Canvas */}
-            <div ref={mapRef} className="w-full h-[450px] md:h-[550px]" />
 
-            {/* Loading Overlay */}
-            {!mapLoaded && !loadError && (
-                <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm flex items-center justify-center z-10">
-                    <div className="text-center">
-                        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                        <p className="text-white text-xs font-black uppercase tracking-widest">Loading Map...</p>
+            {/* ─── Map Canvas ─────────────────────────────────────────────── */}
+            {showFallback ? (
+                /* OpenStreetMap fallback */
+                <div className="relative w-full h-[450px] md:h-[550px] bg-slate-800 overflow-hidden">
+                    <iframe
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                        scrolling="no"
+                        src={osmSrc}
+                        title="Backup Map"
+                    />
+                    <div className="absolute top-2 left-2 right-2 bg-amber-500/90 text-black text-[9px] font-black uppercase px-2 py-1 rounded shadow-lg z-10">
+                        Backup Map Active — Google Maps unavailable
                     </div>
+                </div>
+            ) : !isLoaded ? (
+                /* Loading state */
+                <div className="w-full h-[450px] md:h-[550px] bg-slate-900 flex flex-col items-center justify-center text-white">
+                    <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="font-black uppercase tracking-widest text-[10px]">Initializing Live Tracking...</p>
+                </div>
+            ) : (
+                /* Google Maps */
+                <div className="w-full h-[450px] md:h-[550px]">
+                    <GoogleMap
+                        mapContainerStyle={{ width: '100%', height: '100%' }}
+                        center={locationData ? { lat: locationData.lat, lng: locationData.lng } : defaultCenter}
+                        zoom={16}
+                        options={{
+                            styles: luxuryDarkStyle,
+                            disableDefaultUI: true,
+                            zoomControl: true,
+                            zoomControlOptions: {
+                                position: google.maps.ControlPosition.RIGHT_BOTTOM,
+                            },
+                            mapTypeControl: false,
+                            fullscreenControl: true,
+                            fullscreenControlOptions: {
+                                position: google.maps.ControlPosition.RIGHT_BOTTOM,
+                            },
+                        }}
+                        onLoad={(map) => {
+                            googleMap.current = map;
+                        }}
+                        onUnmount={() => {
+                            googleMap.current = null;
+                        }}
+                    >
+                        {locationData && (
+                            <Marker
+                                position={{ lat: locationData.lat, lng: locationData.lng }}
+                                title={`${driverName} — Driver Location`}
+                                icon={{
+                                    url: '/car-icon.svg',
+                                    scaledSize: new google.maps.Size(50, 50),
+                                    anchor: new google.maps.Point(25, 25),
+                                }}
+                                onLoad={(marker) => {
+                                    // Store ref for smooth animation
+                                    driverMarkerRef.current = marker;
+                                    lastPositionRef.current = { lat: locationData.lat, lng: locationData.lng };
+                                }}
+                                onUnmount={() => {
+                                    driverMarkerRef.current = null;
+                                }}
+                            />
+                        )}
+                    </GoogleMap>
                 </div>
             )}
 
-            {/* Error Overlay */}
-            {loadError && (
-                <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm flex items-center justify-center z-10">
-                    <div className="text-center max-w-sm mx-auto p-6">
-                        <FaExclamationTriangle className="text-amber-500 text-4xl mx-auto mb-4" />
-                        <h3 className="text-white font-bold mb-2">Map Failed to Load</h3>
-                        <p className="text-slate-400 text-xs mb-4">
-                            Please check your internet connection and try again.
-                        </p>
-                        <button
-                            onClick={retryLoadMap}
-                            disabled={retrying}
-                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
-                        >
-                            {retrying ? 'Retrying...' : 'Retry'}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Top Status Bar */}
+            {/* ─── Top Status Bar ─────────────────────────────────────────── */}
             <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none z-20">
                 <div className="bg-slate-900/80 backdrop-blur-xl px-4 py-2 rounded-2xl border border-emerald-500/30 flex items-center gap-3 pointer-events-auto">
                     <div className="relative">
@@ -319,7 +320,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
                 )}
             </div>
 
-            {/* Bottom Info Panel */}
+            {/* ─── Bottom Info Panel ───────────────────────────────────────── */}
             <div className="absolute bottom-4 left-4 right-4 bg-slate-900/90 backdrop-blur-2xl border border-white/10 p-5 rounded-2xl shadow-2xl z-20">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
@@ -329,7 +330,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
                         <div>
                             <h3 className="text-white font-bold text-base leading-none mb-1">{driverName}</h3>
                             <p className="text-slate-400 text-xs truncate max-w-[200px] md:max-w-xs">
-                                {locationData?.address || "Fetching current position..."}
+                                {locationData?.address || 'Fetching current position...'}
                             </p>
                             {locationData?.speed !== undefined && (
                                 <p className="text-emerald-400 text-[8px] font-black uppercase mt-1">
@@ -360,8 +361,8 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
                 </div>
             </div>
 
-            {/* No Location Fallback */}
-            {!locationData && !loadError && mapLoaded && (
+            {/* ─── Waiting for Driver Overlay ──────────────────────────────── */}
+            {!locationData && isLoaded && !showFallback && (
                 <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
                     <div className="text-center p-6 bg-slate-900/90 rounded-2xl border border-white/10 max-w-sm">
                         <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
@@ -377,19 +378,3 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
         </div>
     );
 }
-
-// THE LUXURY DARK STYLE
-const luxuryDarkStyle: google.maps.MapTypeStyle[] = [
-    { "elementType": "geometry", "stylers": [{ "color": "#0a0a0a" }] },
-    { "elementType": "labels.text.fill", "stylers": [{ "color": "#747474" }] },
-    { "elementType": "labels.text.stroke", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "administrative.land_parcel", "elementType": "labels", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1a1a1a" }] },
-    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#2a2a2a" }] },
-    { "featureType": "road", "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "transit", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] },
-    { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#2a2a2a" }] }
-];
