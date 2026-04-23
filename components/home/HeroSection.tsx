@@ -113,13 +113,13 @@ export default function HeroSection({
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      className="w-full pl-12 pr-4 py-4 bg-gray-100 border-2 border-gray-200 rounded-xl text-gray-800 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      className="w-full pl-12 pr-2 md:pr-4 py-3 md:py-4 bg-gray-100 border-2 border-gray-200 rounded-xl text-gray-800 text-sm sm:text-base placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-3 shadow-md"
+                    className="w-full bg-blue-600 text-white py-3 md:py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-3 shadow-md"
                   >
                     <FaCar /> Search Available Cars
                   </button>
