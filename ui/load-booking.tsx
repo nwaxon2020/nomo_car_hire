@@ -423,8 +423,8 @@ export default function LoadBookingUi() {
                 {isDriver ? "Driver" : "Passenger"}
               </span>
 
-              {/* Trust badge for customers */}
-              {!isDriver && <TrustBadge score={trustInfo.trustScore} />}
+              {/* Trust badge for both roles */}
+              <TrustBadge score={trustInfo.trustScore} />
             </div>
           </div>
         </div>
@@ -468,6 +468,7 @@ export default function LoadBookingUi() {
                     booking={activeBooking}
                     driverId={user.uid}
                     driverName={driverInfo.driverName}
+                    trustScore={trustInfo.trustScore}
                     onEndSession={() => setActiveBooking(null)}
                   />
                 </div>

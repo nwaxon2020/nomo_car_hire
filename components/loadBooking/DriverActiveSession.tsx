@@ -21,6 +21,7 @@ interface DriverActiveSessionProps {
   booking: LoadBooking;
   driverId: string;
   driverName: string;
+  trustScore?: number;
   onEndSession: () => void;
 }
 
@@ -37,6 +38,7 @@ export default function DriverActiveSession({
   booking,
   driverId,
   driverName,
+  trustScore,
   onEndSession,
 }: DriverActiveSessionProps) {
   const [seats, setSeats] = useState<LoadSeat[]>([]);
@@ -128,10 +130,17 @@ export default function DriverActiveSession({
       <div className="bg-gray-800/50 border border-white/10 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white font-black text-sm uppercase tracking-tight">Active Session</h3>
-          <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-            Live
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+              Live
+            </span>
+            {trustScore !== undefined && (
+              <span className={`${getTrustColor(trustScore)} text-white text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-lg`}>
+                Trust: {trustScore}%
+              </span>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gray-900/50 rounded-lg p-2.5">
