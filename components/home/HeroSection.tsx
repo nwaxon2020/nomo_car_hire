@@ -123,6 +123,7 @@ export default function HeroSection({
                   >
                     <FaCar /> Search Available Cars
                   </button>
+                  <p className="text-center text-xs text-blue-800/80 font-medium">Note: Searches directly target load-booking destinations.</p>
                 </form>
 
                 <div className="mt-8 pt-6 border-t border-gray-100">

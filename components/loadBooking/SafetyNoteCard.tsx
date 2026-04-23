@@ -1,7 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { FaShieldAlt, FaMapMarkerAlt, FaExclamationTriangle, FaUsers, FaEye } from "react-icons/fa";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FaShieldAlt, FaMapMarkerAlt, FaExclamationTriangle, FaUsers, FaEye, FaChevronDown, FaChevronUp } from "react-icons/fa";
 
 interface SafetyNoteCardProps {
   role: "driver" | "customer";
@@ -45,7 +46,9 @@ const CUSTOMER_EXTRA = {
 };
 
 export default function SafetyNoteCard({ role }: SafetyNoteCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const rules = [...SAFETY_RULES, role === "driver" ? DRIVER_EXTRA : CUSTOMER_EXTRA];
+  const displayedRules = expanded ? rules : rules.slice(0, 3);
 
   return (
     <motion.div
@@ -59,26 +62,39 @@ export default function SafetyNoteCard({ role }: SafetyNoteCardProps) {
           <FaShieldAlt className="text-amber-400" size={13} />
         </div>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Safety Notice</p>
-          <p className="text-[8px] text-amber-400/60 font-bold uppercase tracking-wider">
+          <p className="text-xs font-black uppercase tracking-widest text-amber-400">Safety Notice</p>
+          <p className="text-[10px] text-amber-400/60 font-bold uppercase tracking-wider">
             {role === "driver" ? "For Drivers" : "For Passengers"}
           </p>
         </div>
         <div className="ml-auto">
-          <span className="bg-red-600/20 border border-red-500/30 text-red-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+          <span className="bg-red-600/20 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
             Important
           </span>
         </div>
       </div>
 
       {/* Rules */}
-      <div className="p-4 space-y-2.5">
-        {rules.map((rule, i) => (
-          <div key={i} className="flex items-start gap-2.5">
+      <div className="p-4 space-y-3">
+        {displayedRules.map((rule, i) => (
+          <div key={i} className="flex items-start gap-3">
             <div className="mt-0.5 shrink-0">{rule.icon}</div>
-            <p className="text-[10px] text-gray-300 font-medium leading-relaxed">{rule.text}</p>
+            <p className="text-xs text-gray-300 font-medium leading-relaxed">{rule.text}</p>
           </div>
         ))}
+        
+        {rules.length > 3 && (
+          <button 
+            onClick={() => setExpanded(!expanded)}
+            className="w-full mt-2 py-2 flex items-center justify-center gap-2 text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors bg-amber-500/10 rounded-lg border border-amber-500/20"
+          >
+            {expanded ? (
+              <>Show Less <FaChevronUp size={10} /></>
+            ) : (
+              <>Show More ({rules.length - 3}) <FaChevronDown size={10} /></>
+            )}
+          </button>
+        )}
       </div>
     </motion.div>
   );

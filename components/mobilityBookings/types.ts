@@ -191,6 +191,14 @@ export interface DirectOffer {
     destination?: string;
 }
 
+export interface BookingRequest {
+    id: string;
+    userId: string;
+    status: 'active' | 'completed' | 'cancelled';
+    offers?: any[];
+    createdAt: Timestamp;
+}
+
 export const VIP_CONFIG = {
     levels: [
         { level: 1, name: "Green VIP", color: "green", stars: 1, referralsRequired: 15, price: 5000 },

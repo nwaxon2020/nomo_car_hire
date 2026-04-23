@@ -140,7 +140,7 @@ export default function HomePageUi() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push(`/user/mobility/car-hire${searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery.trim())}` : ""}`);
+    router.push(`/user/mobility/load-booking${searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery.trim())}` : ""}`);
   };
 
   // --- LOADING STATE ---

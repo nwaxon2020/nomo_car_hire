@@ -25,9 +25,15 @@ export default function TicketGuard({ children }: TicketGuardProps) {
       }
 
       // 1. Fetch Admin Finance Config (Pricing)
-      const configRef = doc(db, "adminfinance", "pricing");
-      const configSnap = await getDoc(configRef);
-      const config = configSnap.exists() ? configSnap.data() : null;
+      let config: any = null;
+      try {
+        const configRef = doc(db, "adminfinance", "pricing");
+        const configSnap = await getDoc(configRef);
+        config = configSnap.exists() ? configSnap.data() : null;
+      } catch (err) {
+        console.error("[TicketGuard] Error fetching config:", err);
+        // Fallback to default behavior if config can't be loaded
+      }
       setAdminConfig(config);
 
       // 2. Listen to User Data
@@ -47,7 +53,7 @@ export default function TicketGuard({ children }: TicketGuardProps) {
             const regDate = data.newDriverConfig?.registeredAt?.toDate?.() || 
                             (data.newDriverConfig?.registeredAt ? new Date(data.newDriverConfig.registeredAt) : null);
             
-            const trialDays = config.newDriver?.freeTrialDays || 60;
+            const trialDays = config?.newDriver?.freeTrialDays || 60;
             let isTrialActive = false;
             
             if (regDate) {

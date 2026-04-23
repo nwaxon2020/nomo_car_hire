@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
@@ -166,6 +166,7 @@ export default function LoadBookingUi() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isDriver, setIsDriver] = useState(false);
+  const [viewMode, setViewMode] = useState<"driver" | "customer">("customer");
 
   useEffect(() => {
     logFeatureUsage("load-booking");
@@ -196,6 +197,9 @@ export default function LoadBookingUi() {
         const data = snap.data();
         setUserData(data);
         setIsDriver(data.isDriver === true);
+        if (data.isDriver === true) {
+          setViewMode(prev => prev === "customer" && !userData ? "driver" : prev);
+        }
 
         /* ── Monthly trust reset ── */
         const trust: TrustInfo = {
@@ -245,11 +249,11 @@ export default function LoadBookingUi() {
     if (!user || !isDriver) return;
     setVehiclesLoading(true);
 
-    const vehiclesRef = collection(db, "vehicleLogs");
+    const vehiclesRef = collection(db, "vehicleLog");
     const q = query(vehiclesRef, where("driverId", "==", user.uid));
     const unsub = onSnapshot(q, (snap) => {
       const vehicles = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setDriverVehicles(vehicles);
+      setDriverVehicles(vehicles.filter((v: any) => v.isApproved));
       setVehiclesLoading(false);
     });
 
@@ -427,10 +431,32 @@ export default function LoadBookingUi() {
 
         <div className="max-w-2xl mx-auto px-4 pt-5 space-y-5">
           {/* Safety Note */}
-          <SafetyNoteCard role={isDriver ? "driver" : "customer"} />
+          <SafetyNoteCard role={viewMode} />
+
+          {/* DRIVER / CUSTOMER TOGGLE */}
+          {isDriver && (
+            <div className="flex bg-gray-900 border border-white/10 rounded-xl p-1 mb-4 max-w-sm">
+              <button
+                onClick={() => setViewMode("driver")}
+                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
+                  viewMode === "driver" ? "bg-amber-500 text-black shadow-md" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Create Trip
+              </button>
+              <button
+                onClick={() => setViewMode("customer")}
+                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
+                  viewMode === "customer" ? "bg-purple-500 text-white shadow-md" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Book a Seat
+              </button>
+            </div>
+          )}
 
           {/* ── DRIVER VIEW ── */}
-          {isDriver && (
+          {viewMode === "driver" && (
             <div>
               {activeBooking ? (
                 <div>
@@ -469,7 +495,7 @@ export default function LoadBookingUi() {
           )}
 
           {/* ── CUSTOMER VIEW ── */}
-          {!isDriver && (
+          {viewMode === "customer" && (
             <div>
               {/* Once-allowed notice */}
               {trustInfo.trustScore === 0 && trustInfo.loadOnceAllowed && !trustInfo.loadOnceUsedDate && (
@@ -495,10 +521,12 @@ export default function LoadBookingUi() {
                 <h2 className="text-white font-black text-sm uppercase tracking-tight">Available Rides</h2>
               </div>
 
-              <CustomerSearchPanel
-                currentUser={customerInfo}
-                onCancelOccurred={handleCancelOccurred}
-              />
+              <Suspense fallback={<div className="h-40 bg-gray-800/40 animate-pulse rounded-xl" />}>
+                <CustomerSearchPanel
+                  currentUser={customerInfo}
+                  onCancelOccurred={handleCancelOccurred}
+                />
+              </Suspense>
             </div>
           )}
         </div>

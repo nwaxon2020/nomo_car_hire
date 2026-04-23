@@ -27,7 +27,8 @@ import BookingTrackingMap from "@/components/map/BookingTrackingMap";
 // Interfaces matching your Firebase data structure
 import {
     VehicleLog, Comment, Driver, DriverWithVehicle, TripHistory,
-    ContactedDriver, HiredCar, Trip, DirectOffer
+    ContactedDriver, HiredCar, Trip, DirectOffer,
+    BookingRequest
 } from "@/components/mobilityBookings/types"
 import {
     getDriverLocation,
@@ -212,6 +213,9 @@ export default function BookingUi() {
     // ✅ NEW: Loading state for accept offer button
     const [isAcceptingOffer, setIsAcceptingOffer] = useState(false);
 
+    // ✅ NEW: Missing state for active public booking requests
+    const [activeRequest, setActiveRequest] = useState<BookingRequest | null>(null);
+
 
     // Initialize auth and load history from Firebase
     useEffect(() => {
@@ -277,7 +281,8 @@ export default function BookingUi() {
                     const requestsRef = collection(db, "bookingRequests");
                     const querySnapshot = await getDocs(query(
                         requestsRef,
-                        where("status", "==", "active")
+                        where("status", "==", "active"),
+                        limit(50) // Added limit to prevent over-fetching
                     ));
 
                     let unofferedCount = 0;
@@ -290,24 +295,37 @@ export default function BookingUi() {
                     });
                     setNotificationCount(Math.min(unofferedCount, 99));
                 } else {
-                    // For customers: Count received offers
+                    // For customers: Count received offers from notification data
                     const requestsRef = collection(db, "bookingRequests");
-                    const querySnapshot = await getDocs(query(
+                    const q = query(
                         requestsRef,
                         where("userId", "==", userId),
-                        where("status", "==", "active")
-                    ));
+                        where("status", "==", "active"),
+                        limit(1)
+                    );
 
-                    let totalOffers = 0;
-                    querySnapshot.forEach((docSnap) => {
-                        const request = docSnap.data();
-                        totalOffers += (request.offers?.length || 0);
-                    });
-                    setNotificationCount(Math.min(totalOffers, 99));
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                        const request = querySnapshot.docs[0].data();
+                        setNotificationCount(Math.min(request.offers?.length || 0, 99));
+                    }
                 }
             }
         } catch (error) {
             console.error("Error fetching notification data:", error);
+        }
+    };
+
+    // Helper to load offers for a specific request (used in listeners)
+    const loadRequestOffers = async (requestId: string) => {
+        try {
+            const requestDoc = await getDoc(doc(db, "bookingRequests", requestId));
+            if (requestDoc.exists()) {
+                const data = requestDoc.data();
+                setNotificationCount(Math.min(data.offers?.length || 0, 99));
+            }
+        } catch (error) {
+            console.error("Error loading request offers:", error);
         }
     };
 
@@ -389,10 +407,38 @@ export default function BookingUi() {
                 }
                 setCurrentUser((prev: any) => prev ? { ...prev, ...data } : data);
             }
+        }, (error) => {
+            console.error("[Bookings] Error listening to user profile:", error);
         });
 
         return () => unsubscribe();
     }, [currentUserId]);
+
+    // Dedicated listener for Customer's active booking request
+    useEffect(() => {
+        if (!currentUserId || isDriver) return;
+
+        const q = query(
+            collection(db, "bookingRequests"),
+            where("userId", "==", currentUserId),
+            where("status", "==", "active"),
+            limit(1)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            if (!snapshot.empty) {
+                const requestData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as BookingRequest;
+                setActiveRequest(requestData);
+                loadRequestOffers(snapshot.docs[0].id);
+            } else {
+                setActiveRequest(null);
+            }
+        }, (error) => {
+            console.error("[Bookings] Error listening to active request:", error);
+        });
+
+        return () => unsubscribe();
+    }, [currentUserId, isDriver]);
 
     // Save to localStorage when quickViewHistory changes
     useEffect(() => {
@@ -413,7 +459,8 @@ export default function BookingUi() {
             const q = query(
                 tripsRef,
                 where("customerId", "==", userId),
-                where("status", "in", ["completed", "cancelled"]) // Only completed/cancelled trips
+                where("status", "in", ["completed", "cancelled"]), // Only completed/cancelled trips
+                limit(10) // Added limit to prevent massive history fetch
             );
 
             const tripsSnapshot = await getDocs(q);
@@ -1944,6 +1991,8 @@ export default function BookingUi() {
                     setAcceptanceMap(false);
                 }
             }
+        }, (error) => {
+            console.error("[Bookings] Error listening to customer offers:", error);
         });
 
         return () => unsubscribe();
@@ -2003,6 +2052,8 @@ export default function BookingUi() {
                     }
                 }
             }
+        }, (error) => {
+            console.error("[Bookings] Error listening to driver incoming offers:", error);
         });
 
         return () => unsubscribe();

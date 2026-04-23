@@ -1,4 +1,4 @@
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { logger } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
@@ -82,10 +82,10 @@ exports.endMaintenanceMode = onSchedule("0 18 * * 0", async (event) => {
  * Logs whenever a user accesses a major feature.
  */
 exports.logFeatureUsage = onCall(async (request) => {
-    if (!request.auth) throw new Error("Unauthenticated");
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required");
     
     const { featureName } = request.data;
-    if (!featureName) throw new Error("Missing featureName");
+    if (!featureName) throw new HttpsError("invalid-argument", "Missing featureName");
 
     const db = admin.firestore();
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -117,7 +117,7 @@ exports.deleteUserAndData = onCall(
         // Authentication check
         if (!request.auth) {
         logger.error("❌ NO AUTH - returning 401");
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             "unauthenticated",
             "Authentication required"
         );
@@ -193,7 +193,7 @@ exports.deleteUserAndData = onCall(
             // ... add your Firestore deletion logic here
         }
         
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             "internal",
             error.message || "Deletion failed"
         );

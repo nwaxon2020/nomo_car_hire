@@ -10,6 +10,7 @@ import {
 import {
   collection, query, where, onSnapshot, getDocs,
 } from "firebase/firestore";
+import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebaseConfig";
 import { LoadBooking, getTodayString } from "./types";
 import DriverLoadCard from "./DriverLoadCard";
@@ -35,9 +36,12 @@ export default function CustomerSearchPanel({
   currentUser,
   onCancelOccurred,
 }: CustomerSearchPanelProps) {
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get("search") || "";
+
   const [bookings, setBookings] = useState<LoadBooking[]>([]);
   const [filtered, setFiltered] = useState<LoadBooking[]>([]);
-  const [destination, setDestination] = useState("");
+  const [destination, setDestination] = useState(initialSearch);
   const [manualLocation, setManualLocation] = useState(
     currentUser.location?.address || ""
   );
@@ -226,7 +230,9 @@ export default function CustomerSearchPanel({
             <div className="flex-1 min-w-0">
               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Your Location</p>
               <p className="text-gray-300 text-[10px] font-bold truncate">
-                {manualLocation || `${currentUser.city || ""} ${currentUser.state || ""}`.trim() || "Location not set"}
+                {manualLocation && manualLocation !== "Location updated" 
+                  ? manualLocation 
+                  : `${currentUser.city || ""} ${currentUser.state || ""}`.trim() || "Location not set"}
               </p>
             </div>
             {destination && (

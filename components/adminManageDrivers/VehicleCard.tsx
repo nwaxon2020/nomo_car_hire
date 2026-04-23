@@ -132,13 +132,13 @@ export default function VehicleCard({ car }: any) {
 
           {/* 1. Updated Approve Button with Confirmation Trigger */}
           <button
-            disabled={car.isApproved === true && car.status === "approved"}
+            disabled={car.isApproved === true}
             className={`flex-1 py-2 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-all 
-              ${(car.isApproved === true && car.status === "approved") ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+              ${car.isApproved === true ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
             onClick={() => setShowConfirm(true)}
           >
             <FaCheckCircle />
-            {(car.isApproved === true && car.status === "approved") ? "APPROVED" : "APPROVE"}
+            {car.isApproved === true ? "APPROVED" : "APPROVE"}
           </button>
 
         </div>
