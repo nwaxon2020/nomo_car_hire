@@ -11,7 +11,7 @@ import {
 import { db } from "@/lib/firebaseConfig";
 import { getAuth } from "firebase/auth";
 import {
-    FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes, FaInfoCircle
+    FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes, FaInfoCircle, FaMapMarkerAlt
 } from 'react-icons/fa';
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from "react-hot-toast"
@@ -212,9 +212,15 @@ export default function BookingUi() {
 
     // ✅ NEW: Loading state for accept offer button
     const [isAcceptingOffer, setIsAcceptingOffer] = useState(false);
+    const [isStartingTrip, setIsStartingTrip] = useState(false);
 
     // ✅ NEW: Missing state for active public booking requests
     const [activeRequest, setActiveRequest] = useState<BookingRequest | null>(null);
+
+    // ✅ NEW: Destination Overlay States
+    const [showDestinationOverlay, setShowDestinationOverlay] = useState(false);
+    const [tempBookingData, setTempBookingData] = useState<{ driver: DriverWithVehicle; vehicle: VehicleLog } | null>(null);
+    const [destinationInput, setDestinationInput] = useState("");
 
 
     // Initialize auth and load history from Firebase
@@ -272,7 +278,12 @@ export default function BookingUi() {
                 const userData = userDoc.data();
                 const driverStatus = userData.isDriver || false;
                 setIsDriver(driverStatus);
-                if (driverStatus) {
+                const savedViewMode = sessionStorage.getItem("nomo_view_mode");
+                if (savedViewMode === "customer") {
+                    setViewMode("customer");
+                } else if (savedViewMode === "driver") {
+                    setViewMode("driver");
+                } else if (driverStatus) {
                     setViewMode("driver");
                 }
 
@@ -416,7 +427,7 @@ export default function BookingUi() {
 
     // Dedicated listener for Customer's active booking request
     useEffect(() => {
-        if (!currentUserId || isDriver) return;
+        if (!currentUserId) return;
 
         const q = query(
             collection(db, "bookingRequests"),
@@ -1035,117 +1046,78 @@ export default function BookingUi() {
             setSaveMessage({ type: "", text: "" })
 
             const userDocRef = doc(db, "users", String(currentUser.uid))
-            const driverDocId = selectedDriver.id || selectedDriver.uid
-            const driverDocRef = doc(db, "users", String(driverDocId))
             const now = Timestamp.now()
-
-            // Create the new history items
-            const newContactedDriver: ContactedDriver = {
-                driverId: selectedDriver.uid,
-                driverName: `${selectedDriver.firstName} ${selectedDriver.lastName}`,
-                phoneNumber: selectedDriver.phoneNumber,
-                vehicleId: selectedVehicle.id,
-                vehicleName: selectedVehicle.carName,
-                vehicleModel: selectedVehicle.carModel,
-                contactDate: now,
-                lastContacted: now,
-                timestamp: now
-            }
-
-            const newHiredCar: HiredCar = {
-                driverId: selectedDriver.uid,
-                vehicleId: selectedVehicle.id,
-                driverName: `${selectedDriver.firstName} ${selectedDriver.lastName}`,
-                vehicleName: selectedVehicle.carName,
-                vehicleModel: selectedVehicle.carModel,
-                hireDate: now,
-                lastHired: now,
-                timestamp: now
-            }
 
             // Get current user data
             const userDoc = await getDoc(userDocRef)
             const userData = userDoc.data()
 
-            let currentContactedDrivers: ContactedDriver[] = userData?.contactedDrivers || []
-            let currentHiredCars: HiredCar[] = userData?.hiredCars || []
+            const isAlreadyContacted = (userData?.contactedDrivers || []).some(
+                (cd: any) => cd.driverId === selectedDriver.uid
+            );
 
-            // Check if already exists
-            const existingContactIndex = currentContactedDrivers.findIndex(
-                (cd: ContactedDriver) => cd.driverId === selectedDriver.uid && cd.vehicleId === selectedVehicle.id
-            )
+            if (isAlreadyContacted) {
+                const updatedList = (userData?.contactedDrivers || []).filter(
+                    (cd: any) => cd.driverId !== selectedDriver.uid
+                );
+                await updateDoc(userDocRef, {
+                    contactedDrivers: updatedList,
+                    updatedAt: now
+                });
+                toast.success("Driver removed from your contacted list.");
+            } else {
+                const newContactedDriver = {
+                    driverId: selectedDriver.uid,
+                    driverName: selectedDriver.fullName || `${selectedDriver.firstName} ${selectedDriver.lastName}`,
+                    phoneNumber: selectedDriver.phoneNumber,
+                    vehicleId: selectedVehicle.id,
+                    vehicleName: selectedVehicle.carName,
+                    vehicleModel: selectedVehicle.carModel,
+                    contactDate: now,
+                    lastContacted: now,
+                    timestamp: now
+                };
 
-            const existingHireIndex = currentHiredCars.findIndex(
-                (hc: HiredCar) => hc.driverId === selectedDriver.uid && hc.vehicleId === selectedVehicle.id
-            )
-
-            // If exists, remove old entries first
-            if (existingContactIndex !== -1) {
-                currentContactedDrivers.splice(existingContactIndex, 1)
+                await updateDoc(userDocRef, {
+                    contactedDrivers: arrayUnion(newContactedDriver),
+                    updatedAt: now
+                });
+                toast.success("Driver added to your contacted list!");
             }
-
-            if (existingHireIndex !== -1) {
-                currentHiredCars.splice(existingHireIndex, 1)
-            }
-
-            // Add new entries at the beginning
-            currentContactedDrivers.unshift(newContactedDriver)
-            currentHiredCars.unshift(newHiredCar)
-
-            // Keep only 5 most recent items
-            if (currentContactedDrivers.length > 5) {
-                currentContactedDrivers = currentContactedDrivers.slice(0, 5)
-            }
-
-            if (currentHiredCars.length > 5) {
-                currentHiredCars = currentHiredCars.slice(0, 5)
-            }
-
-            // Update both user and driver documents in a batch
-            const batch = writeBatch(db)
-
-            // Update user document with limited history
-            batch.update(userDocRef, {
-                contactedDrivers: currentContactedDrivers,
-                hiredCars: currentHiredCars,
-                updatedAt: now
-            })
+            
+            // Refresh user history from Firestore (source of truth)
+            loadUserHistory(currentUser.uid);
 
             // Add user to driver's customersCarried (if not already there)
-            const customersCarried = selectedDriver.customersCarried || []
+            const driverDocId = selectedDriver.id || selectedDriver.uid;
+            const driverDocRef = doc(db, "users", driverDocId);
+            const customersCarried = selectedDriver.customersCarried || [];
             if (!customersCarried.includes(currentUser.uid)) {
-                batch.update(driverDocRef, {
+                await updateDoc(driverDocRef, {
                     customersCarried: arrayUnion(currentUser.uid),
                     updatedAt: now
-                })
+                });
             }
 
-            await batch.commit()
-
-            // Update local state
-            setContactedDrivers(currentContactedDrivers)
-            setHiredCars(currentHiredCars)
-
             // Update selected driver's customersCarried in local state
-            if (selectedDriver && !selectedDriver.customersCarried?.includes(currentUser.uid)) {
+            if (!selectedDriver.customersCarried?.includes(currentUser.uid)) {
                 setSelectedDriver({
                     ...selectedDriver,
                     customersCarried: [...(selectedDriver.customersCarried || []), currentUser.uid]
-                })
+                });
             }
 
             // Update cooldown state
-            const key = `${selectedDriver.uid}_${selectedVehicle.id}`
-            setSaveCooldown(prev => ({ ...prev, [key]: Date.now() }))
-
-            // Save to quick view history
-            setQuickViewHistory(newContactedDriver)
+            const key = `${selectedDriver.uid}_${selectedVehicle.id}`;
+            setSaveCooldown(prev => ({ ...prev, [key]: Date.now() }));
 
             // Show success message
             setSaveMessage({
                 type: "success",
-                text: "✓ Driver and vehicle saved to your history!"
-            })
+                text: isAlreadyContacted
+                    ? "✓ Driver removed from your contacted list."
+                    : "✓ The contact of this driver has been added to your list of contacted drivers in your dashboard."
+            });
 
             // Clear message after 5 seconds
             setTimeout(() => {
@@ -1483,6 +1455,7 @@ export default function BookingUi() {
         setQuickViewHistory(null)
     }
 
+
     // WhatsApp handler with country code
     const handleWhatsAppMessage = (driver: DriverWithVehicle, vehicle: VehicleLog) => {
         if (!driver.whatsappPreferred) {
@@ -1537,23 +1510,25 @@ export default function BookingUi() {
             return null;
         }
 
+        setIsStartingTrip(true);
         try {
-            // Generate a simple fare based on distance (you can use actual calculation later)
-            const estimatedFare = Math.floor(Math.random() * 5000) + 2000; // 2000-7000 NGN
+            // Use fare from incomingOffer if available, otherwise generate estimation
+            const fare = incomingOffer?.fare || Math.floor(Math.random() * 5000) + 2000;
 
             const tripData = {
                 driverId,
                 vehicleId,
-                customerId: currentUser.uid,
-                customerName: currentUser.fullName || (currentUser.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : (currentUser.displayName || 'Customer')),
+                customerId: incomingOffer?.customerId || currentUser.uid,
+                customerName: incomingOffer?.customerName || (currentUser.displayName || 'Customer'),
                 pickupLocation,
                 destination,
-                fare: estimatedFare,
+                fare,
                 status: 'active',
                 startTime: Timestamp.now(),
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now(),
-                // NEW: Initial location (you can get from driver's profile or ask driver to share)
+                type: incomingOffer ? 'direct_booking' : 'regular_booking',
+                // NEW: Initial location
                 driverLocation: {
                     lat: 9.0765, // Default Nigeria coordinates (Lagos)
                     lng: 7.3986, // Default Nigeria coordinates (Abuja)
@@ -1570,8 +1545,18 @@ export default function BookingUi() {
             const vehicleRef = doc(db, 'vehicleLog', vehicleId);
             await updateDoc(vehicleRef, {
                 status: 'on-trip',
-                currentTripId: tripDoc.id
+                currentTripId: tripDoc.id,
+                updatedAt: serverTimestamp()
             });
+
+            // Update incoming offer status if exists
+            if (incomingOffer) {
+                await updateDoc(doc(db, "directOffers", incomingOffer.id), {
+                    status: 'started',
+                    tripId: tripDoc.id,
+                    updatedAt: serverTimestamp()
+                });
+            }
 
             // Update driver's customersCarried on a Monthly Reset basis
             const driverRef = doc(db, 'users', driverId);
@@ -1593,7 +1578,8 @@ export default function BookingUi() {
 
             await updateDoc(driverRef, {
                 customersCarried: updatedCustomers,
-                customersCarriedMonth: currentMonth
+                customersCarriedMonth: currentMonth,
+                updatedAt: Timestamp.now()
             });
 
             // Set active trip locally
@@ -1619,7 +1605,7 @@ export default function BookingUi() {
             setTripInfo({
                 pickupLocation,
                 destination,
-                fare: estimatedFare,
+                fare,
                 status: 'active',
                 startTime: Timestamp.now(),
                 endTime: null
@@ -1794,6 +1780,20 @@ export default function BookingUi() {
         setAcceptanceMap(false);
         setDriverResponse("none");
 
+        // Trigger destination overlay instead of sending immediately
+        setTempBookingData({ driver, vehicle });
+        setShowDestinationOverlay(true);
+    };
+
+    // Finalize booking after destination is entered
+    const finalizeBooking = async () => {
+        if (!tempBookingData || !currentUser || !destinationInput) {
+            toast.error("Please enter a destination");
+            return;
+        }
+
+        const { driver, vehicle } = tempBookingData;
+
         try {
             const offerData: any = {
                 customerId: currentUser.uid,
@@ -1804,7 +1804,7 @@ export default function BookingUi() {
                 status: 'pending',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-                customerLocation: freshLoc || customerLocation,
+                customerLocation: customerLocation,
                 driverLocation: driver.location || null, // Allow driver map tracking
                 customerImage: (currentUser?.profileImage && !currentUser.profileImage.includes("profile.png"))
                     ? currentUser.profileImage
@@ -1812,24 +1812,27 @@ export default function BookingUi() {
                 driverImage: driver.profileImage || "",
                 driverPhone: driver.phoneNumber,
                 plateNumber: vehicle.plateNumber || "N/A",
-                pickupLocation: '', // Can be enhanced later
-                destination: '',
+                pickupLocation: 'Current Location', // Simplified for now
+                destination: destinationInput,
             };
 
             const docRef = await addDoc(collection(db, 'directOffers'), offerData);
             setPendingOffer({ ...offerData, id: docRef.id });
-            setCountdown(30); // 30 second timeout logic (visual)
+            setCountdown(60); // 60 second timeout logic (visual)
 
             // Trigger Notification for the Driver
             await triggerNotification(
                 driver.uid,
                 "New Booking Request!",
-                `${currentUser.displayName || "A customer"} is requesting a ride right now!`,
+                `${currentUser.displayName || "A customer"} is requesting a ride to ${destinationInput}!`,
                 "booking",
                 "/user/mobility/bookings"
             );
 
             toast.success("Booking request sent!");
+            setShowDestinationOverlay(false);
+            setDestinationInput("");
+            setTempBookingData(null);
         } catch (error) {
             console.error('Error creating booking offer:', error);
             toast.error("Failed to send booking request");
@@ -2145,6 +2148,15 @@ export default function BookingUi() {
                                     : `You are tracking ${incomingOffer?.customerName}'s pick-up point.`
                                 }
                             </p>
+                            {/* Show destination */}
+                            {(pendingOffer?.destination || incomingOffer?.destination) && (
+                                <div className="mt-3 inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 px-4 py-2 rounded-xl">
+                                    <FaMapMarkerAlt className="text-emerald-400" size={12} />
+                                    <span className="text-emerald-400 text-xs font-black uppercase tracking-wider">
+                                        Heading to: {pendingOffer?.destination || incomingOffer?.destination}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="w-full md:w-[80%] h-[50vh] md:h-[60vh] bg-gray-800 rounded-[2rem] md:rounded-[3rem] overflow-hidden border-4 md:border-8 border-gray-800 shadow-2xl relative">
@@ -2155,6 +2167,7 @@ export default function BookingUi() {
                                 driverImage={pendingOffer?.driverImage || incomingOffer?.driverImage}
                                 plateNumber={pendingOffer?.plateNumber || incomingOffer?.plateNumber}
                                 viewerRole={pendingOffer ? 'customer' : 'driver'}
+                                destinationLabel={pendingOffer?.destination || incomingOffer?.destination}
                             />
 
                             {/* Visual Pulse for active tracking */}
@@ -2299,12 +2312,87 @@ export default function BookingUi() {
                 </div>
             )}
 
+            {/* ✅ NEW: Destination Input Overlay */}
+            {showDestinationOverlay && tempBookingData && (
+                <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden"
+                    >
+                        {/* Decorative background elements */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
+
+                        <button
+                            onClick={() => {
+                                setShowDestinationOverlay(false);
+                                setDestinationInput("");
+                                setTempBookingData(null);
+                            }}
+                            className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors"
+                        >
+                            <FaTimes size={20} />
+                        </button>
+
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-500/30">
+                                <FaMapMarkerAlt className="text-emerald-500 text-2xl" />
+                            </div>
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Set Your Destination</h3>
+                            <p className="text-gray-400 text-xs">Tell {tempBookingData.driver.firstName} where you are heading.</p>
+                        </div>
+
+                        <div className="space-y-6 relative z-10">
+                            <div className="relative">
+                                <div className="absolute top-1/2 left-5 -translate-y-1/2 text-emerald-500">
+                                    <FaMapMarkerAlt size={16} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Enter drop-off location..."
+                                    value={destinationInput}
+                                    onChange={(e) => setDestinationInput(e.target.value)}
+                                    className="w-full pl-12 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder:text-gray-600 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="bg-gray-800/50 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
+                                    <Image
+                                        src={tempBookingData.driver.profileImage || "/per.png"}
+                                        alt="Driver"
+                                        width={48}
+                                        height={48}
+                                        className="object-cover w-full h-full"
+                                    />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Driver Selected</p>
+                                    <p className="text-sm font-bold text-white">{tempBookingData.driver.fullName}</p>
+                                    <p className="text-[10px] text-gray-500">{tempBookingData.vehicle.carName} • {tempBookingData.vehicle.plateNumber}</p>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={finalizeBooking}
+                                disabled={!destinationInput.trim()}
+                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-50 text-white hover:text-emerald-900 font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 disabled:hover:text-white"
+                            >
+                                Confirm & Send Request
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
             <div className="px-2 pt-4 md:px-4 md:pt-2 relative bg-[#F9FAF9]">
                 {/* ✅ NEW: View Mode Toggles */}
                 {isDriver && (
                     <div className="max-w-6xl mx-auto mb- flex justify-center md:justify-start flex-row gap-2 md:inline-flex w-full md:w-auto">
                         <button
-                            onClick={() => setViewMode("customer")}
+                            onClick={() => { setViewMode("customer"); sessionStorage.setItem("nomo_view_mode", "customer"); }}
                             className={`px-3 md:px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-1 md:gap-3 border-2 ${viewMode === "customer"
                                 ? "bg-gray-900 text-white border-gray-900 shadow-xl"
                                 : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
@@ -2314,7 +2402,7 @@ export default function BookingUi() {
                             Book a Ride
                         </button>
                         <button
-                            onClick={() => setViewMode("driver")}
+                            onClick={() => { setViewMode("driver"); sessionStorage.setItem("nomo_view_mode", "driver"); }}
                             className={`px-3 md:px-8 py-4 rounded-lg font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-1 md:gap-3 border-2 ${viewMode === "driver"
                                 ? "bg-amber-500 text-black border-amber-500 shadow-xl"
                                 : "bg-white text-gray-500 border-gray-100 hover:border-gray-200"
@@ -2416,16 +2504,40 @@ export default function BookingUi() {
                                                     <h3 className="text-xl font-black text-gray-900 mb-1">Trip with {incomingOffer.customerName}</h3>
                                                     <p className="text-gray-500 text-[10px] sm:text-xs mb-6 font-medium">Map tracking is active. You can minimize this view to see your other requests.</p>
 
-                                                    <div className="flex gap-3">
-                                                        <button
-                                                            onClick={() => setAcceptanceMap(true)}
-                                                            className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all"
-                                                        >
-                                                            Open Map
-                                                        </button>
+                                                    <div className="flex flex-col gap-3">
+                                                        <div className="flex gap-3">
+                                                            <button
+                                                                onClick={() => setAcceptanceMap(true)}
+                                                                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all"
+                                                            >
+                                                                Open Map
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (incomingOffer.pickupLocation && incomingOffer.destination) {
+                                                                        startTrip(
+                                                                            incomingOffer.driverId,
+                                                                            incomingOffer.vehicleId,
+                                                                            incomingOffer.pickupLocation,
+                                                                            incomingOffer.destination
+                                                                        );
+                                                                    } else {
+                                                                        toast.error("Trip details incomplete");
+                                                                    }
+                                                                }}
+                                                                disabled={isStartingTrip}
+                                                                className="flex-1 py-3.5 bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                                            >
+                                                                {isStartingTrip ? (
+                                                                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                                ) : (
+                                                                    <><FaCar size={10} /> Start Trip</>
+                                                                )}
+                                                            </button>
+                                                        </div>
                                                         <button
                                                             onClick={() => setShowCancelWarning(true)} // Used as Cancel here
-                                                            className="flex-1 py-3.5 bg-gray-50 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
+                                                            className="w-full py-3.5 bg-gray-50 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
                                                         >
                                                             Terminate
                                                         </button>
@@ -2463,13 +2575,28 @@ export default function BookingUi() {
                                                 <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">Accept request from {incomingOffer.customerName} to see the location.</p>
 
                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId) && (
-                                                    <div className="bg-amber-50 rounded-xl p-3 mb-6 border border-amber-200 shadow-inner flex items-center justify-center gap-3 w-full">
+                                                    <div className="bg-amber-50 rounded-xl p-3 mb-4 border border-amber-200 shadow-inner flex items-center justify-center gap-3 w-full">
                                                         <div className="text-center">
                                                             <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 mb-0.5">Target Vehicle</p>
                                                             <p className="font-bold text-gray-900 text-xs">
                                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carName}{" "}
                                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carModel}
                                                             </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Customer's Destination */}
+                                                {incomingOffer.destination && (
+                                                    <div className="bg-emerald-50 rounded-xl p-3 mb-6 border border-emerald-200 shadow-inner w-full">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
+                                                                <FaMapMarkerAlt className="text-white" size={14} />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-0.5">Customer&apos;s Destination</p>
+                                                                <p className="font-bold text-gray-900 text-sm leading-tight">{incomingOffer.destination}</p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 )}
@@ -2556,6 +2683,7 @@ export default function BookingUi() {
                     getDriverAddress={getDriverAddress}
                     formatDate={formatDate}
                     onSetVehicle={setSelectedVehicle}
+                    onMarkContacted={handleSaveDriver}
                 />
 
                 {/* ✅ NEW: Pre-Chat Modal */}

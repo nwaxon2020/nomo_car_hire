@@ -129,11 +129,16 @@ export default function AnalysisPageUi() {
         
         // Flags logic
         const userFlags = userData.flags || 0;
+        const isDisabled = userData.isDisabled === true;
+        
         if (userFlags > 0) {
-          defaultersCount++;
           if (userFlags === 1) flagsMap[1]++;
           else if (userFlags === 2) flagsMap[2]++;
           else if (userFlags >= 3) flagsMap[3]++;
+        }
+        
+        if (userFlags >= 3 || isDisabled) {
+          defaultersCount++;
         }
 
         // Qualifying logic
@@ -145,12 +150,14 @@ export default function AnalysisPageUi() {
         if (userData.vipHistory && Array.isArray(userData.vipHistory)) {
           userData.vipHistory.forEach((item: any) => {
             const amt = Number(item.price) || 0;
-            const date = item.timestamp?.toDate ? item.timestamp.toDate() : new Date(item.timestamp);
+            const ts = item.timestamp;
+            const date = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : new Date();
+            const validDate = isNaN(date.getTime()) ? new Date() : date;
             
             vipRevenue += amt;
-            if (date > weekAgo) weeklyIncome += amt;
-            if (date > monthAgo) monthlyIncome += amt;
-            if (date > yearAgo) yearlyIncome += amt;
+            if (validDate > weekAgo) weeklyIncome += amt;
+            if (validDate > monthAgo) monthlyIncome += amt;
+            if (validDate > yearAgo) yearlyIncome += amt;
           });
         }
 
@@ -158,12 +165,14 @@ export default function AnalysisPageUi() {
         if (userData.tickets && Array.isArray(userData.tickets)) {
           userData.tickets.forEach((item: any) => {
             const amt = Number(item.amount) || 0;
-            const date = item.timestamp?.toDate ? item.timestamp.toDate() : new Date(item.timestamp);
+            const ts = item.timestamp;
+            const date = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : new Date();
+            const validDate = isNaN(date.getTime()) ? new Date() : date;
             
             ticketRevenue += amt;
-            if (date > weekAgo) weeklyIncome += amt;
-            if (date > monthAgo) monthlyIncome += amt;
-            if (date > yearAgo) yearlyIncome += amt;
+            if (validDate > weekAgo) weeklyIncome += amt;
+            if (validDate > monthAgo) monthlyIncome += amt;
+            if (validDate > yearAgo) yearlyIncome += amt;
           });
         }
       });
@@ -175,12 +184,14 @@ export default function AnalysisPageUi() {
         transSnap.forEach((d) => {
           const data = d.data();
           const amt = Number(data.paymentAmount) || 0;
-          const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+          const ts = data.createdAt;
+          const date = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : new Date();
+          const validDate = isNaN(date.getTime()) ? new Date() : date;
           
           transportRevenue += amt;
-          if (date > weekAgo) weeklyIncome += amt;
-          if (date > monthAgo) monthlyIncome += amt;
-          if (date > yearAgo) yearlyIncome += amt;
+          if (validDate > weekAgo) weeklyIncome += amt;
+          if (validDate > monthAgo) monthlyIncome += amt;
+          if (validDate > yearAgo) yearlyIncome += amt;
         });
       } catch (e) {}
 
@@ -453,7 +464,7 @@ export default function AnalysisPageUi() {
                 CEO Authorization
               </h2>
               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-8 leading-relaxed">
-                Resetting system analytics to zero is a non-reversible protocol.
+                Resetting daily page visits traffic to zero. (Does NOT affect dashboard revenue/statistics).
               </p>
 
               <input

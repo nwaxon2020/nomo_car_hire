@@ -509,7 +509,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       },
       {
         enableHighAccuracy: true,
-        timeout: 20000,
+        timeout: 60000,
         maximumAge: 10000
       }
     );

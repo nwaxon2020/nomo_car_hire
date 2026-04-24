@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
+import { doc, updateDoc, getDoc, Timestamp, setDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import { toast } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
 import { triggerNotification } from "@/lib/notifications"
 import PaymentSection from "@/components/Payment"
+import SuccessModal from "@/components/SuccessModal"
 
 const TICKET_CONFIG = [
   {
@@ -155,10 +156,9 @@ export default function TicketPage() {
 
   // Check if we should show unblur option (within warning period)
   const shouldShowPurchaseOption = () => {
-    if (!isNewDriver()) return false
-    const freeTrialDays = adminConfig?.newDriver?.freeTrialDays || 60
+    const daysLeft = getNewDriverTimeLeft()
+    if (daysLeft === null) return true
     const warningDays = adminConfig?.newDriver?.warningDays || 5
-    const daysLeft = getNewDriverTimeLeft() || 0
     return daysLeft <= warningDays
   }
 
@@ -167,92 +167,43 @@ export default function TicketPage() {
     setShowOverlay(true)
   }
 
+  const [showSuccess, setShowSuccess] = useState(false)
+
+  useEffect(() => {
+    import("@/lib/paystack").then((m) => m.loadPaystackScript());
+  }, []);
+
   const handlePurchase = async (level: number) => {
     const ticket = dynamicTickets.find((t) => t.level === level)
-    if (!ticket || processing || !userId) return
+    if (!ticket || processing || !userId || !userData) return
     setProcessing(true)
 
     try {
-      const userRef = doc(db, "users", userId)
+      const { initiatePaystackPayment } = await import("@/lib/paystack");
 
-      // Always re-read fresh data so we don't overwrite concurrent changes
-      const freshSnap = await getDoc(userRef)
-      const freshData = freshSnap.data() || {}
-      const existingTickets: any[] = freshData.tickets || []
-
-      const purchaseDate = new Date()
-      const expiry = new Date(purchaseDate)
-      expiry.setDate(expiry.getDate() + ticket.durationDays)
-
-      // If same-type ticket is still active, extend from its current expiry
-      let finalExpiry = expiry
-      const sameTypeActive = existingTickets.find(
-        (t: any) => t.type === ticket.type && !t.expired && t.expiryDate?.toDate() > purchaseDate
-      )
-      if (sameTypeActive) {
-        const currentExpiry: Date = sameTypeActive.expiryDate.toDate()
-        finalExpiry = new Date(currentExpiry)
-        finalExpiry.setDate(finalExpiry.getDate() + ticket.durationDays)
-      }
-
-      // Mark previous same-type tickets as expired in the array
-      const updatedTickets = existingTickets.map((t: any) =>
-        t.type === ticket.type ? { ...t, expired: true } : t
-      )
-
-      // New array entry: amount + purchaseDate + expired boolean
-      const newEntry = {
+      await initiatePaystackPayment({
+        email: userData.email || `${userId}@nomo.com`,
         amount: ticket.price,
-        type: ticket.type,
-        name: ticket.name,
-        purchaseDate: Timestamp.fromDate(purchaseDate),
-        expiryDate: Timestamp.fromDate(finalExpiry),
-        expired: false,
-      }
-
-      await triggerNotification(
-        userId,
-        `${ticket.name} Purchased! 🎫`,
-        `Your ${ticket.name} is now active. Enjoy ${ticket.duration} of full access on Nomopo!`,
-        "success"
-      )
-
-      await updateDoc(userRef, {
-        // Array history — holds every ticket purchase with amount/date/expired
-        tickets: [...updatedTickets, newEntry],
-        // Flat convenience fields for quick reads elsewhere in the app
-        hasActiveTicket: true,
-        ticketType: ticket.type,
-        ticketName: ticket.name,
-        ticketPurchaseDate: Timestamp.fromDate(purchaseDate),
-        ticketExpiryDate: Timestamp.fromDate(finalExpiry),
-        updatedAt: Timestamp.now(),
-      })
-
-      // Update local state immediately so UI reflects without re-fetch
-      setUserData((prev: any) => ({
-        ...prev,
-        tickets: [...updatedTickets, newEntry],
-        hasActiveTicket: true,
-        ticketType: ticket.type,
-        ticketName: ticket.name,
-        ticketExpiryDate: Timestamp.fromDate(finalExpiry),
-      }))
-
-      toast.success(`🎫 ${ticket.name} Activated!`)
-
-      setTimeout(() => {
-        const path = freshData?.isDriver
-          ? `/user/driver-profile/${userId}`
-          : `/user/profile/${userId}`
-        router.push(`${path}?ticketSuccess=true`)
-      }, 2000)
+        metadata: {
+          userId,
+          type: 'ticket',
+          ticketType: ticket.type,
+          ticketName: ticket.name
+        },
+        onSuccess: (response: any) => {
+          setProcessing(false);
+          setShowOverlay(false);
+          setShowSuccess(true);
+          toast.success("Ticket purchased! Activating...");
+        },
+        onClose: () => {
+          setProcessing(false);
+        }
+      });
     } catch (error) {
       console.error("Ticket Purchase Error:", error)
       toast.error("Purchase failed. Please try again.")
-    } finally {
       setProcessing(false)
-      setShowOverlay(false)
     }
   }
 
@@ -604,6 +555,17 @@ export default function TicketPage() {
           </div>
         </div>
       </div>
+
+      <SuccessModal
+        isOpen={showSuccess}
+        onClose={() => {
+          setShowSuccess(false);
+          const path = userData?.isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`
+          router.push(path);
+        }}
+        title="Ticket Activated"
+        message={`Success! Your ${selectedTicket?.name} has been activated. You now have full access to the platform.`}
+      />
 
       <style jsx>{`
         @keyframes scaleIn {

@@ -812,6 +812,48 @@ export default function ViewRequests({
     }
   };
 
+  const handleMarkAsContacted = async (driverId: string, driverName: string, vehicleInfo: string) => {
+    if (!userId) {
+      toast.error("Please sign in to save drivers");
+      return;
+    }
+
+    try {
+      const userRef = doc(db, "users", userId);
+      
+      const isAlreadyContacted = (userData.contactedDrivers || []).some(
+        (c: any) => c.driverId === driverId
+      );
+
+      if (isAlreadyContacted) {
+        const updatedList = (userData.contactedDrivers || []).filter(
+          (c: any) => c.driverId !== driverId
+        );
+        await updateDoc(userRef, {
+          contactedDrivers: updatedList
+        });
+        toast.success("Driver removed from your contacted list.");
+      } else {
+        const now = Timestamp.now();
+        const contactedEntry = {
+          driverId,
+          driverName,
+          vehicleName: vehicleInfo,
+          contactedAt: now,
+          type: "car_hire_bid_contact"
+        };
+
+        await updateDoc(userRef, {
+          contactedDrivers: arrayUnion(contactedEntry)
+        });
+        toast.success("Driver added to your contacted list in your dashboard.");
+      }
+    } catch (error) {
+      console.error("Error toggling contacted status:", error);
+      toast.error("Failed to update contacted status");
+    }
+  };
+
   const handleEditRequest = (request: BookingRequestType) => {
     if (userId !== request.userId) {
       toast.error("You can only edit your own requests");
@@ -1200,6 +1242,8 @@ export default function ViewRequests({
           onChatDriver={handleChatDriver}
           onViewVehiclePreview={(vehicle) => setShowVehiclePreview({ show: true, vehicle })}
           onFlagDriver={(driver) => setFlagOverlay({ show: true, targetUser: { ...driver, type: "driver" } })}
+          onMarkContacted={handleMarkAsContacted}
+          contactedDriverIds={(userData.contactedDrivers || []).map((c: any) => c.driverId)}
         />
       )}
 

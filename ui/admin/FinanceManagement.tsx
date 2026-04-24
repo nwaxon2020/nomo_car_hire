@@ -125,8 +125,15 @@ export default function FinanceManagement() {
 
     // Only compare relevant fields, ignore metadata like lastUpdated
     const isVipDifferent = JSON.stringify(currentData.vip) !== JSON.stringify(serverData.vip);
-    const isTicketsDifferent = JSON.stringify(currentData.tickets) !== JSON.stringify(serverData.tickets);
-    const isNewDriverDifferent = JSON.stringify(currentData.newDriver) !== JSON.stringify(serverData.newDriver);
+    
+    // Safely compare tickets without ordering issues
+    const isTicketsDifferent = serverData.tickets ? (Object.keys(currentData.tickets) as Array<keyof typeof currentData.tickets>).some(k => 
+      currentData.tickets[k]?.price !== (serverData.tickets as any)[k]?.price ||
+      currentData.tickets[k]?.durationDays !== (serverData.tickets as any)[k]?.durationDays ||
+      currentData.tickets[k]?.warningHours !== (serverData.tickets as any)[k]?.warningHours
+    ) : true;
+    
+    const isNewDriverDifferent = currentData.newDriver.freeTrialDays !== serverData.newDriver?.freeTrialDays || currentData.newDriver.warningDays !== serverData.newDriver?.warningDays;
     const isTicketCollectDifferent = startTicketCollect !== serverData.startTicketCollect;
     const isTransportFeeDifferent = transportRegistrationFee !== (serverData.transportRegistrationFee || 20000);
     const isTransportDurationDifferent = transportRegistrationDuration !== (serverData.transportRegistrationDuration || 1);
@@ -141,7 +148,6 @@ export default function FinanceManagement() {
       setVipPrices({ ...serverData.vip.prices })
       setTickets(JSON.parse(JSON.stringify(serverData.tickets)))
       setNewDriverDays(serverData.newDriver?.freeTrialDays || 60)
-      setNewDriverWarningDays(serverData.newDriver?.freeTrialDays || 60)
       setNewDriverWarningDays(serverData.newDriver?.warningDays || 5)
       setStartTicketCollect(serverData.startTicketCollect || false)
       setTransportRegistrationFee(serverData.transportRegistrationFee || 20000)
@@ -382,7 +388,7 @@ export default function FinanceManagement() {
                   type="number"
                   value={transportRegistrationFee}
                   onChange={(e) => setTransportRegistrationFee(Number(e.target.value))}
-                  className="flex-1 bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-emerald-400/60 transition-all"
+                  className="w-full min-w-0 bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-lg focus:outline-none focus:border-emerald-400/60 transition-all"
                 />
               </div>
             </div>
@@ -395,7 +401,7 @@ export default function FinanceManagement() {
                   value={transportRegistrationDuration}
                   onChange={(e) => setTransportRegistrationDuration(Number(e.target.value))}
                   min={1}
-                  className="flex-1 bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-emerald-400/60 transition-all"
+                  className="w-full min-w-0 bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-lg focus:outline-none focus:border-emerald-400/60 transition-all"
                 />
               </div>
               <p className="text-[10px] text-slate-500 mt-2">Partners will remain active for {transportRegistrationDuration} year(s) after payment.</p>

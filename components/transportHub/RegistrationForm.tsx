@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
-import { doc, getDoc, setDoc, Timestamp, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import { FiX, FiCheckCircle, FiAlertCircle, FiCamera, FiGlobe, FiMail, FiPhone, FiMapPin, FiUser } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import LoadingRound from "@/components/re-useable-loading";
+import SuccessModal from "@/components/SuccessModal";
 
 interface RegistrationFormProps {
     onClose: () => void;
@@ -60,58 +61,64 @@ export default function RegistrationForm({ onClose, onSuccess, isRenewal = false
         setShowPayment(true);
     };
 
+    const [showSuccess, setShowSuccess] = useState(false);
+
+    useEffect(() => {
+        import("@/lib/paystack").then((m) => m.loadPaystackScript());
+    }, []);
+
     const handlePayment = async () => {
+        const user = auth.currentUser;
+        if (!user) {
+            toast.error("Please login to register a company");
+            return;
+        }
+
         setLoading(true);
         try {
-            const user = auth.currentUser;
-            if (!user) {
-                toast.error("Please login to register a company");
-                return;
-            }
-
-            const durationYears = adminConfig?.transportRegistrationDuration || 1;
-            const expiryDate = new Date();
-            expiryDate.setFullYear(expiryDate.getFullYear() + durationYears);
-
-            if (isRenewal && existingCompanyId) {
-                // Renewal logic: only update expiry and status
-                await updateDoc(doc(db, "transportCompanies", existingCompanyId), {
-                    expiryDate: Timestamp.fromDate(expiryDate),
-                    status: "approved",
-                    lastPaymentDate: Timestamp.now(),
-                    paymentAmount: registrationFee,
-                });
-                toast.success("Registration Renewed Successfully! 🎉");
-            } else {
-                // New registration logic
-                const companyId = `${user.uid}_${Date.now()}`;
-                const companyData = {
+            const { initiatePaystackPayment } = await import("@/lib/paystack");
+            
+            // For new registration, we'll generate a companyId now or let the webhook do it.
+            // But we need to pass a reference to the metadata so the webhook knows which company to update.
+            // Since the company doc doesn't exist yet for new registration, we'll create it with 'pending_payment' status.
+            
+            let companyId = existingCompanyId;
+            if (!isRenewal || !companyId) {
+                companyId = `${user.uid}_${Date.now()}`;
+                
+                // Create the pending doc first
+                await setDoc(doc(db, "transportCompanies", companyId), {
                     ...formData,
                     id: companyId,
                     ownerId: user.uid,
-                    status: "pending",
-                    registrationDate: Timestamp.now(),
-                    expiryDate: Timestamp.fromDate(expiryDate),
-                    paymentAmount: registrationFee,
-                    paymentStatus: "paid",
-                };
-
-                // Save company data
-                await setDoc(doc(db, "transportCompanies", companyId), companyData);
-
-                // Update user profile to mark them as a company owner
-                await updateDoc(doc(db, "users", user.uid), {
-                    hasCompany: true,
-                    ownedCompanies: arrayUnion(companyId)
+                    status: "pending_payment",
+                    paymentStatus: "unpaid",
+                    createdAt: serverTimestamp()
                 });
-                toast.success("Company Registered Successfully! 🎉");
             }
 
-            onSuccess();
+            await initiatePaystackPayment({
+                email: user.email || `${user.uid}@nomo.com`,
+                amount: registrationFee,
+                metadata: {
+                    userId: user.uid,
+                    type: 'hub',
+                    hubId: companyId,
+                    isRenewal
+                },
+                onSuccess: (response: any) => {
+                    setLoading(false);
+                    setShowPayment(false);
+                    setShowSuccess(true);
+                    toast.success("Payment successful! Processing registration...");
+                },
+                onClose: () => {
+                    setLoading(false);
+                }
+            });
         } catch (error) {
-            console.error("Registration error:", error);
-            toast.error(isRenewal ? "Failed to renew registration." : "Failed to register company.");
-        } finally {
+            console.error("Paystack Error:", error);
+            toast.error("Failed to initiate payment.");
             setLoading(false);
         }
     };
@@ -210,6 +217,16 @@ export default function RegistrationForm({ onClose, onSuccess, isRenewal = false
                     </div>
                 )}
             </motion.div>
+
+            <SuccessModal
+                isOpen={showSuccess}
+                onClose={() => {
+                    setShowSuccess(false);
+                    onSuccess();
+                }}
+                title="Registration Received"
+                message={isRenewal ? "Your registration has been renewed successfully! Your dashboard is now active." : "Payment received! Your company registration is now being processed. You can access your dashboard once approved."}
+            />
         </div>
     );
 }

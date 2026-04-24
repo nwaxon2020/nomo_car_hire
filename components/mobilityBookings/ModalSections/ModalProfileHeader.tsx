@@ -15,6 +15,7 @@ interface ModalProfileHeaderProps {
     onPhoneCall: (p: string) => void;
     onWhatsAppMessage: (d: any, v: any) => void;
     getDriverAddress: (d: any) => string;
+    onMarkContacted?: () => void;
 }
 
 export default function ModalProfileHeader({
@@ -24,7 +25,8 @@ export default function ModalProfileHeader({
     onSetPreChat,
     onPhoneCall,
     onWhatsAppMessage,
-    getDriverAddress
+    getDriverAddress,
+    onMarkContacted
 }: ModalProfileHeaderProps) {
     return (
         <div className="flex flex-col md:flex-row gap-6 mb-8">
@@ -120,6 +122,15 @@ export default function ModalProfileHeader({
                                 <FaWhatsapp className="text-4xl md:text-sm md:mr-2" /> <span className="hidden md:block">WhatsApp</span>
                             </button>
                         </div>
+                    )}
+
+                    {onMarkContacted && (
+                        <button
+                            onClick={onMarkContacted}
+                            className="py-3 text-emerald-700 font-bold border border-emerald-200 rounded-lg transition-all duration-300 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 uppercase tracking-widest text-[10px]"
+                        >
+                            📌 Mark as Contacted
+                        </button>
                     )}
                 </div>
             </div>

@@ -406,7 +406,7 @@ export default function DriverLocationToggle({
       {
         enableHighAccuracy: isVisible, // Only high accuracy when app is visible
         maximumAge: isVisible ? 0 : 10000,
-        timeout: isVisible ? 10000 : 30000
+        timeout: isVisible ? 30000 : 60000
       }
     );
 
@@ -498,8 +498,8 @@ export default function DriverLocationToggle({
 
       {/* SETTINGS OVERLAY - Same as original, no changes needed */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-0">
-          <div className="bg-slate-900 w-full max-w-lg rounded-t-xl md:rounded-xl border-t md:border border-emerald-500/20 shadow-2xl max-h-[95vh] overflow-y-auto">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-0">
+          <div className="bg-slate-900 w-full max-w-lg md:rounded-xl border-t md:border border-emerald-500/20 shadow-2xl max-h-[95vh] overflow-y-auto">
             <div className="relative p-4 md:p-6 space-y-5">
               <button onClick={() => setSettingsOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><FaTimes /></button>
 

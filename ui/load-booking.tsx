@@ -59,12 +59,12 @@ function TrustBadge({ score }: { score: number }) {
     score >= 80
       ? "bg-green-500"
       : score >= 60
-      ? "bg-yellow-500"
-      : score >= 40
-      ? "bg-orange-500"
-      : score >= 20
-      ? "bg-red-500"
-      : "bg-red-800";
+        ? "bg-yellow-500"
+        : score >= 40
+          ? "bg-orange-500"
+          : score >= 20
+            ? "bg-red-500"
+            : "bg-red-800";
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${color} text-white text-[10px] font-black shadow-lg`}>
@@ -119,35 +119,35 @@ function MaintenanceScreen() {
         {/* Background glow */}
         <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-600/10 blur-[100px] rounded-full" />
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-600/10 blur-[100px] rounded-full" />
-        
+
         <div className="w-24 h-24 bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-purple-900/40 border border-white/10 rotate-3">
           <FaTools className="text-white animate-pulse" size={36} />
         </div>
-        
+
         <h2 className="text-white font-black text-2xl uppercase tracking-tighter mb-3 leading-tight">
           System Maintenance
         </h2>
-        
+
         <div className="space-y-4 relative z-10">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest leading-relaxed">
             Our load booking servers are currently undergoing weekly optimization.
           </p>
-          
+
           <div className="bg-gray-800/50 border border-white/5 rounded-2xl p-5 flex items-center justify-center gap-3">
             <FaClock className="text-purple-400" size={16} />
             <p className="text-white font-black text-sm uppercase tracking-tight">
               Re-opening by 6:00 PM Today
             </p>
           </div>
-          
+
           <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
             Thank you for your patience as we work to improve your transport experience.
           </p>
         </div>
-        
+
         {/* Bottom bar */}
         <div className="mt-8 h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-          <motion.div 
+          <motion.div
             initial={{ width: "0%" }}
             animate={{ width: "100%" }}
             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
@@ -396,8 +396,8 @@ export default function LoadBookingUi() {
       <div className="min-h-screen bg-[#0B0B12] pb-20">
         {/* ── Page Header ── */}
         <div className="bg-gradient-to-b from-gray-900 to-[#0B0B12] border-b border-white/5 px-4 pt-6 pb-4 sticky top-0 z-30">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col w-full md:flex-row items-center justify-start gap-2 md:justify-between">
+            <div className="w-full md:w-auto flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-900/30">
                 {isDriver ? <FaTruck className="text-white" size={16} /> : <FaUsers className="text-white" size={16} />}
               </div>
@@ -411,14 +411,13 @@ export default function LoadBookingUi() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex justify-start w-full md:w-auto items-center gap-2">
               {/* Role badge */}
               <span
-                className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${
-                  isDriver
-                    ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                    : "bg-purple-500/20 text-purple-400 border-purple-500/30"
-                }`}
+                className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${isDriver
+                  ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                  : "bg-purple-500/20 text-purple-400 border-purple-500/30"
+                  }`}
               >
                 {isDriver ? "Driver" : "Passenger"}
               </span>
@@ -438,17 +437,15 @@ export default function LoadBookingUi() {
             <div className="flex bg-gray-900 border border-white/10 rounded-xl p-1 mb-4 max-w-sm">
               <button
                 onClick={() => setViewMode("driver")}
-                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
-                  viewMode === "driver" ? "bg-amber-500 text-black shadow-md" : "text-gray-400 hover:text-white"
-                }`}
+                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === "driver" ? "bg-amber-500 text-black shadow-md" : "text-gray-400 hover:text-white"
+                  }`}
               >
                 Create Trip
               </button>
               <button
                 onClick={() => setViewMode("customer")}
-                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
-                  viewMode === "customer" ? "bg-purple-500 text-white shadow-md" : "text-gray-400 hover:text-white"
-                }`}
+                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === "customer" ? "bg-purple-500 text-white shadow-md" : "text-gray-400 hover:text-white"
+                  }`}
               >
                 Book a Seat
               </button>

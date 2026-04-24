@@ -20,6 +20,8 @@ interface DriverHeaderProps {
     whatsappPreferred: boolean;
     onToggleWhatsapp: () => void;
     vipDetails: any;
+    onMarkContacted?: () => void;
+    isContacted?: boolean;
 }
 
 export const DriverHeader: React.FC<DriverHeaderProps> = ({
@@ -37,7 +39,9 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
     onBuyTicket,
     whatsappPreferred,
     onToggleWhatsapp,
-    vipDetails
+    vipDetails,
+    onMarkContacted,
+    isContacted
 }) => {
     // Vehicle limit shown in stats
     const maxVehicles = getVehicleLimit(vipLevel);
@@ -219,6 +223,18 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
                     >
                         🎮 Play Game
                     </button>
+
+                    {onMarkContacted && (
+                        <button
+                            onClick={onMarkContacted}
+                            className={`col-span-2 md:col-span-1 px-3 md:px-6 py-3 rounded-md md:rounded-xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-sm ${isContacted
+                                ? 'bg-amber-500 text-black border-amber-600 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                                : 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200'
+                                }`}
+                        >
+                            {isContacted ? '📌 Contacted' : '📍 Mark Contact'}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

@@ -8,7 +8,7 @@ import {
   FaFlag, FaCheckCircle, FaBell, FaStop,
 } from "react-icons/fa";
 import {
-  collection, onSnapshot, doc, updateDoc, serverTimestamp
+  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, Timestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { LoadBooking, LoadSeat, getSeatLayout } from "./types";
@@ -46,6 +46,9 @@ export default function DriverActiveSession({
   const [flagTarget, setFlagTarget] = useState<{ seat: LoadSeat } | null>(null);
   const [endingSession, setEndingSession] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [tripStarted, setTripStarted] = useState(booking.status === "departed");
+  const [arriving, setArriving] = useState(false);
+  const [tripIds, setTripIds] = useState<string[]>([]);
 
   const { isLoaded: mapLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
@@ -68,29 +71,125 @@ export default function DriverActiveSession({
     return () => unsub();
   }, [booking.id]);
 
-  const handleEndSession = async () => {
+  // Start Trip: Creates ACTIVE trips for all passengers, marks booking as departed
+  const handleStartTrip = async () => {
     setEndingSession(true);
     try {
+      // 1. Update Load Booking status to departed
       await updateDoc(doc(db, "loadBookings", booking.id), {
         status: "departed",
+        departedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      toast.success("Session ended. Have a safe trip!");
-      onEndSession();
-    } catch {
-      toast.error("Failed to end session");
+
+      // 2. Create ACTIVE trip documents for each booked seat (not completed yet)
+      const bookedSeatsList = seats.filter(s => s.status === "booked" && s.customerId);
+      const createdTripIds: string[] = [];
+
+      for (const seat of bookedSeatsList) {
+        const tripData = {
+          driverId,
+          driverName,
+          vehicleId: booking.vehicleId || "",
+          customerId: seat.customerId,
+          customerName: seat.customerName || "Customer",
+          pickupLocation: booking.meetingPoint,
+          destination: booking.destination,
+          fare: booking.fare,
+          status: 'active', // Active until driver arrives at destination
+          startTime: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          type: 'load_booking',
+          loadBookingId: booking.id,
+        };
+        const tripDoc = await addDoc(collection(db, 'trips'), tripData);
+        createdTripIds.push(tripDoc.id);
+      }
+
+      setTripIds(createdTripIds);
+
+      // 3. Update driver's customersCarried count
+      const driverRef = doc(db, 'users', driverId);
+      const driverDoc = await getDoc(driverRef);
+      const driverData = driverDoc.data() || {};
+      const currentCustomers = driverData.customersCarried || [];
+      
+      const newTripEntries = bookedSeatsList.map(seat => `${seat.customerId}_${booking.id}`);
+      const updatedCustomers = [...currentCustomers, ...newTripEntries];
+
+      await updateDoc(driverRef, {
+        customersCarried: updatedCustomers,
+        updatedAt: serverTimestamp()
+      });
+
+      setTripStarted(true);
+      toast.success("Trip started! Navigate to destination.");
+    } catch (error) {
+      console.error("Error starting trip:", error);
+      toast.error("Failed to start trip");
     } finally {
       setEndingSession(false);
       setShowEndConfirm(false);
     }
   };
 
-  const mapCenter = {
-    lat: booking.meetingPointLat || 6.5244,
-    lng: booking.meetingPointLng || 3.3792,
+  // Arrive at Destination: Completes ALL active trips, updates trip history for ALL passengers
+  const handleArriveDestination = async () => {
+    setArriving(true);
+    try {
+      const endTime = serverTimestamp();
+
+      // If we don't have tripIds from this session, query them from Firestore
+      let idsToComplete = tripIds;
+      if (idsToComplete.length === 0) {
+        const { query, where, getDocs } = await import("firebase/firestore");
+        const tripsRef = collection(db, 'trips');
+        const q = query(tripsRef,
+          where('loadBookingId', '==', booking.id),
+          where('status', '==', 'active')
+        );
+        const snap = await getDocs(q);
+        idsToComplete = snap.docs.map(d => d.id);
+      }
+
+      // Mark ALL trips as completed (this triggers trip history for each passenger)
+      for (const tripId of idsToComplete) {
+        await updateDoc(doc(db, 'trips', tripId), {
+          status: 'completed',
+          endTime,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Update load booking as completed
+      await updateDoc(doc(db, "loadBookings", booking.id), {
+        status: "completed",
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      toast.success("Trip completed! All passengers' trip history updated.");
+      onEndSession();
+    } catch (error) {
+      console.error("Error completing trip:", error);
+      toast.error("Failed to complete trip");
+    } finally {
+      setArriving(false);
+    }
   };
 
-  const hasValidCoords = (booking.meetingPointLat || 0) !== 0 && (booking.meetingPointLng || 0) !== 0;
+
+  const mapCenter = (tripStarted && booking.destinationLat && booking.destinationLng) 
+    ? { lat: booking.destinationLat, lng: booking.destinationLng }
+    : {
+        lat: booking.meetingPointLat || 6.5244,
+        lng: booking.meetingPointLng || 3.3792,
+      };
+
+  const hasValidCoords = tripStarted 
+    ? (booking.destinationLat || 0) !== 0 && (booking.destinationLng || 0) !== 0
+    : (booking.meetingPointLat || 0) !== 0 && (booking.meetingPointLng || 0) !== 0;
 
   const formatTime = (t: string) => {
     if (!t) return "—";
@@ -175,10 +274,14 @@ export default function DriverActiveSession({
       {/* Meeting Point Map */}
       <div className="bg-gray-800/50 border border-white/10 rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
-          <FaMapMarkerAlt className="text-green-400" size={12} />
+          <FaMapMarkerAlt className={tripStarted ? "text-red-400" : "text-green-400"} size={12} />
           <div className="flex-1">
-            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Your Meeting Point</p>
-            <p className="text-white text-[11px] font-bold leading-tight mt-0.5">{booking.meetingPoint}</p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+              {tripStarted ? "Destination Point" : "Your Meeting Point"}
+            </p>
+            <p className="text-white text-[11px] font-bold leading-tight mt-0.5">
+              {tripStarted ? booking.destination : booking.meetingPoint}
+            </p>
           </div>
         </div>
         <div className="h-44 relative">
@@ -205,7 +308,7 @@ export default function DriverActiveSession({
                   url: "data:image/svg+xml;base64," + btoa(`
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
                       <ellipse cx="16" cy="36" rx="8" ry="3" fill="rgba(0,0,0,0.3)"/>
-                      <path d="M16 0C9.4 0 4 5.4 4 12c0 9 12 24 12 24s12-15 12-24C28 5.4 22.6 0 16 0z" fill="#f59e0b"/>
+                      <path d="M16 0C9.4 0 4 5.4 4 12c0 9 12 24 12 24s12-15 12-24C28 5.4 22.6 0 16 0z" fill="${tripStarted ? "#ef4444" : "#f59e0b"}"/>
                       <circle cx="16" cy="12" r="5" fill="white"/>
                     </svg>
                   `),
@@ -321,35 +424,49 @@ export default function DriverActiveSession({
         )}
       </div>
 
-      {/* End Session */}
+      {/* Start/Arrive Button Section */}
       <div className="pt-2">
-        {showEndConfirm ? (
-          <div className="bg-red-600/10 border border-red-500/30 rounded-xl p-4">
-            <p className="text-red-400 font-black text-[11px] uppercase tracking-widest mb-3 text-center">
-              End session and mark as departed?
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowEndConfirm(false)}
-                className="flex-1 py-2.5 bg-gray-800 border border-gray-700 text-gray-400 rounded-xl font-black uppercase tracking-widest text-[10px]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEndSession}
-                disabled={endingSession}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-1.5 transition-all"
-              >
-                {endingSession ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><FaStop size={9} /> End</>}
-              </button>
+        {!tripStarted ? (
+          showEndConfirm ? (
+            <div className="bg-amber-600/10 border border-amber-500/30 rounded-xl p-4">
+              <p className="text-amber-400 font-black text-[11px] uppercase tracking-widest mb-3 text-center">
+                Ready to depart with {bookedSeats} passengers?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowEndConfirm(false)}
+                  className="flex-1 py-2.5 bg-gray-800 border border-gray-700 text-gray-400 rounded-xl font-black uppercase tracking-widest text-[10px]"
+                >
+                  Wait
+                </button>
+                <button
+                  onClick={handleStartTrip}
+                  disabled={endingSession}
+                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-1.5"
+                >
+                  {endingSession ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Start Trip"}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <button
+              onClick={() => setShowEndConfirm(true)}
+              className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
+            >
+              <FaCheckCircle size={9} /> Start Trip / Departed
+            </button>
+          )
         ) : (
           <button
-            onClick={() => setShowEndConfirm(true)}
-            className="w-full py-3 bg-gray-800 border border-red-500/30 text-red-400 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-red-500/10 transition-all flex items-center justify-center gap-2"
+            onClick={handleArriveDestination}
+            disabled={arriving}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
           >
-            <FaStop size={9} /> End Session / Departed
+            {arriving ? (
+              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <><FaFlag size={9} /> I Have Arrived / End Trip</>
+            )}
           </button>
         )}
       </div>

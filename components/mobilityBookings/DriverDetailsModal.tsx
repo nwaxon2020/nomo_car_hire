@@ -39,6 +39,7 @@ interface DriverDetailsModalProps {
     getDriverAddress: (d: any) => string;
     formatDate: (d: any) => string;
     onSetVehicle: (v: VehicleLog) => void;
+    onMarkContacted?: () => void;
 }
 
 export default function DriverDetailsModal(props: DriverDetailsModalProps) {
@@ -94,6 +95,7 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                         onPhoneCall={props.onPhoneCall}
                         onWhatsAppMessage={props.onWhatsAppMessage}
                         getDriverAddress={props.getDriverAddress}
+                        onMarkContacted={props.onMarkContacted}
                     />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

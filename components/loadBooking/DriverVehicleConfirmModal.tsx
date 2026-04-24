@@ -82,7 +82,7 @@ export default function DriverVehicleConfirmModal({
           <div className="bg-gray-800/50 border border-white/5 rounded-xl p-3 mb-5 grid grid-cols-2 gap-2 text-[10px]">
             <div>
               <p className="text-gray-500 font-bold uppercase tracking-wider">Passenger Seats</p>
-              <p className="text-white font-black mt-0.5">{vehicle.passengers - 1} seats</p>
+              <p className="text-white font-black mt-0.5">{vehicle.passengers} seats</p>
             </div>
             <div>
               <p className="text-gray-500 font-bold uppercase tracking-wider">Plate No.</p>

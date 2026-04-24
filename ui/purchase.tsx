@@ -8,6 +8,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { toast } from "react-hot-toast"
 import LoadingRound from "@/components/re-useable-loading"
 import { triggerNotification } from "@/lib/notifications"
+import SuccessModal from "@/components/SuccessModal"
 
 const VIP_CONFIG = {
   levels: [
@@ -127,87 +128,43 @@ export default function PurchasePage({ userIdProp }: { userIdProp?: string }) {
     return activeEntry.expiryDate.toDate().getTime() - new Date().getTime()
   }
 
+  const [showSuccess, setShowSuccess] = useState(false)
+
+  useEffect(() => {
+    import("@/lib/paystack").then((m) => m.loadPaystackScript());
+  }, []);
+
   const handleFinalPurchase = async () => {
-    if (!selectedLevelData || processing || !userId) return
+    if (!selectedLevelData || processing || !userId || !userData) return
     setProcessing(true)
 
     try {
-      const userRef = doc(db, "users", userId)
-      const nowTime = new Date()
-      const expiryDate = new Date(nowTime)
-      expiryDate.setDate(expiryDate.getDate() + vipValidityDays)
-
-      // Calculate expiry extension
-      let finalExpiry = expiryDate
-      const activeEntry = getActiveVipEntry()
-      if (activeEntry && activeEntry.expiryDate?.toDate() > nowTime) {
-        const currentExpiry = activeEntry.expiryDate.toDate()
-        currentExpiry.setDate(currentExpiry.getDate() + vipValidityDays)
-        finalExpiry = currentExpiry
-      }
-
-      // Get existing history
-      const existingHistory: any[] = userData?.vipHistory || []
-
-      // Mark previous entries of same level as expired (but keep history)
-      const updatedHistory = existingHistory.map((entry: any) =>
-        entry.level === selectedLevelData.level ? { ...entry, expired: true } : entry
-      )
-
-      // Create new VIP entry
-      const newEntry = {
-        level: selectedLevelData.level,
-        name: selectedLevelData.name,
-        price: selectedLevelData.price,
-        purchaseDate: Timestamp.fromDate(nowTime),
-        expiryDate: Timestamp.fromDate(finalExpiry),
-        expired: false,
-        stars: selectedLevelData.stars,
-        color: selectedLevelData.color,
-      }
-
-      await triggerNotification(
-        userId,
-        "VIP Upgrade Successful 🎉",
-        `Congratulations! Your account has been upgraded to ${selectedLevelData.name}. Your benefits are now active for ${vipValidityDays} days.`,
-        "success"
-      )
-
-      await updateDoc(userRef, {
-        // Array history - stores every VIP purchase
-        vipHistory: [...updatedHistory, newEntry],
-        // Flat convenience fields for quick reads
-        vip: true,
-        vipLevel: selectedLevelData.level,
-        purchasedVipLevel: selectedLevelData.level,
-        vipPurchaseDate: Timestamp.fromDate(nowTime),
-        vipExpiryDate: Timestamp.fromDate(finalExpiry),
-        updatedAt: Timestamp.now()
-      })
-
-      // Update local state
-      setUserData((prev: any) => ({
-        ...prev,
-        vipHistory: [...updatedHistory, newEntry],
-        vip: true,
-        vipLevel: selectedLevelData.level,
-        purchasedVipLevel: selectedLevelData.level,
-        vipExpiryDate: Timestamp.fromDate(finalExpiry),
-      }))
-
-      toast.success(`🎉 ${selectedLevelData.name} Activated!`)
-
-      setTimeout(() => {
-        const path = userData?.isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`
-        router.push(`${path}?purchaseSuccess=true`)
-      }, 2000)
-
+      const { initiatePaystackPayment } = await import("@/lib/paystack");
+      
+      await initiatePaystackPayment({
+        email: userData.email || `${userId}@nomo.com`,
+        amount: selectedLevelData.price,
+        metadata: {
+          userId,
+          type: 'vip',
+          vipLevel: selectedLevelData.level,
+          vipName: selectedLevelData.name
+        },
+        onSuccess: (response: any) => {
+          setProcessing(false);
+          setShowOverlay(false);
+          setShowSuccess(true);
+          // The webhook will handle the database update reliably
+          toast.success("Payment successful! Updating your status...");
+        },
+        onClose: () => {
+          setProcessing(false);
+        }
+      });
     } catch (error) {
-      console.error("Purchase Error:", error)
-      toast.error("Purchase failed. Please try again.")
-    } finally {
+      console.error("Paystack Error:", error)
+      toast.error("Could not initiate payment. Please try again.")
       setProcessing(false)
-      setShowOverlay(false)
     }
   }
 
@@ -426,6 +383,17 @@ export default function PurchasePage({ userIdProp }: { userIdProp?: string }) {
           })}
         </div>
       </div>
+
+      <SuccessModal
+        isOpen={showSuccess}
+        onClose={() => {
+          setShowSuccess(false);
+          const path = userData?.isDriver ? `/user/driver-profile/${userId}` : `/user/profile/${userId}`
+          router.push(path);
+        }}
+        title="Purchase Successful"
+        message={`Congratulations! Your ${selectedLevelData?.name} is now active. Your account has been upgraded successfully.`}
+      />
 
       <style jsx>{`
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }

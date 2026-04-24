@@ -17,6 +17,8 @@ interface OfferCardProps {
   onChatDriver: (otherUserId: string, otherUserName: string, request?: BookingRequestType, driverPhone?: string) => void;
   onViewVehiclePreview: (vehicle: any) => void;
   onFlagDriver?: (driver: { uid: string, fullName: string, email?: string, phoneNumber?: string }) => void;
+  onMarkContacted?: (driverId: string, driverName: string, vehicleInfo: string) => void;
+  contactedDriverIds?: string[];
 }
 
 export default function OfferCard({
@@ -31,7 +33,9 @@ export default function OfferCard({
   onWhatsAppContact,
   onChatDriver,
   onViewVehiclePreview,
-  onFlagDriver
+  onFlagDriver,
+  onMarkContacted,
+  contactedDriverIds = []
 }: OfferCardProps) {
   const isRequestOwner = request.userId === userId;
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ offerIndex: number, driverName: string } | null>(null);
@@ -232,6 +236,17 @@ export default function OfferCard({
                               >
                                 <AlertCircle className="w-3.5 h-3.5" />
                                 Flag Driver
+                              </button>
+                            )}
+                            {onMarkContacted && (
+                              <button
+                                onClick={() => onMarkContacted(offer.driverId, offer.driverName, offer.carMake || "Car")}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${contactedDriverIds.includes(offer.driverId)
+                                  ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                                  }`}
+                              >
+                                {contactedDriverIds.includes(offer.driverId) ? '📌 Contacted' : '📍 Mark Contact'}
                               </button>
                             )}
                           </>

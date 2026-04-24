@@ -2,12 +2,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db, storage } from "@/lib/firebaseConfig";
+import { db, storage, auth } from "@/lib/firebaseConfig";
 import {
   doc, collection, addDoc, updateDoc, deleteDoc, query, where, increment,
   onSnapshot, getDoc, Timestamp, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { onAuthStateChanged } from "firebase/auth";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 
@@ -283,6 +284,8 @@ export default function DriverProfilePage() {
   const [freerideConfig, setFreerideConfig] = useState<any>({
     driverThreshold: 20
   });
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
 
   const vipDetails = calculateVIPDetails(referralCount, purchasedVipLevel, freerideConfig.driverThreshold);
   const averageRating = ratings.length > 0
@@ -336,7 +339,8 @@ export default function DriverProfilePage() {
       for (const tripDoc of tripsSnapshot.docs) {
         const tripData = tripDoc.data();
 
-        if (tripData.status === "completed" || tripData.status === "cancelled") {
+        // Include active, departed, and completed trips in history
+        if (tripData.status === "completed" || tripData.status === "active" || tripData.status === "departed" || tripData.status === "cancelled") {
           const driverDoc = await getDoc(doc(db, "users", tripData.driverId));
           const driverData = driverDoc.data();
 
@@ -397,6 +401,53 @@ export default function DriverProfilePage() {
       console.error("Error loading trip history:", error);
     } finally {
       setLoadingTripHistory(false);
+    }
+  };
+
+  const handleMarkAsContacted = async () => {
+    if (!currentUser) {
+      toast.error("Please sign in to save drivers");
+      return;
+    }
+
+    if (currentUser.uid === driverId) {
+      toast.error("You cannot add yourself to your contacted list");
+      return;
+    }
+
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      
+      const isAlreadyContacted = (currentUserData?.contactedDrivers || []).some(
+        (c: any) => c.driverId === driverId
+      );
+
+      if (isAlreadyContacted) {
+        const updatedList = (currentUserData.contactedDrivers || []).filter(
+          (c: any) => c.driverId !== driverId
+        );
+        await updateDoc(userRef, {
+          contactedDrivers: updatedList
+        });
+        toast.success("Driver removed from your contacted list.");
+      } else {
+        const now = Timestamp.now();
+        const contactedEntry = {
+          driverId: driverId,
+          driverName: driverData?.fullName || "Professional Driver",
+          profileImage: driverData?.profileImage || "",
+          contactedAt: now,
+          type: "profile_contact"
+        };
+
+        await updateDoc(userRef, {
+          contactedDrivers: arrayUnion(contactedEntry)
+        });
+        toast.success("Driver added to your contacted list in your dashboard.");
+      }
+    } catch (error) {
+      console.error("Error toggling contacted status:", error);
+      toast.error("Failed to update contacted status");
     }
   };
 
@@ -571,19 +622,76 @@ export default function DriverProfilePage() {
   };
 
   const handleVIPPurchase = async (level: number) => {
+    if (!currentUser) {
+      toast.error("Please sign in to upgrade");
+      return;
+    }
+
     try {
-      router.push(`/user/purchase-vip/${driverId}`);
-    } catch (err) {
-      console.error("Error redirecting to purchase:", err);
-      toast.error("Failed to redirect to purchase page");
+      setLoading(true);
+      const { initiatePaystackPayment } = await import("@/lib/paystack");
+      
+      const levelInfo = VIP_CONFIG.levels.find(l => l.level === level) || VIP_CONFIG.levels[0];
+      const price = levelInfo.price;
+
+      await initiatePaystackPayment({
+        email: currentUser.email || `${currentUser.uid}@nomo.com`,
+        amount: price,
+        metadata: {
+          userId: currentUser.uid,
+          type: 'vip',
+          vipLevel: level
+        },
+        onSuccess: (response: any) => {
+          setLoading(false);
+          toast.success(`Payment successful! Your ${levelInfo.name} status will be updated shortly.`);
+          setShowVIPModal(false);
+        },
+        onClose: () => {
+          setLoading(false);
+          console.log("Payment window closed");
+        }
+      });
+    } catch (error) {
+      console.error("VIP Purchase Error:", error);
+      toast.error("Failed to initiate payment");
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    import("@/lib/paystack").then(m => m.loadPaystackScript());
+  }, []);
 
   const handleRateTrip = (driverId: string, vehicleId: string) => {
     router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
   };
 
   // Fetch Data Effect
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setCurrentUserData(null);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
+      if (snap.exists()) {
+        setCurrentUserData(snap.data());
+      }
+    });
+    return () => unsub();
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadTripHistory();
+  }, [driverId]);
+
   useEffect(() => {
     if (!driverId) { setLoading(false); return; }
 
@@ -616,6 +724,7 @@ export default function DriverProfilePage() {
             const storedVipLevel = getStoredVipLevel(driverId);
             const calculatedVIP = calculateVIPDetails(referralCount, purchasedVipLevel, configSnap.exists() ? configSnap.data().driverThreshold : 20);
 
+            // Only update Firestore if values actually changed AND we're not already in an update cycle
             if (calculatedVIP.vipLevel !== vipLevel || calculatedVIP.prestigeLevel !== prestigeLevel) {
               vipLevel = calculatedVIP.vipLevel;
               prestigeLevel = calculatedVIP.prestigeLevel;
@@ -628,15 +737,20 @@ export default function DriverProfilePage() {
                 });
               }
 
-              if (vipLevel > 0 || (vipLevel === 0 && data.vipLevel !== undefined)) {
-                try {
-                  await updateDoc(userRef, {
-                    vipLevel: vipLevel,
-                    prestigeLevel: prestigeLevel,
-                    updatedAt: Timestamp.now()
-                  });
-                } catch (updateError) {
-                  console.error("Error updating VIP levels:", updateError);
+              // Guard: Only write if Firestore values differ from calculated values
+              const firestoreVipLevel = data.vipLevel ?? 0;
+              const firestorePrestigeLevel = data.prestigeLevel ?? 0;
+              if (firestoreVipLevel !== vipLevel || firestorePrestigeLevel !== prestigeLevel) {
+                if (vipLevel > 0 || (vipLevel === 0 && data.vipLevel !== undefined)) {
+                  try {
+                    await updateDoc(userRef, {
+                      vipLevel: vipLevel,
+                      prestigeLevel: prestigeLevel,
+                      updatedAt: Timestamp.now()
+                    });
+                  } catch (updateError) {
+                    console.error("Error updating VIP levels:", updateError);
+                  }
                 }
               }
             }
@@ -683,7 +797,7 @@ export default function DriverProfilePage() {
               setContactedDrivers(data.contactedDrivers);
             }
 
-            loadTripHistory();
+            // Removed loadTripHistory() from here to prevent infinite/frequent refresh loop
           }
         });
 
@@ -777,6 +891,8 @@ export default function DriverProfilePage() {
         whatsappPreferred={whatsappPreferred}
         onToggleWhatsapp={toggleWhatsappPreference}
         vipDetails={vipDetails}
+        onMarkContacted={handleMarkAsContacted}
+        isContacted={(currentUserData?.contactedDrivers || []).some((c: any) => c.driverId === driverId)}
       />
 
       {/* Vehicle Form Modal */}

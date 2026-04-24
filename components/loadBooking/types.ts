@@ -18,6 +18,8 @@ export interface LoadBooking {
   meetingPoint: string;
   meetingPointLat?: number;
   meetingPointLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
   fare: number;
   departureTime: string; // "HH:MM" 24h format
   status: "active" | "departed" | "cancelled";
@@ -46,7 +48,7 @@ export interface EligibleVehicle {
   carModel: string;
   carType: string;
   exteriorColor: string;
-  passengers: number; // total seats INCLUDING driver
+  passengers: number; // number of passenger seats (excluding driver)
   plateNumber: string;
   images?: {
     front?: string;
@@ -74,20 +76,20 @@ export const KEKE_SEAT_LAYOUT = {
 /**
  * Determines if a vehicle is eligible for Load Booking.
  * - Keke (tricycle): always eligible
- * - Others: must have 4–6 passenger seats (passengers - 1)
- *   i.e. total seats (incl. driver) must be 5–7
+ * - Others: must have 4–8 passenger seats
  */
 export const isVehicleEligible = (passengers: number, carType: string): boolean => {
   const type = carType?.toLowerCase();
   if (type === "keke") return true;
-  const passengerSeats = passengers - 1;
-  return passengerSeats >= 4 && passengerSeats <= 6;
+  const passengerSeats = Number(passengers);
+  return passengerSeats >= 4 && passengerSeats <= 8;
 };
 
 /** Returns how many passenger seats a vehicle has */
 export const getPassengerSeats = (passengers: number, carType: string): number => {
-  if (carType?.toLowerCase() === "keke") return Math.min(passengers, 3);
-  return Math.max(0, passengers - 1);
+  const p = Number(passengers);
+  if (carType?.toLowerCase() === "keke") return Math.min(p, 3);
+  return Math.max(0, p);
 };
 
 /** Returns the seat layout rows for a vehicle */
@@ -105,8 +107,14 @@ export const getSeatLayout = (
   if (passengerSeats === 5) {
     return { front: [1], middle: [2, 3, 4], back: [5] };
   }
-  // 6 seats
-  return { front: [1], middle: [2, 3, 4], back: [5, 6] };
+  if (passengerSeats === 6) {
+    return { front: [1], middle: [2, 3, 4], back: [5, 6] };
+  }
+  if (passengerSeats === 7) {
+    return { front: [1], middle: [2, 3, 4], back: [5, 6, 7] };
+  }
+  // 8 seats
+  return { front: [1], middle: [2, 3, 4], back: [5, 6, 7, 8] };
 };
 
 /** Returns today as YYYY-MM-DD string */
