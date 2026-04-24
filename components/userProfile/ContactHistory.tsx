@@ -2,19 +2,30 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { formatDate, formatTime } from "@/components/userProfile/dateUtils";
 
 interface ContactHistoryProps {
     contactedDrivers: any[];
     onContactAgain: (driverId: string, vehicleId?: string) => void;
     onConnectDrivers: () => void;
+    onRemoveContact?: (driverId: string) => void;
 }
 
 export const ContactHistory: React.FC<ContactHistoryProps> = ({
     contactedDrivers,
     onContactAgain,
     onConnectDrivers,
+    onRemoveContact,
 }) => {
+    const [loadingDriverId, setLoadingDriverId] = useState<string | null>(null);
+
+    const handleViewProfile = (driverId: string, vehicleId?: string) => {
+        setLoadingDriverId(driverId);
+        onContactAgain(driverId, vehicleId);
+        // Loading state will persist until navigation occurs
+    };
+
     return (
         <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -62,23 +73,45 @@ export const ContactHistory: React.FC<ContactHistoryProps> = ({
                                         <h3 className="text-lg font-semibold text-white">
                                             {driver.driverName || "Driver"}
                                         </h3>
-                                        <p className="text-gray-400 text-sm mt-1">
-                                            📱 {driver.phoneNumber || driver.driverPhone || "No phone"}
-                                        </p>
                                         <p className="text-gray-500 text-xs mt-1">
                                             🚗 {driver.vehicleName || "Vehicle"} {driver.vehicleModel && `• ${driver.vehicleModel}`}
                                         </p>
                                         <p className="text-gray-600 text-xs mt-1">
                                             {formatDate(driver.contactDate || driver.lastContacted)} at {formatTime(driver.contactDate || driver.lastContacted)}
                                         </p>
-                                        <motion.button
-                                            whileHover={{ scale: 1.05 }}
-                                            whileTap={{ scale: 0.95 }}
-                                            onClick={() => onContactAgain(driver.driverId || driver.uid, driver.vehicleId)}
-                                            className="mt-3 w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:from-green-700 hover:to-emerald-700 transition-all"
-                                        >
-                                            📞 Contact Again
-                                        </motion.button>
+                                        <div className="flex gap-2 w-full">
+                                            <motion.button
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={() => handleViewProfile(driver.driverId || driver.uid, driver.vehicleId)}
+                                                disabled={loadingDriverId === (driver.driverId || driver.uid)}
+                                                className={`mt-3 flex-1 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-center items-center ${
+                                                    loadingDriverId === (driver.driverId || driver.uid)
+                                                        ? 'bg-gray-600 cursor-not-allowed opacity-80'
+                                                        : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
+                                                }`}
+                                            >
+                                                {loadingDriverId === (driver.driverId || driver.uid) ? (
+                                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                ) : (
+                                                    '👤 View Profile'
+                                                )}
+                                            </motion.button>
+                                            {onRemoveContact && (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.05 }}
+                                                    whileTap={{ scale: 0.95 }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onRemoveContact(driver.driverId || driver.uid);
+                                                    }}
+                                                    className="mt-3 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white px-3 py-2 rounded-lg text-sm font-medium transition-all border border-red-500/30 hover:border-red-500"
+                                                    title="Remove Contact"
+                                                >
+                                                    🗑️
+                                                </motion.button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </motion.div>

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebaseConfig";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, onSnapshot, collection, query, where, getDocs, writeBatch, deleteDoc } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 
@@ -148,12 +148,28 @@ export default function UserProfilePageUi() {
             } catch (err) {
                 console.error("Error loading user:", err);
                 setUserData(null);
-            } finally {
-                setLoading(false);
             }
         };
 
+        const userRef = doc(db, "users", userId);
+        const unsubscribe = onSnapshot(userRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                setUserData(data);
+                setNewName(data.fullName || "");
+            } else {
+                setUserData(null);
+            }
+            setLoading(false);
+        }, (err) => {
+            console.error("onSnapshot error in profile:", err);
+            setLoading(false);
+        });
+
+        // Run the initial normalization check once
         fetchUser();
+
+        return () => unsubscribe();
     }, [userId]);
 
     useEffect(() => {
@@ -300,14 +316,70 @@ export default function UserProfilePageUi() {
 
     const handleContactAgain = (driverId: string, vehicleId?: string) => {
         if (vehicleId) {
-            router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}#contact-driver`);
+            router.push(`/user/mobility/bookings?driver=${driverId}&vehicle=${vehicleId}&openModal=true`);
         } else {
-            router.push(`/user/mobility/car-hire?driver=${driverId}#contact-driver`);
+            router.push(`/user/mobility/bookings?driver=${driverId}&openModal=true`);
         }
     };
 
-    const handleRateTrip = (driverId: string, vehicleId: string) => {
-        router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
+    const handleRateDriver = async (driverId: string, rating: number) => {
+        if (!userId) return;
+        
+        try {
+            // 1. Update all trips by this customer for this driver
+            const tripsRef = collection(db, "trips");
+            const q = query(tripsRef, where("customerId", "==", userId), where("driverId", "==", driverId));
+            const tripsSnapshot = await getDocs(q);
+            
+            const batch = writeBatch(db);
+            tripsSnapshot.docs.forEach((docSnap) => {
+                batch.update(docSnap.ref, { rating });
+            });
+            await batch.commit();
+
+            // 2. Update Driver's global rating
+            const driverRef = doc(db, "users", driverId);
+            const driverSnap = await getDoc(driverRef);
+            if (driverSnap.exists()) {
+                const data = driverSnap.data();
+                const userRatings = data.userRatings || {};
+                
+                // Track this customer's rating for this driver
+                userRatings[userId] = rating;
+
+                // Recalculate average rating
+                const allRatings = Object.values(userRatings) as number[];
+                const newAverage = allRatings.reduce((a, b) => a + b, 0) / allRatings.length;
+
+                await updateDoc(driverRef, {
+                    userRatings,
+                    averageRating: newAverage,
+                    totalRatings: allRatings.length
+                });
+            }
+
+            toast.success("Driver rating updated!");
+            
+            // Re-load trip history to reflect changes visually
+            loadTripHistory();
+        } catch (error) {
+            console.error("Error rating driver:", error);
+            toast.error("Failed to rate driver");
+        }
+    };
+
+    const handleRemoveTrip = async (tripId: string) => {
+        try {
+            // Delete the trip document from history
+            await deleteDoc(doc(db, "trips", tripId));
+            toast.success("Trip removed from history");
+            
+            // Remove locally to avoid full reload
+            setTripHistory(prev => prev.filter(t => t.id !== tripId));
+        } catch (error) {
+            console.error("Error removing trip:", error);
+            toast.error("Failed to remove trip");
+        }
     };
 
     const referralPoints = userData?.referralPoints || 0;
@@ -362,6 +434,26 @@ export default function UserProfilePageUi() {
         );
     }
 
+    const handleRemoveContact = async (driverIdToRemove: string) => {
+        if (!userData || !userData.contactedDrivers) return;
+        
+        try {
+            const updatedDrivers = userData.contactedDrivers.filter(
+                (driver: any) => (driver.driverId || driver.uid) !== driverIdToRemove
+            );
+            
+            const userRef = doc(db, "users", userId);
+            await updateDoc(userRef, {
+                contactedDrivers: updatedDrivers,
+                updatedAt: new Date()
+            });
+            toast.success("Driver removed from contacts");
+        } catch (error) {
+            console.error("Error removing contact:", error);
+            toast.error("Failed to remove contact");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
 
@@ -389,13 +481,15 @@ export default function UserProfilePageUi() {
                     contactedDrivers={userData.contactedDrivers || []}
                     onContactAgain={handleContactAgain}
                     onConnectDrivers={() => router.push('/user/mobility/car-hire')}
+                    onRemoveContact={handleRemoveContact}
                 />
 
                 {/* Trip History */}
                 <TripHistory
                     trips={tripHistory}
                     loading={loadingTripHistory}
-                    onRateTrip={handleRateTrip}
+                    onRateDriver={handleRateDriver}
+                    onRemoveTrip={handleRemoveTrip}
                     onBookTrip={() => router.push('/user/mobility/car-hire')}
                 />
 

@@ -15,6 +15,7 @@ import {
 interface TripHistoryCardProps {
   trip: {
     id: string;
+    driverId?: string;
     driverName: string;
     driverImage?: string;
     vehicleName: string;
@@ -28,10 +29,11 @@ interface TripHistoryCardProps {
     review?: string;
     driverRating?: number;
   };
-  onRateTrip?: (tripId: string) => void;
+  onRateDriver?: (driverId: string, rating: number) => void;
+  onRemoveTrip?: (tripId: string) => void;
 }
 
-export default function TripHistoryCard({ trip, onRateTrip }: TripHistoryCardProps) {
+export default function TripHistoryCard({ trip, onRateDriver, onRemoveTrip }: TripHistoryCardProps) {
   const [showReview, setShowReview] = useState(false);
 
   // Refined formatting utility
@@ -131,34 +133,53 @@ export default function TripHistoryCard({ trip, onRateTrip }: TripHistoryCardPro
 
         {/* Rating & Action Section */}
         {isCompleted && (
-          <div className="mt-8 pt-6 border-t border-white/5">
-            {trip.rating ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Experience</span>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <FaStar key={star} size={12} className={star <= trip.rating! ? "text-emerald-400" : "text-slate-800"} />
-                    ))}
-                  </div>
-                </div>
-                {trip.review && (
-                  <button
-                    onClick={() => setShowReview(!showReview)}
-                    className="text-[10px] font-black text-emerald-500 uppercase tracking-widest hover:text-emerald-400 transition-colors"
-                  >
-                    {showReview ? 'Hide Details' : 'View Review'}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => onRateTrip?.(trip.id)}
-                className="w-full py-3 bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/20 rounded-xl text-[10px] font-black text-white uppercase tracking-[0.3em] transition-all"
+          <div className="mt-8 pt-6 border-t border-white/5 relative">
+            
+            {onRemoveTrip && (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveTrip(trip.id);
+                }}
+                className="absolute right-0 top-6 text-rose-500/70 hover:text-rose-500 transition-colors p-1"
+                title="Remove Trip from History"
               >
-                Rate Excellence
+                <FaTimesCircle size={14} />
               </button>
             )}
+
+            <div className="flex items-center justify-between pr-8">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  {trip.rating ? "Your Rating" : "Rate Driver"}
+                </span>
+                <div className="flex gap-1 group/stars">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => trip.driverId && onRateDriver?.(trip.driverId, star)}
+                      className={`transition-colors duration-200 focus:outline-none ${
+                        star <= (trip.rating || 0) 
+                          ? "text-emerald-400 hover:text-emerald-300" 
+                          : "text-slate-800 hover:text-emerald-500/50"
+                      }`}
+                    >
+                      <FaStar size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {trip.review && (
+                <button
+                  onClick={() => setShowReview(!showReview)}
+                  className="text-[10px] font-black text-emerald-500 uppercase tracking-widest hover:text-emerald-400 transition-colors"
+                >
+                  {showReview ? 'Hide Details' : 'View Review'}
+                </button>
+              )}
+            </div>
 
             {showReview && trip.review && (
               <div className="mt-4 p-4 bg-white/[0.02] rounded-xl border border-white/5">

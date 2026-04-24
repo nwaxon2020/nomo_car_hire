@@ -40,6 +40,8 @@ interface DriverDetailsModalProps {
     formatDate: (d: any) => string;
     onSetVehicle: (v: VehicleLog) => void;
     onMarkContacted?: () => void;
+    isContacted?: boolean;
+    canSave?: boolean;
 }
 
 export default function DriverDetailsModal(props: DriverDetailsModalProps) {
@@ -96,6 +98,8 @@ export default function DriverDetailsModal(props: DriverDetailsModalProps) {
                         onWhatsAppMessage={props.onWhatsAppMessage}
                         getDriverAddress={props.getDriverAddress}
                         onMarkContacted={props.onMarkContacted}
+                        isContacted={props.isContacted}
+                        canSave={props.canSave}
                     />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

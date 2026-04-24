@@ -7,14 +7,16 @@ import TripHistoryCard from "@/components/map/TripHistoryCard";
 interface TripHistoryProps {
     trips: any[];
     loading: boolean;
-    onRateTrip: (driverId: string, vehicleId: string) => void;
+    onRateDriver?: (driverId: string, rating: number) => void;
+    onRemoveTrip?: (tripId: string) => void;
     onBookTrip: () => void;
 }
 
 export const TripHistory: React.FC<TripHistoryProps> = ({
     trips,
     loading,
-    onRateTrip,
+    onRateDriver,
+    onRemoveTrip,
     onBookTrip,
 }) => {
     return (
@@ -50,7 +52,8 @@ export const TripHistory: React.FC<TripHistoryProps> = ({
                             >
                                 <TripHistoryCard
                                     trip={trip}
-                                    onRateTrip={() => onRateTrip(trip.driverId, trip.vehicleId)}
+                                    onRateDriver={onRateDriver}
+                                    onRemoveTrip={onRemoveTrip}
                                 />
                             </motion.div>
                         ))}

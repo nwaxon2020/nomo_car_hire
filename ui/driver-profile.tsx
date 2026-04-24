@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { db, storage, auth } from "@/lib/firebaseConfig";
 import {
   doc, collection, addDoc, updateDoc, deleteDoc, query, where, increment,
-  onSnapshot, getDoc, Timestamp, arrayUnion, arrayRemove,
+  onSnapshot, getDoc, Timestamp, arrayUnion, arrayRemove, getDocs, writeBatch
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { onAuthStateChanged } from "firebase/auth";
@@ -663,8 +663,55 @@ export default function DriverProfilePage() {
     import("@/lib/paystack").then(m => m.loadPaystackScript());
   }, []);
 
-  const handleRateTrip = (driverId: string, vehicleId: string) => {
-    router.push(`/user/mobility/car-hire?driver=${driverId}&vehicle=${vehicleId}&rate=true#search-results`);
+  const handleRateDriver = async (ratedDriverId: string, rating: number) => {
+    if (!currentUser) return;
+    
+    try {
+      const tripsRef = collection(db, "trips");
+      const q = query(tripsRef, where("customerId", "==", currentUser.uid), where("driverId", "==", ratedDriverId));
+      const tripsSnapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      tripsSnapshot.docs.forEach((docSnap) => {
+        batch.update(docSnap.ref, { rating });
+      });
+      await batch.commit();
+
+      const driverRef = doc(db, "users", ratedDriverId);
+      const driverSnap = await getDoc(driverRef);
+      if (driverSnap.exists()) {
+        const data = driverSnap.data();
+        const userRatings = data.userRatings || {};
+        
+        userRatings[currentUser.uid] = rating;
+
+        const allRatings = Object.values(userRatings) as number[];
+        const newAverage = allRatings.reduce((a, b) => a + b, 0) / allRatings.length;
+
+        await updateDoc(driverRef, {
+          userRatings,
+          averageRating: newAverage,
+          totalRatings: allRatings.length
+        });
+      }
+
+      toast.success("Driver rating updated!");
+      loadTripHistory();
+    } catch (error) {
+      console.error("Error rating driver:", error);
+      toast.error("Failed to rate driver");
+    }
+  };
+
+  const handleRemoveTrip = async (tripId: string) => {
+    try {
+      await deleteDoc(doc(db, "trips", tripId));
+      toast.success("Trip removed from history");
+      setTripHistory(prev => prev.filter(t => t.id !== tripId));
+    } catch (error) {
+      console.error("Error removing trip:", error);
+      toast.error("Failed to remove trip");
+    }
   };
 
   // Fetch Data Effect
@@ -845,6 +892,31 @@ export default function DriverProfilePage() {
     </div>
   );
 
+  const handleRemoveContact = async (driverIdToRemove: string) => {
+    // Only allow if logged in user is viewing their own profile
+    if (!currentUserData || currentUserData.uid !== driverId) {
+      toast.error("You can only edit your own profile");
+      return;
+    }
+    
+    try {
+      // Filter from the currently viewed profile's contactedDrivers list
+      const updatedDrivers = contactedDrivers.filter(
+        (driver: any) => (driver.driverId || driver.uid) !== driverIdToRemove
+      );
+      
+      const userRef = doc(db, "users", driverId);
+      await updateDoc(userRef, {
+        contactedDrivers: updatedDrivers,
+        updatedAt: new Date()
+      });
+      toast.success("Driver removed from contacts");
+    } catch (error) {
+      console.error("Error removing contact:", error);
+      toast.error("Failed to remove contact");
+    }
+  };
+
   return (
     <div className="space-y-12 p-2 md:p-3 min-h-screen bg-gradient-to-br from-gray-700 via-gray-600 to-black grid grid-cols-1 items-center justify-center">
 
@@ -934,9 +1006,11 @@ export default function DriverProfilePage() {
         tripHistory={tripHistory}
         loadingTripHistory={loadingTripHistory}
         formatDate={formatDate}
-        onRateTrip={handleRateTrip}
+        onRateDriver={handleRateDriver}
         comments={comments}
         formatDateFn={formatDate}
+        onRemoveContact={currentUserData?.uid === driverId ? handleRemoveContact : undefined}
+        onRemoveTrip={currentUserData?.uid === driverId ? handleRemoveTrip : undefined}
       />
 
       {/* Promotional Section */}

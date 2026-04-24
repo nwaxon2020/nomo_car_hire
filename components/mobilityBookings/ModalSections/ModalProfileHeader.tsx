@@ -16,6 +16,8 @@ interface ModalProfileHeaderProps {
     onWhatsAppMessage: (d: any, v: any) => void;
     getDriverAddress: (d: any) => string;
     onMarkContacted?: () => void;
+    isContacted?: boolean;
+    canSave?: boolean;
 }
 
 export default function ModalProfileHeader({
@@ -26,7 +28,9 @@ export default function ModalProfileHeader({
     onPhoneCall,
     onWhatsAppMessage,
     getDriverAddress,
-    onMarkContacted
+    onMarkContacted,
+    isContacted,
+    canSave = true
 }: ModalProfileHeaderProps) {
     return (
         <div className="flex flex-col md:flex-row gap-6 mb-8">
@@ -90,7 +94,7 @@ export default function ModalProfileHeader({
                 </div>
 
                 {/* Contact Buttons */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                     {/* Pre-Chat Button */}
                     <button
                         onClick={() => {
@@ -127,9 +131,14 @@ export default function ModalProfileHeader({
                     {onMarkContacted && (
                         <button
                             onClick={onMarkContacted}
-                            className="py-3 text-emerald-700 font-bold border border-emerald-200 rounded-lg transition-all duration-300 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 uppercase tracking-widest text-[10px]"
+                            disabled={!canSave}
+                            className={`py-3 font-bold border rounded-lg transition-all duration-300 flex items-center justify-center uppercase tracking-widest text-[10px] ${
+                                !canSave ? "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed" :
+                                isContacted ? "bg-amber-500 text-black border-amber-600 shadow-lg shadow-amber-900/20" : 
+                                "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                            }`}
                         >
-                            📌 Mark as Contacted
+                            {!canSave ? "⏳ Wait..." : isContacted ? "✅ Saved" : "📍 Save Driver"}
                         </button>
                     )}
                 </div>

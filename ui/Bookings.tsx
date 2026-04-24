@@ -417,6 +417,16 @@ export default function BookingUi() {
                     setActiveOwnVehicleId(data.bookingVehicleId);
                 }
                 setCurrentUser((prev: any) => prev ? { ...prev, ...data } : data);
+
+                // ✅ NEW: Real-time sync for contacted drivers list
+                if (data.contactedDrivers) {
+                    const sorted = [...data.contactedDrivers].sort((a: any, b: any) => {
+                        const timeA = a.lastContacted?.toMillis?.() || a.contactDate?.toMillis?.() || 0;
+                        const timeB = b.lastContacted?.toMillis?.() || b.contactDate?.toMillis?.() || 0;
+                        return timeB - timeA;
+                    }).slice(0, 5);
+                    setContactedDrivers(sorted);
+                }
             }
         }, (error) => {
             console.error("[Bookings] Error listening to user profile:", error);
@@ -594,83 +604,100 @@ export default function BookingUi() {
 
     // new useEffect to handle query parameters
     useEffect(() => {
-        // Only check query params after drivers are loaded
-        if (driversWithVehicles.length > 0) {
+        const handleParams = async () => {
             const driverId = searchParams.get('driver')
             const vehicleId = searchParams.get('vehicle')
             const searchQuery = searchParams.get('search')
             const category = searchParams.get('category')
+            const openModal = searchParams.get('openModal') === 'true'
 
-            // Handle category filter from external link (e.g., profile page)
+            // Handle category filter from external link
             if (category) {
                 setSelectedCategory(category)
                 setTimeout(() => {
                     const element = document.getElementById('search-results')
-                    if (element) {
-                        element.scrollIntoView({ behavior: 'smooth' })
-                    }
+                    if (element) element.scrollIntoView({ behavior: 'smooth' })
                 }, 500)
             }
 
-            // Handle search query from homepage
+            // Handle search query
             if (searchQuery) {
                 setSearchLocation(searchQuery)
-
-                // Optional: Also set a message showing what was searched
-                console.log(`Searching for: ${searchQuery}`)
-
-                // Optional: Auto-scroll to search results
                 setTimeout(() => {
                     const element = document.getElementById('search-results')
-                    if (element) {
-                        element.scrollIntoView({ behavior: 'smooth' })
-                    }
+                    if (element) element.scrollIntoView({ behavior: 'smooth' })
                 }, 500)
             }
 
-            if (driverId) {
-                // Find the driver in the loaded drivers
-                const driver = driversWithVehicles.find(d => d.uid === driverId || d.id === driverId)
+            if (driverId && openModal) {
+                // 1. Try finding in current proximity list
+                let driver = driversWithVehicles.find(d => d.uid === driverId || d.id === driverId)
+                let vehicle: VehicleLog | null = null
 
                 if (driver) {
-                    let vehicle: VehicleLog | null = null
-
-                    // Find the specific vehicle if vehicleId is provided
                     if (vehicleId) {
                         vehicle = driver.vehicles.find(v => v.id === vehicleId) || null
                     }
-
-                    // If no specific vehicle found, use the first available vehicle
                     if (!vehicle && driver.vehicles.length > 0) {
                         vehicle = driver.vehicles[0]
                     }
-
-                    if (vehicle) {
-                        // Open the driver modal
-                        setSelectedDriver(driver)
-                        setSelectedVehicle(vehicle)
-                        setDriverInfo(true)
-
-                        // Set the main image
-                        const firstImage = vehicle.images?.front ||
-                            vehicle.images?.side ||
-                            vehicle.images?.back ||
-                            vehicle.images?.interior ||
-                            getDefaultVehicleImage(vehicle.carType)
-                        setMainImage(firstImage)
-
-                        // Scroll to the modal after a short delay
-                        setTimeout(() => {
-                            const element = document.getElementById('contact-driver')
-                            if (element) {
-                                element.scrollIntoView({ behavior: 'smooth' })
+                } else {
+                    // 2. Not found in proximity? Fetch directly from DB
+                    try {
+                        const driverDoc = await getDoc(doc(db, "users", driverId))
+                        if (driverDoc.exists()) {
+                            const dData = driverDoc.data()
+                            const fetchedDriver: any = {
+                                id: driverDoc.id,
+                                uid: dData.uid || driverDoc.id,
+                                firstName: dData.firstName || "",
+                                lastName: dData.lastName || "",
+                                fullName: dData.fullName || `${dData.firstName} ${dData.lastName}`,
+                                phoneNumber: dData.phoneNumber || dData.phone || "",
+                                profileImage: dData.profileImage || dData.photoURL || "",
+                                vehicleLog: dData.vehicleLog || [],
+                                verified: dData.verified || false,
+                                vipLevel: dData.vipLevel || 0,
+                                purchasedVipLevel: dData.purchasedVipLevel || 0,
+                                averageRating: dData.averageRating || 0,
+                                vehicles: []
                             }
-                        }, 300)
+
+                            // Fetch vehicle details
+                            const targetVId = vehicleId || (fetchedDriver.vehicleLog.length > 0 ? fetchedDriver.vehicleLog[0] : null)
+                            if (targetVId) {
+                                const vDoc = await getDoc(doc(db, "vehicleLog", targetVId))
+                                if (vDoc.exists()) {
+                                    vehicle = { id: vDoc.id, ...vDoc.data() } as VehicleLog
+                                    fetchedDriver.vehicles = [vehicle]
+                                }
+                            }
+                            driver = fetchedDriver as DriverWithVehicle
+                        }
+                    } catch (err) {
+                        console.error("[Bookings] Error fetching driver for param modal:", err)
                     }
+                }
+
+                if (driver && vehicle) {
+                    setSelectedDriver(driver)
+                    setSelectedVehicle(vehicle)
+                    setDriverInfo(true)
+                    setMainImage(vehicle.images?.front || "/car_select.jpg")
+                    
+                    // Scroll to modal view
+                    setTimeout(() => {
+                        const element = document.getElementById('contact-driver')
+                        if (element) element.scrollIntoView({ behavior: 'smooth' })
+                    }, 500)
                 }
             }
         }
-    }, [driversWithVehicles, searchParams])
+
+        if (currentUserId) {
+            handleParams()
+        }
+    }, [currentUserId, searchParams, driversWithVehicles.length === 0])
 
     // Fetch Drivers and Vehicles from Backend (Paginated)
     const fetchDriversAndVehicles = async (isLoadMore = false) => {
@@ -743,8 +770,8 @@ export default function BookingUi() {
                     uid: data.uid || docSnap.id,
                     firstName: data.firstName || "",
                     lastName: data.lastName || "",
-                    fullName: data.fullName || `${data.firstName} ${data.lastName}`,
-                    phoneNumber: data.phoneNumber || "",
+                    fullName: data.fullName || `${data.firstName} ${data.lastName}`.trim(),
+                    phoneNumber: data.phoneNumber || data.phone || data.driverPhone || "",
                     email: data.email || "",
                     city: data.city || "",
                     state: data.state || "",
@@ -1051,25 +1078,37 @@ export default function BookingUi() {
             // Get current user data
             const userDoc = await getDoc(userDocRef)
             const userData = userDoc.data()
+            const driverTargetId = selectedDriver.uid || selectedDriver.id;
 
             const isAlreadyContacted = (userData?.contactedDrivers || []).some(
-                (cd: any) => cd.driverId === selectedDriver.uid
+                (cd: any) => cd.driverId === driverTargetId
             );
 
             if (isAlreadyContacted) {
-                const updatedList = (userData?.contactedDrivers || []).filter(
-                    (cd: any) => cd.driverId !== selectedDriver.uid
-                );
+                const updatedList = (userData?.contactedDrivers || []).map((cd: any) => {
+                    if (cd.driverId === driverTargetId) {
+                        return { 
+                            ...cd, 
+                            lastContacted: now, 
+                            timestamp: now,
+                            phoneNumber: selectedDriver.phoneNumber || cd.phoneNumber || "",
+                            driverPhone: selectedDriver.phoneNumber || cd.driverPhone || "" 
+                        };
+                    }
+                    return cd;
+                });
                 await updateDoc(userDocRef, {
                     contactedDrivers: updatedList,
                     updatedAt: now
                 });
-                toast.success("Driver removed from your contacted list.");
+                toast.success("Contact history updated!");
             } else {
                 const newContactedDriver = {
-                    driverId: selectedDriver.uid,
-                    driverName: selectedDriver.fullName || `${selectedDriver.firstName} ${selectedDriver.lastName}`,
-                    phoneNumber: selectedDriver.phoneNumber,
+                    driverId: driverTargetId,
+                    driverName: selectedDriver.fullName || `${selectedDriver.firstName} ${selectedDriver.lastName}`.trim(),
+                    phoneNumber: selectedDriver.phoneNumber || "",
+                    driverPhone: selectedDriver.phoneNumber || "",
+                    profileImage: selectedDriver.profileImage || "",
                     vehicleId: selectedVehicle.id,
                     vehicleName: selectedVehicle.carName,
                     vehicleModel: selectedVehicle.carModel,
@@ -1082,7 +1121,7 @@ export default function BookingUi() {
                     contactedDrivers: arrayUnion(newContactedDriver),
                     updatedAt: now
                 });
-                toast.success("Driver added to your contacted list!");
+                toast.success("Driver saved to your contacted list!");
             }
             
             // Refresh user history from Firestore (source of truth)
@@ -1115,7 +1154,7 @@ export default function BookingUi() {
             setSaveMessage({
                 type: "success",
                 text: isAlreadyContacted
-                    ? "✓ Driver removed from your contacted list."
+                    ? "✓ Contact history updated."
                     : "✓ The contact of this driver has been added to your list of contacted drivers in your dashboard."
             });
 
@@ -2684,6 +2723,8 @@ export default function BookingUi() {
                     formatDate={formatDate}
                     onSetVehicle={setSelectedVehicle}
                     onMarkContacted={handleSaveDriver}
+                    isContacted={(currentUser?.contactedDrivers || []).some((cd: any) => cd.driverId === (selectedDriver?.uid || selectedDriver?.id))}
+                    canSave={selectedDriver && selectedVehicle ? canSaveDriver(selectedDriver.uid || selectedDriver.id, selectedVehicle.id).canSave : true}
                 />
 
                 {/* ✅ NEW: Pre-Chat Modal */}

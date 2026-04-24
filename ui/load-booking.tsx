@@ -405,7 +405,7 @@ export default function LoadBookingUi() {
                 <h1 className="text-white font-black text-base uppercase tracking-tight leading-none">
                   Load Booking
                 </h1>
-                <p className="text-gray-600 text-[8px] font-bold uppercase tracking-widest mt-0.5">
+                <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
                   {isDriver ? "Shared Transport Management" : "Find a Shared Ride"}
                 </p>
               </div>

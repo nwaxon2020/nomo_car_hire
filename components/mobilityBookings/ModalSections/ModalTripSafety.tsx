@@ -134,25 +134,7 @@ export default function ModalTripSafety({
                         </>
                     )}
 
-                    {currentUser && (
-                        <div className="mt-4 pt-4 border-t border-gray-700">
-                            <button
-                                onClick={handleSaveDriver}
-                                disabled={!canSaveDriver(driver.uid, vehicle.id).canSave}
-                                className={`w-full py-2 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center ${
-                                    canSaveDriver(driver.uid, vehicle.id).canSave
-                                    ? "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
-                                    : "bg-gray-800 cursor-not-allowed"
-                                }`}
-                            >
-                                <FaEye className="mr-2" />
-                                {canSaveDriver(driver.uid, vehicle.id).canSave ? "Mark as Contacted" : "Save (Cooldown)"}
-                            </button>
-                            <p className="text-gray-400 text-xs mt-1 text-center">
-                                Save driver to your history for future reference
-                            </p>
-                        </div>
-                    )}
+
                 </>
             )}
         </div>

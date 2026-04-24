@@ -32,7 +32,7 @@ service cloud.firestore {
     }
 
     function isValidReviewUpdate() {
-      let allowedFields = ['comments', 'ratings', 'averageRating', 'totalRatings', 'updatedAt'];
+      let allowedFields = ['comments', 'ratings', 'averageRating', 'totalRatings', 'updatedAt', 'userRatings'];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
     }
 
@@ -50,7 +50,8 @@ service cloud.firestore {
         'hasCompany', 'ownedCompanies',
         'customersCarried', 'customersCarriedMonth',
         'trustScore', 'trustCancels', 'trustLastReset', 'trustExhaustedAt', 
-        'loadOnceAllowed', 'loadOnceUsedDate', 'loadBlockedUntil'
+        'loadOnceAllowed', 'loadOnceUsedDate', 'loadBlockedUntil',
+        'contactedDrivers', 'hiredCars'
       ];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
     }
