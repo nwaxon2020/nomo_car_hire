@@ -27,6 +27,7 @@ interface DriverSetupPanelProps {
   vipLevel?: number;
   isVerified?: boolean;
   driverTrustScore?: number;
+  whatsappPreferred?: boolean;
   vehicles: EligibleVehicle[];
   lockedVehicleId?: string; // already locked for today
   onSessionCreated: (bookingId: string) => void;
@@ -44,6 +45,7 @@ export default function DriverSetupPanel({
   vipLevel,
   isVerified,
   driverTrustScore,
+  whatsappPreferred,
   vehicles,
   lockedVehicleId,
   onSessionCreated,
@@ -55,6 +57,7 @@ export default function DriverSetupPanel({
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_LIBRARIES,
   });
@@ -290,6 +293,7 @@ export default function DriverSetupPanel({
         vipLevel: vipLevel || 0,
         isVerified: isVerified || false,
         driverTrustScore: driverTrustScore ?? 100,
+        whatsappPreferred: whatsappPreferred || false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });

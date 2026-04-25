@@ -52,6 +52,7 @@ export default function CustomerSearchPanel({
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_LIBRARIES,
   });
@@ -396,9 +397,15 @@ export default function CustomerSearchPanel({
                   ref={locInputRef}
                   type="text"
                   value={manualLocation}
-                  onFocus={() => setShowDriverSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowDriverSuggestions(false), 300)}
-                  onChange={(e) => setManualLocation(e.target.value)}
+                  onChange={(e) => {
+                    setManualLocation(e.target.value);
+                    if (e.target.value.length > 0) {
+                      setShowDriverSuggestions(true);
+                    } else {
+                      setShowDriverSuggestions(false);
+                    }
+                  }}
                   placeholder="Where are you? (e.g. Allen Avenue)"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
                 />
@@ -605,6 +612,7 @@ export default function CustomerSearchPanel({
                     booking={b}
                     index={i}
                     isInactive={hasActiveBooking && b.id !== activeBookingId}
+                    hasBooked={hasActiveBooking && b.id === activeBookingId}
                     onSelect={(bk) => {
                       setSelectedBooking(bk);
                     }}

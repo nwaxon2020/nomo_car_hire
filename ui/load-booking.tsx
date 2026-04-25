@@ -385,6 +385,7 @@ export default function LoadBookingUi() {
     vipLevel: userData?.vipLevel || 0,
     isVerified: userData?.isVerified || userData?.isDriverApproved || false,
     driverTrustScore: userData?.driverTrustScore ?? 100,
+    whatsappPreferred: userData?.whatsappPreferred || false,
   };
 
   const customerInfo = {
@@ -445,7 +446,7 @@ export default function LoadBookingUi() {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 pt-5 space-y-5">
+        <div className="max-w-2xl mx-auto px-3 pt-5 space-y-5">
           {/* Safety Note */}
           <SafetyNoteCard role={viewMode} />
 

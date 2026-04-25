@@ -36,6 +36,7 @@ export interface LoadBooking {
   vipLevel?: number;
   isVerified?: boolean;
   driverTrustScore?: number;  // driver's trust score at time of booking creation
+  whatsappPreferred?: boolean; // whether the driver prefers WhatsApp
   createdAt: any;
   updatedAt: any;
 }
