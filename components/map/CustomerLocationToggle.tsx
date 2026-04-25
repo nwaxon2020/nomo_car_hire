@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import GPSPermissionModal from './GPSPermissionModal';
+import { getGeohash } from '@/lib/geofire';
 
 interface CustomerLocationToggleProps {
   userId: string;
@@ -381,6 +382,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           const locationData = {
             lat: latitude,
             lng: longitude,
+            geohash: getGeohash(latitude, longitude),
             accuracy,
             address,
             timestamp: Timestamp.now(),
@@ -451,6 +453,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
               pendingUpdateRef.current = {
                 'location.lat': lat,
                 'location.lng': lng,
+                'location.geohash': getGeohash(lat, lng),
                 'location.accuracy': accuracy,
                 'location.address': newAddress,
                 'location.timestamp': Timestamp.now(),
@@ -482,9 +485,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
               setGpsModalOpen(true);
             },
             {
-              enableHighAccuracy: isVisible && !batterySavingMode,
-              timeout: isVisible ? 30000 : 60000,
-              maximumAge: isVisible ? 10000 : 30000
+              enableHighAccuracy: true,
+              timeout: 30000,
+              maximumAge: 0
             }
           );
 

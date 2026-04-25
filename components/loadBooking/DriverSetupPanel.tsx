@@ -188,6 +188,7 @@ export default function DriverSetupPanel({
         vehicleColor: selectedVehicle.exteriorColor,
         vehiclePlate: selectedVehicle.plateNumber,
         vehicleSideImage: selectedVehicle.images?.side || selectedVehicle.images?.front || "",
+        vehicleImages: selectedVehicle.images || {},
         totalSeats: passengerSeats,
         bookedCount: 0,
         destination: finalDestination,

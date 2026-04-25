@@ -13,6 +13,12 @@ export interface LoadBooking {
   vehicleColor: string;
   vehiclePlate: string;
   vehicleSideImage?: string;   // side-view photo of the car
+  vehicleImages?: {
+    front?: string;
+    side?: string;
+    back?: string;
+    interior?: string;
+  };
   totalSeats: number;
   bookedCount: number;
   destination: string;

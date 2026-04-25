@@ -141,6 +141,21 @@ export default function CustomerSearchPanel({
     checkSeats();
   }, [bookings, currentUser.uid]);
 
+  // Haversine distance formula
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   // Filter bookings by user's location + destination search
   useEffect(() => {
     if (bookings.length === 0) {
@@ -162,15 +177,29 @@ export default function CustomerSearchPanel({
       const bCity = (b.driverCity || "").toLowerCase();
       const bState = (b.driverState || "").toLowerCase();
 
-      // Locality match: Check if driver is in user's city/state
-      const localityMatch =
+      // 1. Locality match (String based)
+      const stringLocalityMatch =
         (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
         (userState && (bState.includes(userState) || userState.includes(bState))) ||
         (locAddr && (bCity.includes(locAddr) || locAddr.includes(bCity) || bState.includes(locAddr) || locAddr.includes(bState)));
 
-      // If destination is empty, prioritize locality match
+      // 2. Radius match (GPS based - 5km Discovery Radius)
+      let radiusMatch = false;
+      if (currentUser.location?.lat != null && currentUser.location?.lng != null && b.meetingPointLat != null && b.meetingPointLng != null) {
+        const dist = getDistance(
+          currentUser.location.lat,
+          currentUser.location.lng,
+          b.meetingPointLat,
+          b.meetingPointLng
+        );
+        if (dist <= 5) radiusMatch = true; // 5km discovery for load bookings
+      }
+
+      const localityMatch = stringLocalityMatch || radiusMatch;
+
+      // If destination is empty, prioritize locality/radius match
       if (!destination.trim()) {
-        if (!userCity && !userState && !manualLocation) return true; // No location to filter by
+        if (!userCity && !userState && !manualLocation && !currentUser.location?.lat) return true; 
         return localityMatch;
       } else {
         // Destination search
@@ -181,7 +210,6 @@ export default function CustomerSearchPanel({
           b.driverName.toLowerCase().includes(q) ||
           b.vehicleName.toLowerCase().includes(q);
 
-        // User requested: "when they enter a destination, the page is filtered to get cars going to that destination WITHIN their locality"
         return destMatch && localityMatch;
       }
     });

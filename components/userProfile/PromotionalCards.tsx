@@ -35,7 +35,7 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
             icon: "🛺",
             title: "Keke Napep",
             image: "/keke.jpeg",
-            description: "Anywhere is possible with our app! Hire a Keke Napep and enjoy an easier, faster journey.",
+            description: "Find a Keke Napep near you! Book instantly and enjoy an easier, faster journey with drivers in your radius.",
             button: "Book Now",
             action: "keke"
         }

@@ -11,6 +11,7 @@ import {
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import GPSPermissionModal from './GPSPermissionModal';
+import { getGeohash } from '@/lib/geofire';
 
 export default function DriverLocationToggle({
   driverId,
@@ -364,6 +365,7 @@ export default function DriverLocationToggle({
           const loc = {
             lat: latitude,
             lng: longitude,
+            geohash: getGeohash(latitude, longitude),
             heading: currentHeading,
             speed: currentSpeed,
             isSharing: true,
@@ -408,9 +410,9 @@ export default function DriverLocationToggle({
         setGpsModalOpen(true);
       },
       {
-        enableHighAccuracy: isVisible, // Only high accuracy when app is visible
-        maximumAge: isVisible ? 0 : 10000,
-        timeout: isVisible ? 30000 : 60000
+        enableHighAccuracy: true, // Senior Pattern: Always high accuracy for drivers
+        maximumAge: 0,            // Senior Pattern: Force fresh location
+        timeout: 20000            // Senior Pattern: Wait 20s for GPS lock
       }
     );
 

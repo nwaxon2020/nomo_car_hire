@@ -498,7 +498,7 @@ export default function UserProfilePageUi() {
                 <PromotionalCards
                     userId={userId}
                     onUpgradeVIP={() => router.push(`/user/purchase-vip/${userId}`)}
-                    onBookKeke={() => router.push('/user/mobility/car-hire?category=keke')}
+                    onBookKeke={() => router.push('/user/mobility/bookings?category=keke')}
                 />
 
                 {/* Contact Section */}
