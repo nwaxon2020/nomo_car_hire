@@ -52,7 +52,6 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
 
     // ─── Load Google Maps API via useJsApiLoader (fixes Bug A & B) ────────────
     const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
         libraries: LIBRARIES,
     });

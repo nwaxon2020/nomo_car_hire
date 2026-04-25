@@ -51,7 +51,6 @@ export default function BookingTrackingMap({
   const driverLabel = viewerRole === 'customer' ? 'Driver' : 'You';
 
   const { isLoaded, loadError: googleLoadError } = useJsApiLoader({
-    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_MAPS_LIBRARIES,
   });

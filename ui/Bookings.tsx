@@ -251,34 +251,35 @@ export default function BookingUi() {
     const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
 
     const { isLoaded: isGoogleMapsLoaded } = useJsApiLoader({
-        id: 'google-map-script',
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
         libraries: ['places', 'geometry']
     });
 
     useEffect(() => {
-        if (isGoogleMapsLoaded && destinationInputRef.current && !autocomplete) {
-            const auto = new google.maps.places.Autocomplete(destinationInputRef.current, {
-                componentRestrictions: { country: "ng" },
-                fields: ["formatted_address", "geometry"]
-            });
+        if (!isGoogleMapsLoaded || !showDestinationOverlay || !destinationInputRef.current) return;
 
-            auto.addListener("place_changed", () => {
-                const place = auto.getPlace();
-                if (place.formatted_address) {
-                    setDestinationInput(place.formatted_address);
-                }
-                if (place.geometry && place.geometry.location) {
-                    setDestinationLocation({
-                        lat: place.geometry.location.lat(),
-                        lng: place.geometry.location.lng()
-                    });
-                }
-            });
+        const auto = new google.maps.places.Autocomplete(destinationInputRef.current, {
+            componentRestrictions: { country: "ng" },
+            fields: ["formatted_address", "geometry"]
+        });
 
-            setAutocomplete(auto);
-        }
-    }, [isGoogleMapsLoaded, autocomplete]);
+        auto.addListener("place_changed", () => {
+            const place = auto.getPlace();
+            if (place.formatted_address) {
+                setDestinationInput(place.formatted_address);
+            }
+            if (place.geometry && place.geometry.location) {
+                setDestinationLocation({
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng()
+                });
+            }
+        });
+
+        return () => {
+            google.maps.event.clearInstanceListeners(auto);
+        };
+    }, [isGoogleMapsLoaded, showDestinationOverlay]);
 
     // NEW: Active Load Booking Check
     const [hasActiveLoadSeat, setHasActiveLoadSeat] = useState(false);
@@ -1357,7 +1358,7 @@ export default function BookingUi() {
 
             // Update driversWithVehicles state
             setDriversWithVehicles(prev => prev.map(driver => {
-                if (driver.id === selectedDriver.id) {
+                if (driver.id === selectedDriver.id || driver.uid === selectedDriver.uid) {
                     return {
                         ...driver,
                         comments: remainingComments,
@@ -1630,12 +1631,110 @@ export default function BookingUi() {
     };
 
     const calculateETA = (loc1: any, loc2: any) => {
-        if (!loc1 || !loc2 || !loc1.lat || !loc1.lng || !loc2.lat || !loc2.lng) return null;
-        const dist = haversineDistance(loc1.lat, loc1.lng, loc2.lat, loc2.lng);
+        const nLoc1 = normalizeLocation(loc1);
+        const nLoc2 = normalizeLocation(loc2);
+        if (!nLoc1 || !nLoc2) return null;
+        const dist = haversineDistance(nLoc1.lat, nLoc1.lng, nLoc2.lat, nLoc2.lng);
         const mins = Math.ceil(dist / 0.5); // 30km/h approx 0.5km/min
         if (mins < 1) return "Arriving";
         return `${mins} mins`;
     };
+
+    const normalizeLocation = (loc: any) => {
+        if (!loc) return null;
+        const lat = loc.lat !== undefined ? loc.lat : loc.latitude;
+        const lng = loc.lng !== undefined ? loc.lng : loc.longitude;
+        if (lat === undefined || lng === undefined) return null;
+        return { 
+            lat: typeof lat === 'string' ? parseFloat(lat) : lat, 
+            lng: typeof lng === 'string' ? parseFloat(lng) : lng 
+        };
+    };
+
+    // ✅ REFINED: Stable Real-time driver location tracking for active accepted offers
+    const watchIdRef = useRef<number | null>(null);
+    const lastUpdateRef = useRef<number>(0);
+    const lastLocRef = useRef<{lat: number, lng: number} | null>(null);
+
+    useEffect(() => {
+        // Condition for tracking: user is a driver AND has an active incoming offer
+        const shouldTrack = currentUserId && isDriver && incomingOffer && 
+                           (incomingOffer.status === 'accepted' || incomingOffer.status === 'started');
+
+        if (!shouldTrack) {
+            if (watchIdRef.current !== null) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+                watchIdRef.current = null;
+            }
+            return;
+        }
+
+        // Start watch only if not already watching
+        if (watchIdRef.current === null && navigator.geolocation) {
+            console.log("[Tracking] Starting driver live tracking for offer:", incomingOffer.id);
+            watchIdRef.current = navigator.geolocation.watchPosition(
+                async (pos) => {
+                    const now = Date.now();
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    
+                    // ✅ Scalability & Anti-Flicker: Throttle updates
+                    // Only update if 5 seconds passed OR moved > 10 meters
+                    const timePassed = now - lastUpdateRef.current;
+                    const distanceMoved = lastLocRef.current 
+                        ? haversineDistance(lastLocRef.current.lat, lastLocRef.current.lng, lat, lng) * 1000 
+                        : Infinity;
+
+                    if (timePassed < 5000 && distanceMoved < 10) {
+                        return;
+                    }
+
+                    lastUpdateRef.current = now;
+                    lastLocRef.current = { lat, lng };
+
+                    const newLoc = {
+                        lat,
+                        lng,
+                        timestamp: Timestamp.now()
+                    };
+                    
+                    try {
+                        // 1. Update the direct offer document for the customer to see
+                        await updateDoc(doc(db, 'directOffers', incomingOffer.id), {
+                            driverLocation: newLoc,
+                            updatedAt: serverTimestamp()
+                        });
+                        
+                        // 2. Also update driver's global location in users collection
+                        // Use both formats for maximum compatibility with other legacy components
+                        await updateDoc(doc(db, 'users', currentUserId), {
+                            location: {
+                                lat: newLoc.lat,
+                                lng: newLoc.lng,
+                                latitude: newLoc.lat, // fallback
+                                longitude: newLoc.lng, // fallback
+                                isSharing: true,
+                                timestamp: Timestamp.now()
+                            },
+                            lastLocationUpdate: serverTimestamp()
+                        });
+                    } catch (err) {
+                        console.error("[Tracking] Update error:", err);
+                    }
+                },
+                (err) => console.error("[Tracking] GPS error:", err),
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+            );
+        }
+
+        return () => {
+            // Cleanup on unmount or status change
+            if (!shouldTrack && watchIdRef.current !== null) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+                watchIdRef.current = null;
+            }
+        };
+    }, [currentUserId, isDriver, incomingOffer?.id, incomingOffer?.status]);
 
     // Start a new trip
     const startTrip = async (driverId: string, vehicleId: string, pickupLocation: string, destination: string) => {
@@ -1673,7 +1772,7 @@ export default function BookingUi() {
                 updatedAt: Timestamp.now(),
                 type: incomingOffer ? 'direct_booking' : 'regular_booking',
                 // NEW: Initial location
-                driverLocation: {
+                driverLocation: normalizeLocation(incomingOffer?.driverLocation || customerLocation) || {
                     lat: 9.0765, // Default Nigeria coordinates (Lagos)
                     lng: 7.3986, // Default Nigeria coordinates (Abuja)
                     address: 'Starting point',
@@ -1964,7 +2063,7 @@ export default function BookingUi() {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 customerLocation: customerLocation,
-                driverLocation: driver.location || null, // Allow driver map tracking
+                driverLocation: normalizeLocation(driver.location), // Allow driver map tracking
                 customerImage: (currentUser?.profileImage && !currentUser.profileImage.includes("profile.png"))
                     ? currentUser.profileImage
                     : (currentUser?.photoURL || ""),
@@ -2048,7 +2147,7 @@ export default function BookingUi() {
             batch.update(doc(db, 'directOffers', offer.id), {
                 status: 'accepted',
                 updatedAt: serverTimestamp(),
-                driverLocation: driverLoc,
+                driverLocation: normalizeLocation(driverLoc),
                 driverPhone: currentUser.phoneNumber || offer.driverPhone || ""
             });
 
@@ -2056,6 +2155,8 @@ export default function BookingUi() {
             if (driverLoc && currentUser) {
                 batch.update(doc(db, 'users', currentUser.uid), {
                     location: {
+                        lat: driverLoc.lat,
+                        lng: driverLoc.lng,
                         latitude: driverLoc.lat,
                         longitude: driverLoc.lng,
                         isSharing: true
@@ -2324,9 +2425,13 @@ export default function BookingUi() {
 
                         <div className="w-full md:w-[80%] h-[50vh] md:h-[60vh] bg-gray-800 rounded-[2rem] md:rounded-[3rem] overflow-hidden border-4 md:border-8 border-gray-800 shadow-2xl relative">
                             <BookingTrackingMap
-                                pickup={pendingOffer?.customerLocation || incomingOffer?.customerLocation || { lat: 0, lng: 0, address: "" }}
-                                driver={pendingOffer?.driverLocation || incomingOffer?.driverLocation || { lat: 0, lng: 0, address: "" }}
-                                destination={((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') && (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation)) ? (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation) : undefined}
+                                pickup={normalizeLocation(pendingOffer?.customerLocation || incomingOffer?.customerLocation) || { lat: 0, lng: 0, address: "" }}
+                                driver={
+                                    (pendingOffer ? normalizeLocation(pendingOffer.driverLocation) : null) || 
+                                    (incomingOffer ? normalizeLocation(customerLocation) : null) || 
+                                    { lat: 0, lng: 0, address: "" }
+                                }
+                                destination={((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') && (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation)) ? (normalizeLocation(pendingOffer?.destinationLocation || incomingOffer?.destinationLocation) || undefined) : undefined}
                                 customerImage={pendingOffer?.customerImage || incomingOffer?.customerImage}
                                 driverImage={pendingOffer?.driverImage || incomingOffer?.driverImage}
                                 plateNumber={pendingOffer?.plateNumber || incomingOffer?.plateNumber}
@@ -2656,8 +2761,7 @@ export default function BookingUi() {
                                     ref={destinationInputRef}
                                     type="text"
                                     placeholder="Enter drop-off location..."
-                                    value={destinationInput}
-                                    onChange={(e) => setDestinationInput(e.target.value)}
+                                    defaultValue={destinationInput}
                                     className="w-full pl-12 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder:text-gray-600 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium"
                                     autoFocus
                                 />

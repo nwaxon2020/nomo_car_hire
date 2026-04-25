@@ -53,9 +53,17 @@ export const getVehicleImages = (vehicle: any) => {
 
 export const getDriverLocation = (driver: any) => {
     if (!driver || !driver.location) return null;
-    const lat = typeof driver.location.lat === 'string' ? parseFloat(driver.location.lat) : driver.location.lat;
-    const lng = typeof driver.location.lng === 'string' ? parseFloat(driver.location.lng) : driver.location.lng;
-    if (isNaN(lat) || isNaN(lng)) return null;
+    
+    // Handle both lat/lng and latitude/longitude formats
+    const lat = driver.location.lat !== undefined 
+        ? (typeof driver.location.lat === 'string' ? parseFloat(driver.location.lat) : driver.location.lat)
+        : (typeof driver.location.latitude === 'string' ? parseFloat(driver.location.latitude) : driver.location.latitude);
+        
+    const lng = driver.location.lng !== undefined
+        ? (typeof driver.location.lng === 'string' ? parseFloat(driver.location.lng) : driver.location.lng)
+        : (typeof driver.location.longitude === 'string' ? parseFloat(driver.location.longitude) : driver.location.longitude);
+
+    if (isNaN(lat) || isNaN(lng) || lat === undefined || lng === undefined) return null;
     return { lat, lng };
 };
 

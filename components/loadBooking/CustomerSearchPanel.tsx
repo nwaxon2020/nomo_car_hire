@@ -53,7 +53,6 @@ export default function CustomerSearchPanel({
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_LIBRARIES,
   });
@@ -128,28 +127,16 @@ export default function CustomerSearchPanel({
     destAcRef.current = ac;
   }, [isLoaded]);
 
-  // Width matching logic for all inputs
+  // Broadcast active seat state globally so the sidebar can intercept navigation
   useEffect(() => {
-    const matchWidth = (e: FocusEvent) => {
-      const input = e.target as HTMLInputElement;
-      const width = input.offsetWidth;
-      setTimeout(() => {
-        const containers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>;
-        containers.forEach(c => {
-          c.style.width = `${width}px`;
-        });
-      }, 10);
-    };
-
-    const dIn = destInputRef.current;
-    const lIn = locInputRef.current;
-    dIn?.addEventListener('focus', matchWidth);
-    lIn?.addEventListener('focus', matchWidth);
+    const event = new CustomEvent("loadBookingState", { detail: hasActiveBooking });
+    window.dispatchEvent(event);
+    
     return () => {
-      dIn?.removeEventListener('focus', matchWidth);
-      lIn?.removeEventListener('focus', matchWidth);
+      // Clear state when unmounting
+      window.dispatchEvent(new CustomEvent("loadBookingState", { detail: false }));
     };
-  }, [isLoaded]);
+  }, [hasActiveBooking]);
 
   // Extract unique active driver meeting points
   useEffect(() => {
