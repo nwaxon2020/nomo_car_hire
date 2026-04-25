@@ -59,9 +59,7 @@ export default function CustomerSearchPanel({
   const [bookings, setBookings] = useState<LoadBooking[]>([]);
   const [filtered, setFiltered] = useState<LoadBooking[]>([]);
   const [destination, setDestination] = useState(initialSearch);
-  const [manualLocation, setManualLocation] = useState(
-    currentUser.location?.address || ""
-  );
+  const [manualLocation, setManualLocation] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<LoadBooking | null>(null);
   const [flagBooking, setFlagBooking] = useState<LoadBooking | null>(null);
@@ -251,13 +249,10 @@ export default function CustomerSearchPanel({
       let stringLocalityMatch = false;
 
       if (locAddr.trim()) {
-        // If user typed a search, prioritize that search string
-        stringLocalityMatch =
-          bCity.includes(locAddr) ||
-          locAddr.includes(bCity) ||
-          bState.includes(locAddr) ||
-          locAddr.includes(bState) ||
-          (b.meetingPoint || "").toLowerCase().includes(locAddr);
+        // Strict match against the driver's set meeting point only
+        const normInput = normalizeForSearch(locAddr);
+        const normPoint = normalizeForSearch(b.meetingPoint || "");
+        stringLocalityMatch = normPoint.includes(normInput);
       } else {
         // Fallback to profile location if search is empty
         stringLocalityMatch = (!!userCity && (bCity.includes(userCity) || userCity.includes(bCity))) || (!!userState && (bState.includes(userState) || userState.includes(bState)));
