@@ -12,6 +12,7 @@ interface DriverLoadCardProps {
   onSelect: (booking: LoadBooking) => void;
   onFlag: (booking: LoadBooking) => void;
   index?: number;
+  isInactive?: boolean;
 }
 
 const formatTime = (t: string) => {
@@ -51,6 +52,7 @@ export default function DriverLoadCard({
   onSelect,
   onFlag,
   index = 0,
+  isInactive = false,
 }: DriverLoadCardProps) {
   const availableSeats = booking.totalSeats - booking.bookedCount;
   const isFullyBooked = availableSeats === 0;
@@ -60,8 +62,10 @@ export default function DriverLoadCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className={`relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border rounded-2xl overflow-hidden shadow-xl transition-all duration-300 group ${
-        isFullyBooked
+      className={`relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border rounded-2xl overflow-hidden shadow-xl transition-all duration-300 group mb-10 lg:mb-8 ${
+        isInactive
+          ? "border-gray-800 opacity-50 cursor-not-allowed grayscale-[0.5]"
+          : isFullyBooked
           ? "border-gray-700/50 opacity-70"
           : "border-purple-700/30 hover:border-purple-500/50 hover:shadow-purple-900/20 hover:shadow-2xl"
       }`}
@@ -232,15 +236,15 @@ export default function DriverLoadCard({
             <FaFlag size={11} />
           </button>
           <button
-            onClick={() => !isFullyBooked && onSelect(booking)}
-            disabled={isFullyBooked}
+            onClick={() => !isFullyBooked && !isInactive && onSelect(booking)}
+            disabled={isFullyBooked || isInactive}
             className={`flex-1 py-2.5 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all ${
-              isFullyBooked
+              isFullyBooked || isInactive
                 ? "bg-gray-700 text-gray-500 cursor-not-allowed"
                 : "bg-gradient-to-r from-purple-600 to-violet-700 text-white hover:from-purple-500 hover:to-violet-600 shadow-lg shadow-purple-900/30 active:scale-95"
             }`}
           >
-            {isFullyBooked ? "No Seats" : (
+            {isFullyBooked ? "No Seats" : isInactive ? "Booking Active" : (
               <>
                 View Seats
                 <FaChevronRight size={9} />

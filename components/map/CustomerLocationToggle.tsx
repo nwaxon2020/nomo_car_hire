@@ -49,6 +49,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [sendingLinks, setSendingLinks] = useState<string[]>([]);
   const [showTracking, setShowTracking] = useState(false);
+  const batteryToastShownRef = useRef(false);
 
   // GPS Permission Modal State
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
@@ -84,9 +85,14 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     if ('getBattery' in navigator) {
       (navigator as any).getBattery().then((battery: any) => {
         const updateBatteryStatus = () => {
+          const isLow = battery.level < 0.15 && !battery.charging;
           setBatterySavingMode(battery.level < 0.2 && !battery.charging);
-          if (battery.level < 0.15 && !battery.charging && isSharing) {
-            toast.error('Battery low - reducing location updates');
+          
+          if (isLow && isSharing && !batteryToastShownRef.current) {
+            toast.error('Battery low - reducing location updates', { id: 'battery-low' });
+            batteryToastShownRef.current = true;
+          } else if (!isLow || battery.charging) {
+            batteryToastShownRef.current = false;
           }
         };
         updateBatteryStatus();
@@ -740,26 +746,43 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   };
 
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    // Primary: Google Maps Geocoding API
+    if (apiKey) {
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          // Find the most specific result (prefer street_address)
+          const bestResult = data.results.find((r: any) => r.types.includes('street_address')) || data.results[0];
+          return bestResult.formatted_address;
+        }
+      } catch (err) {
+        console.warn('Google Geocoding failed, trying fallback:', err);
+      }
+    }
+
+    // Fallback: BigDataCloud (free, no key needed)
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+      );
+      const data = await response.json();
+      const area = data.locality || data.city || '';
+      const subArea = data.principalSubdivision || '';
+      return `${area}${area && subArea ? ', ' : ''}${subArea}`.trim() || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    } catch (err) {
+      // Last resort: OpenStreetMap (Nominatim)
+      try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
         const data = await res.json();
-        return data.display_name || 'Location active';
+        return data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      } catch (e) {
+        return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
       }
-
-      const res = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
-      );
-      const data = await res.json();
-
-      if (data.results && data.results.length > 0) {
-        return data.results[0].formatted_address;
-      }
-      return 'Location updated';
-    } catch (error) {
-      console.error('Geocoding error:', error);
-      return 'Location active';
     }
   };
 

@@ -148,6 +148,10 @@ export default function CustomerSearchPanel({
       return;
     }
 
+    const userCity = (currentUser.city || "").toLowerCase();
+    const userState = (currentUser.state || "").toLowerCase();
+    const locAddr = (manualLocation || "").toLowerCase();
+
     let result = bookings.filter((b) => b.driverId !== currentUser.uid);
 
     // Filter logic
@@ -155,28 +159,30 @@ export default function CustomerSearchPanel({
       // ALWAYS include their active booking so they can manage it
       if (b.id === activeBookingId) return true;
 
-      // If destination is empty, prioritize location match
+      const bCity = (b.driverCity || "").toLowerCase();
+      const bState = (b.driverState || "").toLowerCase();
+      
+      // Locality match: Check if driver is in user's city/state
+      const localityMatch = 
+        (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
+        (userState && (bState.includes(userState) || userState.includes(bState))) ||
+        (locAddr && (bCity.includes(locAddr) || locAddr.includes(bCity) || bState.includes(locAddr) || locAddr.includes(bState)));
+
+      // If destination is empty, prioritize locality match
       if (!destination.trim()) {
-        const userCity = (currentUser.city || "").toLowerCase();
-        const userState = (currentUser.state || "").toLowerCase();
-
-        if (!userCity && !userState) return true; // No location to filter by
-
-        const bCity = (b.driverCity || "").toLowerCase();
-        const bState = (b.driverState || "").toLowerCase();
-        return (
-          (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
-          (userState && (bState.includes(userState) || userState.includes(bState)))
-        );
+        if (!userCity && !userState && !manualLocation) return true; // No location to filter by
+        return localityMatch;
       } else {
         // Destination search
         const q = destination.trim().toLowerCase();
-        return (
+        const destMatch = 
           b.destination.toLowerCase().includes(q) ||
           b.meetingPoint.toLowerCase().includes(q) ||
           b.driverName.toLowerCase().includes(q) ||
-          b.vehicleName.toLowerCase().includes(q)
-        );
+          b.vehicleName.toLowerCase().includes(q);
+
+        // User requested: "when they enter a destination, the page is filtered to get cars going to that destination WITHIN their locality"
+        return destMatch && localityMatch;
       }
     });
 
@@ -207,7 +213,7 @@ export default function CustomerSearchPanel({
 
     setFiltered(result);
     setVisibleCount(20); // Reset count on filter change
-  }, [bookings, destination, currentUser, activeBookingId]);
+  }, [bookings, destination, currentUser, activeBookingId, manualLocation]);
 
   const handleClearDestination = () => {
     setDestination("");
@@ -280,25 +286,37 @@ export default function CustomerSearchPanel({
             )}
           </div>
 
-          {/* Location info */}
-          <div className="bg-gray-800/60 border border-white/5 rounded-xl p-2.5 flex items-center gap-2">
-            <FaMapMarkerAlt className="text-green-400 shrink-0" size={10} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Your Location</p>
-              <p className="text-gray-300 text-[10px] font-bold truncate">
-                {manualLocation && manualLocation !== "Location updated" 
-                  ? manualLocation 
-                  : `${currentUser.city || ""} ${currentUser.state || ""}`.trim() || "Location not set"}
-              </p>
+          {/* Location info & Manual Input */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 block flex items-center gap-1">
+              <FaMapMarkerAlt className="text-green-400" size={8} /> Your Current Locality
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={manualLocation}
+                onChange={(e) => setManualLocation(e.target.value)}
+                placeholder="Enter your city or area (e.g. Sagamu)"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
+              />
+              {manualLocation && (
+                <button
+                  onClick={() => setManualLocation("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                >
+                  <FaTimes size={10} />
+                </button>
+              )}
             </div>
-            {destination && (
-              <button
-                onClick={handleClearDestination}
-                className="text-purple-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
-              >
-                Clear Filter
-              </button>
-            )}
+            
+            <div className="bg-gray-800/40 border border-white/5 rounded-xl p-2 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Auto-detected</p>
+                <p className="text-gray-400 text-[9px] font-bold truncate">
+                  {currentUser.location?.address || `${currentUser.city || ""} ${currentUser.state || ""}`.trim() || "Location not found"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -369,13 +387,9 @@ export default function CustomerSearchPanel({
                     key={b.id}
                     booking={b}
                     index={i}
+                    isInactive={hasActiveBooking && b.id !== activeBookingId}
                     onSelect={(bk) => {
-                      if (hasActiveBooking) {
-                        // Check if the booking they're viewing IS their active one (allow re-open)
-                        setSelectedBooking(bk);
-                      } else {
-                        setSelectedBooking(bk);
-                      }
+                      setSelectedBooking(bk);
                     }}
                     onFlag={(bk) => setFlagBooking(bk)}
                   />

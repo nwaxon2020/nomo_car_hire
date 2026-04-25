@@ -101,6 +101,28 @@ export default function SeatSelectionOverlay({
   const handleBookSeat = async (seatNum: number) => {
     setActionLoading(true);
     try {
+      const userRef = doc(db, "users", currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data() || {};
+      
+      const lastBookedCarId = userData.lastBookedCarId || null;
+      let carSwitchCount = userData.carSwitchCount || 0;
+      let trustScore = currentUser.trustScore;
+
+      // Logic: if booking a DIFFERENT car than the last one, increment count
+      // If booking the SAME car (e.g. they unselected and re-selected, or just moving seats), no penalty
+      if (lastBookedCarId && lastBookedCarId !== booking.id) {
+        carSwitchCount += 1;
+        
+        if (carSwitchCount >= 3) {
+          trustScore = Math.max(0, trustScore - 20);
+          carSwitchCount = 0; // Reset after penalty
+          toast.error("Trust score reduced by 20% for switching cars 3 times!");
+        } else {
+          toast(`Car switch ${carSwitchCount}/3 before trust penalty`, { icon: '⚠️' });
+        }
+      }
+
       const bookingRef = doc(db, "loadBookings", booking.id);
       const newSeatRef = doc(db, "loadBookings", booking.id, "seats", String(seatNum));
       const newSeatSnap = await getDoc(newSeatRef);
@@ -111,7 +133,15 @@ export default function SeatSelectionOverlay({
       }
 
       await runTransaction(db, async (tx) => {
-        // Release old seat if moving
+        // Update user data (trust and switch tracking)
+        tx.update(userRef, {
+          lastBookedCarId: booking.id,
+          carSwitchCount: carSwitchCount,
+          trustScore: trustScore,
+          updatedAt: serverTimestamp(),
+        });
+
+        // Release old seat if moving within the SAME car
         if (selectedSeat !== null) {
           const oldSeatRef = doc(db, "loadBookings", booking.id, "seats", String(selectedSeat));
           tx.update(oldSeatRef, {
@@ -137,7 +167,7 @@ export default function SeatSelectionOverlay({
           customerId: currentUser.uid,
           customerName: currentUser.displayName,
           customerImage: currentUser.photoURL || "",
-          trustScore: currentUser.trustScore,
+          trustScore: trustScore,
           bookedAt: serverTimestamp(),
         });
       });

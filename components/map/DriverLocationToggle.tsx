@@ -268,7 +268,9 @@ export default function DriverLocationToggle({
         );
         const data = await res.json();
         if (data.results && data.results.length > 0) {
-          return data.results[0].formatted_address;
+          // Find the most specific result (prefer street_address)
+          const bestResult = data.results.find((r: any) => r.types.includes('street_address')) || data.results[0];
+          return bestResult.formatted_address;
         }
       } catch (err) {
         console.warn('Google Geocoding failed, trying fallback:', err);
@@ -281,7 +283,9 @@ export default function DriverLocationToggle({
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
       );
       const data = await response.json();
-      return `${data.city || data.locality || ''}, ${data.principalSubdivision || ''}`.trim().replace(/^,\s*/, '') || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+      const area = data.locality || data.city || '';
+      const subArea = data.principalSubdivision || '';
+      return `${area}${area && subArea ? ', ' : ''}${subArea}`.trim() || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     } catch (err) {
       return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     }
