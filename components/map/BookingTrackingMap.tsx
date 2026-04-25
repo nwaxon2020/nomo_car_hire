@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, OverlayView } from '@react-google-maps/api';
 
 // Defined outside component to prevent referential instability warning from useJsApiLoader
-const GOOGLE_MAPS_LIBRARIES: ('places' | 'geometry')[] = ['places'];
+const GOOGLE_MAPS_LIBRARIES: ('places' | 'geometry')[] = ['places', 'geometry'];
 
 const mapStyles = [
   { "elementType": "geometry", "stylers": [{ "color": "#1d2c4d" }] },
@@ -51,6 +51,7 @@ export default function BookingTrackingMap({
   const driverLabel = viewerRole === 'customer' ? 'Driver' : 'You';
 
   const { isLoaded, loadError: googleLoadError } = useJsApiLoader({
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_MAPS_LIBRARIES,
   });

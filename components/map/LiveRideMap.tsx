@@ -15,7 +15,7 @@ const luxuryDarkStyle: google.maps.MapTypeStyle[] = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
 ];
 
-const LIBRARIES: ('places' | 'geometry')[] = ['geometry', 'places'];
+const LIBRARIES: ('places' | 'geometry')[] = ['places', 'geometry'];
 
 interface Driver {
   id: string;
@@ -36,6 +36,7 @@ export default function LiveRideMap() {
   const watchIdRef = useRef<number | null>(null);
 
   const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
     libraries: LIBRARIES,
   });

@@ -18,7 +18,7 @@ import SeatSelectionOverlay from "./SeatSelectionOverlay";
 import LoadFlagOverlay from "./LoadFlagOverlay";
 import BookingTrackingMap from "@/components/map/BookingTrackingMap";
 
-const GOOGLE_LIBRARIES: ("places")[] = ["places"];
+const GOOGLE_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
 // Robust normalization for Nigerian spellings (e.g., Sagamu vs Shagamu)
 const normalizeForSearch = (str: string) => {

@@ -13,7 +13,7 @@ import { db } from "@/lib/firebaseConfig";
 import toast from "react-hot-toast";
 import { useJsApiLoader } from "@react-google-maps/api";
 
-const GOOGLE_LIBRARIES: ("places" | "geometry")[] = ["places"];
+const GOOGLE_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
 interface DriverSetupPanelProps {
   driverId: string;

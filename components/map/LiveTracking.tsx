@@ -35,7 +35,7 @@ const luxuryDarkStyle: google.maps.MapTypeStyle[] = [
 const defaultCenter = { lat: 6.5244, lng: 3.3792 }; // Lagos
 
 // Shared libraries array (defined outside component to avoid re-renders)
-const LIBRARIES: ('places' | 'geometry')[] = ['places'];
+const LIBRARIES: ('places' | 'geometry')[] = ['places', 'geometry'];
 
 export default function LiveTracking({ driverId }: { driverId: string }) {
     const googleMap = useRef<google.maps.Map | null>(null);
@@ -52,6 +52,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
 
     // ─── Load Google Maps API via useJsApiLoader (fixes Bug A & B) ────────────
     const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
         libraries: LIBRARIES,
     });
