@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLoadScript, Autocomplete } from "@react-google-maps/api";
 import {
   FaSearch, FaMapMarkerAlt, FaFilter, FaSyncAlt,
-  FaCar, FaUsers, FaInfoCircle, FaChevronRight,
+  FaCar, FaUsers, FaInfoCircle, FaChevronRight, FaTimes,
 } from "react-icons/fa";
 import {
   collection, query, where, onSnapshot, getDocs,
@@ -48,15 +47,46 @@ export default function CustomerSearchPanel({
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<LoadBooking | null>(null);
   const [flagBooking, setFlagBooking] = useState<LoadBooking | null>(null);
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
   const [hasActiveBooking, setHasActiveBooking] = useState(false);
   const [activeBookingDriverName, setActiveBookingDriverName] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
+  const [mapsReady, setMapsReady] = useState(false);
 
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: GOOGLE_LIBRARIES,
-  });
+  const destInputRef = useRef<HTMLInputElement>(null);
+  const destAcRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detect Google Maps
+  useEffect(() => {
+    const checkReady = () => {
+      if (typeof window !== "undefined" && (window as any).google?.maps?.places) {
+        setMapsReady(true);
+      } else {
+        setTimeout(checkReady, 500);
+      }
+    };
+    checkReady();
+  }, []);
+
+  // Initialize Autocomplete directly on the input ref
+  useEffect(() => {
+    if (!mapsReady || !destInputRef.current || destAcRef.current) return;
+
+    const ac = new google.maps.places.Autocomplete(destInputRef.current, {
+      fields: ["formatted_address", "name", "geometry", "address_components"],
+      componentRestrictions: { country: "ng" }, // Restrict to Nigeria
+    });
+
+    ac.addListener("place_changed", () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      const place = ac.getPlace();
+      const addr = place.formatted_address || place.name || "";
+      setDestination(addr);
+      if (destInputRef.current) destInputRef.current.value = addr;
+    });
+
+    destAcRef.current = ac;
+  }, [mapsReady]);
 
   // Real-time listener for active load bookings today
   useEffect(() => {
@@ -165,10 +195,12 @@ export default function CustomerSearchPanel({
     setVisibleCount(20); // Reset count on filter change
   }, [bookings, destination, currentUser]);
 
-  const handlePlaceChanged = () => {
-    if (!autocomplete) return;
-    const place = autocomplete.getPlace();
-    setDestination(place.formatted_address || place.name || "");
+  const handleClearDestination = () => {
+    setDestination("");
+    if (destInputRef.current) {
+      destInputRef.current.value = "";
+      destInputRef.current.focus();
+    }
   };
 
   const handleBookingChanged = (action: "booked" | "cancelled") => {
@@ -203,24 +235,34 @@ export default function CustomerSearchPanel({
             <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5 block flex items-center gap-1">
               <FaMapMarkerAlt className="text-red-400" size={8} /> Search by Destination / Bus Stop
             </label>
-            {isLoaded ? (
-              <Autocomplete onLoad={(a) => setAutocomplete(a)} onPlaceChanged={handlePlaceChanged}>
-                <input
-                  type="text"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="e.g. Oshodi, Lagos..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-purple-500 placeholder-gray-600 transition-colors"
-                />
-              </Autocomplete>
-            ) : (
+            <div className="relative">
               <input
+                ref={destInputRef}
                 type="text"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="e.g. Oshodi, Lagos..."
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-purple-500 placeholder-gray-600 transition-colors"
+                defaultValue={destination}
+                onChange={(e) => {
+                  if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                  const val = e.target.value;
+                  debounceTimerRef.current = setTimeout(() => {
+                    setDestination(val);
+                  }, 500);
+                }}
+                placeholder="Where are you going? (e.g. Oshodi, Lagos)"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
               />
+              {destination && (
+                <button
+                  onClick={handleClearDestination}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-gray-700 hover:bg-gray-600 rounded-full text-gray-400 hover:text-white transition-colors"
+                >
+                  <FaTimes size={10} />
+                </button>
+              )}
+            </div>
+            {!mapsReady && (
+              <p className="text-[8px] text-purple-400/40 mt-1 uppercase font-bold tracking-tighter">
+                Initialising search engine...
+              </p>
             )}
           </div>
 
@@ -237,10 +279,10 @@ export default function CustomerSearchPanel({
             </div>
             {destination && (
               <button
-                onClick={() => setDestination("")}
-                className="text-gray-600 hover:text-white text-[10px] font-bold uppercase transition-colors"
+                onClick={handleClearDestination}
+                className="text-purple-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
               >
-                Clear
+                Clear Filter
               </button>
             )}
           </div>
