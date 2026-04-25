@@ -48,6 +48,7 @@ export default function CustomerSearchPanel({
   const [selectedBooking, setSelectedBooking] = useState<LoadBooking | null>(null);
   const [flagBooking, setFlagBooking] = useState<LoadBooking | null>(null);
   const [hasActiveBooking, setHasActiveBooking] = useState(false);
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [activeBookingDriverName, setActiveBookingDriverName] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
   const [mapsReady, setMapsReady] = useState(false);
@@ -113,10 +114,11 @@ export default function CustomerSearchPanel({
   useEffect(() => {
     if (!currentUser.uid || bookings.length === 0) return;
 
-    let found = false;
-    let driverName = "";
-
     const checkSeats = async () => {
+      let found = false;
+      let driverName = "";
+      let foundId: string | null = null;
+
       for (const booking of bookings) {
         const seatsSnap = await getDocs(
           collection(db, "loadBookings", booking.id, "seats")
@@ -127,11 +129,13 @@ export default function CustomerSearchPanel({
         if (mySeat) {
           found = true;
           driverName = booking.driverName;
+          foundId = booking.id;
           break;
         }
       }
       setHasActiveBooking(found);
       setActiveBookingDriverName(driverName);
+      setActiveBookingId(foundId);
     };
 
     checkSeats();
@@ -146,46 +150,56 @@ export default function CustomerSearchPanel({
 
     let result = bookings.filter((b) => b.driverId !== currentUser.uid);
 
-    // If destination is empty, prioritize location match
-    if (!destination.trim()) {
-      const userCity = (currentUser.city || "").toLowerCase();
-      const userState = (currentUser.state || "").toLowerCase();
+    // Filter logic
+    result = result.filter((b) => {
+      // ALWAYS include their active booking so they can manage it
+      if (b.id === activeBookingId) return true;
 
-      if (userCity || userState) {
-        result = result.filter((b) => {
-          const bCity = (b.driverCity || "").toLowerCase();
-          const bState = (b.driverState || "").toLowerCase();
-          return (
-            (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
-            (userState && (bState.includes(userState) || userState.includes(bState)))
-          );
-        });
+      // If destination is empty, prioritize location match
+      if (!destination.trim()) {
+        const userCity = (currentUser.city || "").toLowerCase();
+        const userState = (currentUser.state || "").toLowerCase();
+
+        if (!userCity && !userState) return true; // No location to filter by
+
+        const bCity = (b.driverCity || "").toLowerCase();
+        const bState = (b.driverState || "").toLowerCase();
+        return (
+          (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
+          (userState && (bState.includes(userState) || userState.includes(bState)))
+        );
+      } else {
+        // Destination search
+        const q = destination.trim().toLowerCase();
+        return (
+          b.destination.toLowerCase().includes(q) ||
+          b.meetingPoint.toLowerCase().includes(q) ||
+          b.driverName.toLowerCase().includes(q) ||
+          b.vehicleName.toLowerCase().includes(q)
+        );
       }
-    } else {
-      // Destination search
-      const q = destination.trim().toLowerCase();
-      result = result.filter((b) =>
-        b.destination.toLowerCase().includes(q) ||
-        b.meetingPoint.toLowerCase().includes(q)
-      );
-    }
+    });
 
     // Sort results
     result.sort((a, b) => {
-      // 1. VIP & Verified
+      // 1. User's active booking always first
+      if (a.id === activeBookingId) return -1;
+      if (b.id === activeBookingId) return 1;
+
+      // 2. VIP & Verified
       const aVipVer = (a.vipLevel || 0) > 0 && a.isVerified;
       const bVipVer = (b.vipLevel || 0) > 0 && b.isVerified;
       if (aVipVer !== bVipVer) return aVipVer ? -1 : 1;
 
-      // 2. VIP only
+      // 3. VIP only
       const aVip = (a.vipLevel || 0) > 0;
       const bVip = (b.vipLevel || 0) > 0;
       if (aVip !== bVip) return aVip ? -1 : 1;
 
-      // 3. Verified only
+      // 4. Verified only
       if (a.isVerified !== b.isVerified) return a.isVerified ? -1 : 1;
 
-      // 4. By listed first (createdAt)
+      // 5. By listed first (createdAt)
       const aTime = a.createdAt?.seconds || 0;
       const bTime = b.createdAt?.seconds || 0;
       return aTime - bTime;
@@ -193,7 +207,7 @@ export default function CustomerSearchPanel({
 
     setFiltered(result);
     setVisibleCount(20); // Reset count on filter change
-  }, [bookings, destination, currentUser]);
+  }, [bookings, destination, currentUser, activeBookingId]);
 
   const handleClearDestination = () => {
     setDestination("");
@@ -245,7 +259,7 @@ export default function CustomerSearchPanel({
                   const val = e.target.value;
                   debounceTimerRef.current = setTimeout(() => {
                     setDestination(val);
-                  }, 500);
+                  }, 50);
                 }}
                 placeholder="Where are you going? (e.g. Oshodi, Lagos)"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
