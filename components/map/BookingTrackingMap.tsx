@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, OverlayView } from '@react-google-maps/api';
 
 // Defined outside component to prevent referential instability warning from useJsApiLoader
@@ -98,7 +98,8 @@ export default function BookingTrackingMap({
     }
   }, [googleLoadError]);
 
-  // Fit bounds when map is ready
+  // Fit bounds when map is ready - Optimized to prevent flickering
+  const fittedRef = useRef(false);
   useEffect(() => {
     if (map && isLoaded && !showFallback) {
       const bounds = new google.maps.LatLngBounds();
@@ -109,7 +110,14 @@ export default function BookingTrackingMap({
       if (destValid && destination) { bounds.extend(destination); hasPoints = true; }
 
       if (hasPoints) {
-        map.fitBounds(bounds);
+        // Only fit bounds on first load or if driver moves significantly out of view
+        const currentBounds = map.getBounds();
+        const shouldFit = !fittedRef.current || (currentBounds && !currentBounds.contains(new google.maps.LatLng(driver.lat, driver.lng)));
+        
+        if (shouldFit) {
+          map.fitBounds(bounds, 50); // Added padding
+          fittedRef.current = true;
+        }
       } else {
         map.setCenter({ lat: 9.0765, lng: 7.3986 });
         map.setZoom(10);

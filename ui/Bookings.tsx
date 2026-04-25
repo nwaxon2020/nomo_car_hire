@@ -2069,6 +2069,7 @@ export default function BookingUi() {
                     : (currentUser?.photoURL || ""),
                 driverImage: driver.profileImage || "",
                 driverPhone: driver.phoneNumber,
+                customerPhone: currentUser.phoneNumber || "",
                 plateNumber: vehicle.plateNumber || "N/A",
                 pickupLocation: 'Current Location', // Simplified for now
                 destination: destinationInput,
@@ -2248,11 +2249,15 @@ export default function BookingUi() {
                 setPendingOffer(null);
                 setAcceptanceMap(false);
             } else {
-                const activeOffer = snapshot.docs.find(d => d.data().status === 'pending' || d.data().status === 'accepted');
+                const activeOffer = snapshot.docs.find(d => 
+                    d.data().status === 'pending' || 
+                    d.data().status === 'accepted' || 
+                    d.data().status === 'started'
+                );
                 if (activeOffer) {
                     const data = { ...activeOffer.data(), id: activeOffer.id } as DirectOffer;
                     setPendingOffer(data);
-                    if (data.status === 'accepted') setAcceptanceMap(true);
+                    if (data.status === 'accepted' || data.status === 'started') setAcceptanceMap(true);
                 } else {
                     setPendingOffer(null);
                     setAcceptanceMap(false);
@@ -2293,7 +2298,10 @@ export default function BookingUi() {
                         setAcceptanceMap(false);
                         setDriverResponse("none");
                     }, 4000);
-                } else if (offer.status === 'started' || offer.status === 'completed') {
+                } else if (offer.status === 'started') {
+                    setIncomingOffer(offer);
+                    setAcceptanceMap(true);
+                } else if (offer.status === 'completed') {
                     setIncomingOffer(null);
                     setAcceptanceMap(false);
                 }
@@ -2303,11 +2311,15 @@ export default function BookingUi() {
                 setIncomingOffer(null);
                 setAcceptanceMap(false);
             } else {
-                const active = snapshot.docs.find(d => d.data().status === 'pending' || d.data().status === 'accepted');
+                const active = snapshot.docs.find(d => 
+                    d.data().status === 'pending' || 
+                    d.data().status === 'accepted' || 
+                    d.data().status === 'started'
+                );
                 if (active) {
                     const data = { ...active.data(), id: active.id } as DirectOffer;
                     setIncomingOffer(data);
-                    if (data.status === 'accepted') setAcceptanceMap(true);
+                    if (data.status === 'accepted' || data.status === 'started') setAcceptanceMap(true);
                 } else {
                     const cancelledDoc = snapshot.docs.find(d => d.data().status === 'cancelled');
                     if (cancelledDoc) {
@@ -2344,7 +2356,7 @@ export default function BookingUi() {
                 const tripsRef = collection(db, 'trips');
                 const q = query(
                     tripsRef,
-                    where('customerId', '==', currentUser.uid),
+                    where(isDriver ? 'driverId' : 'customerId', '==', currentUser.uid),
                     where('status', '==', 'active')
                 );
 
@@ -2464,18 +2476,49 @@ export default function BookingUi() {
                         </div>
 
                         <div className="mt-6 md:mt-10 flex flex-col sm:flex-row gap-4 w-full px-6 max-w-xl">
+                            {/* CUSTOMER VIEW CONTROLS */}
                             {pendingOffer && (
-                                <button
-                                    onClick={() => handlePhoneCall(pendingOffer?.driverPhone || "")}
-                                    className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:scale-105 transition-all"
-                                >
-                                    Call Driver
-                                </button>
+                                <>
+                                    {pendingOffer.status !== 'started' ? (
+                                        <>
+                                            <button
+                                                onClick={() => handlePhoneCall(pendingOffer?.driverPhone || "")}
+                                                className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:scale-105 transition-all"
+                                            >
+                                                Call Driver
+                                            </button>
+                                            <button
+                                                onClick={() => setShowCancelWarning(true)}
+                                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
+                                            >
+                                                Cancel Request
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* EMERGENCY SOS CONTROLS */}
+                                            <button
+                                                onClick={() => handlePhoneCall("+2348123456789")} // Admin/Emergency Placeholder
+                                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <FaExclamationTriangle size={14} /> SOS Call
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://wa.me/2348123456789?text=${encodeURIComponent("EMERGENCY HELP: I am on a trip and need assistance. Trip ID: " + (pendingOffer.id || "Unknown"))}`, '_blank')}
+                                                className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <FaCar size={14} /> SOS WhatsApp
+                                            </button>
+                                        </>
+                                    )}
+                                </>
                             )}
-                            {incomingOffer && (
+
+                            {/* DRIVER VIEW CONTROLS - Shown only BEFORE trip starts */}
+                            {incomingOffer && incomingOffer.status !== 'started' && (
                                 <>
                                     <button
-                                        onClick={() => handlePhoneCall("123")} // Customer phone currently not captured, placeholder
+                                        onClick={() => handlePhoneCall(incomingOffer.customerPhone || "123")}
                                         className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all"
                                     >
                                         Call Customer
@@ -2490,7 +2533,6 @@ export default function BookingUi() {
                                                         tripId: tripId,
                                                         updatedAt: serverTimestamp() 
                                                     });
-                                                    // Note: We keep setAcceptanceMap(true) and incomingOffer so the map stays open
                                                 }
                                             } catch (err) {
                                                 console.error(err);
@@ -2500,69 +2542,16 @@ export default function BookingUi() {
                                     >
                                         Start Trip
                                     </button>
+                                    <button
+                                        onClick={() => setShowCancelWarning(true)}
+                                        className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
+                                    >
+                                        Cancel Request
+                                    </button>
                                 </>
                             )}
-                            {incomingOffer && incomingOffer.status === 'started' && (
-                                <button
-                                    onClick={async () => {
-                                        try {
-                                            const tripId = incomingOffer.tripId;
-                                            await updateDoc(doc(db, "directOffers", incomingOffer.id), { 
-                                                status: "completed", 
-                                                updatedAt: serverTimestamp() 
-                                            });
-                                            if (tripId) {
-                                                await updateDoc(doc(db, "trips", tripId), { 
-                                                    status: "completed", 
-                                                    endTime: serverTimestamp(),
-                                                    updatedAt: serverTimestamp() 
-                                                });
-                                            }
-                                            // Free the vehicle
-                                            await updateDoc(doc(db, 'vehicleLog', incomingOffer.vehicleId), { status: 'available' });
-                                            
-                                            // Push to tripHistory
-                                            const historyItem = {
-                                                tripId: tripId,
-                                                driverId: incomingOffer.driverId,
-                                                driverName: incomingOffer.driverName || "Driver",
-                                                customerId: incomingOffer.customerId,
-                                                pickupLocation: incomingOffer.pickupLocation,
-                                                destination: incomingOffer.destination,
-                                                fare: incomingOffer.fare,
-                                                status: 'completed',
-                                                startTime: serverTimestamp(), // Approximate if not stored
-                                                endTime: serverTimestamp(),
-                                                createdAt: serverTimestamp(),
-                                                updatedAt: serverTimestamp(),
-                                                type: 'direct_booking'
-                                            };
 
-                                            await updateDoc(doc(db, 'users', incomingOffer.customerId), {
-                                                tripHistory: arrayUnion(historyItem)
-                                            });
-                                            await updateDoc(doc(db, 'users', incomingOffer.driverId), {
-                                                tripHistory: arrayUnion(historyItem)
-                                            });
-
-                                            setAcceptanceMap(false);
-                                            setIncomingOffer(null);
-                                            toast.success("Trip completed successfully!");
-                                        } catch (err) {
-                                            console.error(err);
-                                        }
-                                    }}
-                                    className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:bg-blue-700 transition-all"
-                                >
-                                    Complete Trip
-                                </button>
-                            )}
-                            <button
-                                onClick={() => setShowCancelWarning(true)}
-                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
-                            >
-                                Cancel Request
-                            </button>
+                            {/* NOTE: For Driver when started, we hide everything as requested */}
                         </div>
                     </div>
                 </div>

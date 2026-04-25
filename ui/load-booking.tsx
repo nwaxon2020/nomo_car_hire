@@ -307,7 +307,7 @@ export default function LoadBookingUi() {
     const q = query(
       collection(db, "loadBookings"),
       where("driverId", "==", user.uid),
-      where("status", "==", "active"),
+      where("status", "in", ["active", "departed"]),
       where("date", "==", today)
     );
 

@@ -188,6 +188,7 @@ export interface DirectOffer {
     driverImage?: string;
     driverPhone?: string;
     plateNumber?: string;
+    customerPhone?: string;
     fare?: number;
     pickupLocation?: string;
     destination?: string;
