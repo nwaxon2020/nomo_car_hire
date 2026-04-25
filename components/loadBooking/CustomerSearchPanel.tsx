@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useJsApiLoader } from "@react-google-maps/api";
 import {
   FaSearch, FaMapMarkerAlt, FaFilter, FaSyncAlt,
   FaCar, FaUsers, FaInfoCircle, FaChevronRight, FaTimes,
@@ -38,6 +39,12 @@ export default function CustomerSearchPanel({
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
 
+  // Load Google Maps API
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries: GOOGLE_LIBRARIES,
+  });
+
   const [bookings, setBookings] = useState<LoadBooking[]>([]);
   const [filtered, setFiltered] = useState<LoadBooking[]>([]);
   const [destination, setDestination] = useState(initialSearch);
@@ -51,43 +58,35 @@ export default function CustomerSearchPanel({
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [activeBookingDriverName, setActiveBookingDriverName] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
-  const [mapsReady, setMapsReady] = useState(false);
 
   const destInputRef = useRef<HTMLInputElement>(null);
   const destAcRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Detect Google Maps
   useEffect(() => {
-    const checkReady = () => {
-      if (typeof window !== "undefined" && (window as any).google?.maps?.places) {
-        setMapsReady(true);
-      } else {
-        setTimeout(checkReady, 500);
-      }
-    };
-    checkReady();
-  }, []);
+    if (isLoaded) {
+      // API is loaded and ready
+    }
+  }, [isLoaded]);
 
   // Initialize Autocomplete directly on the input ref
   useEffect(() => {
-    if (!mapsReady || !destInputRef.current || destAcRef.current) return;
+    if (!isLoaded || !destInputRef.current || destAcRef.current) return;
 
     const ac = new google.maps.places.Autocomplete(destInputRef.current, {
       fields: ["formatted_address", "name", "geometry", "address_components"],
       componentRestrictions: { country: "ng" }, // Restrict to Nigeria
+      types: ["geocode", "establishment"], // Filter results
     });
 
     ac.addListener("place_changed", () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       const place = ac.getPlace();
       const addr = place.formatted_address || place.name || "";
       setDestination(addr);
-      if (destInputRef.current) destInputRef.current.value = addr;
     });
 
     destAcRef.current = ac;
-  }, [mapsReady]);
+  }, [isLoaded]);
 
   // Real-time listener for active load bookings today
   useEffect(() => {
@@ -149,9 +148,9 @@ export default function CustomerSearchPanel({
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
@@ -177,12 +176,21 @@ export default function CustomerSearchPanel({
       const bCity = (b.driverCity || "").toLowerCase();
       const bState = (b.driverState || "").toLowerCase();
 
-      // 1. Locality match (String based)
-      const stringLocalityMatch =
-        (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
-        (userState && (bState.includes(userState) || userState.includes(bState))) ||
-        (locAddr && (bCity.includes(locAddr) || locAddr.includes(bCity) || bState.includes(locAddr) || locAddr.includes(bState)));
+      // 1. Locality match
+      let stringLocalityMatch = false;
 
+      if (locAddr.trim()) {
+        // If user typed a search, prioritize that search string
+        stringLocalityMatch =
+          bCity.includes(locAddr) ||
+          locAddr.includes(bCity) ||
+          bState.includes(locAddr) ||
+          locAddr.includes(bState) ||
+          (b.meetingPoint || "").toLowerCase().includes(locAddr);
+      } else {
+        // Fallback to profile location if search is empty
+        stringLocalityMatch = (!!userCity && (bCity.includes(userCity) || userCity.includes(bCity))) || (!!userState && (bState.includes(userState) || userState.includes(bState)));
+      }
       // 2. Radius match (GPS based - 5km Discovery Radius)
       let radiusMatch = false;
       if (currentUser.location?.lat != null && currentUser.location?.lng != null && b.meetingPointLat != null && b.meetingPointLng != null) {
@@ -192,14 +200,17 @@ export default function CustomerSearchPanel({
           b.meetingPointLat,
           b.meetingPointLng
         );
-        if (dist <= 5) radiusMatch = true; // 5km discovery for load bookings
+        if (dist <= 5) radiusMatch = true;
       }
 
-      const localityMatch = stringLocalityMatch || radiusMatch;
+      // FINAL LOCALITY MATCH:
+      // If the user typed a specific area, we must match that area STRICTLY.
+      // If the search is empty, we show profile matches + radius matches.
+      const localityMatch = locAddr.trim() ? stringLocalityMatch : (stringLocalityMatch || radiusMatch);
 
       // If destination is empty, prioritize locality/radius match
       if (!destination.trim()) {
-        if (!userCity && !userState && !manualLocation && !currentUser.location?.lat) return true; 
+        if (!userCity && !userState && !manualLocation && !currentUser.location?.lat) return true;
         return localityMatch;
       } else {
         // Destination search
@@ -288,14 +299,8 @@ export default function CustomerSearchPanel({
                 <input
                   ref={destInputRef}
                   type="text"
-                  defaultValue={destination}
-                  onChange={(e) => {
-                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-                    const val = e.target.value;
-                    debounceTimerRef.current = setTimeout(() => {
-                      setDestination(val);
-                    }, 50);
-                  }}
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
                   placeholder="Where are you going?"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
                 />
@@ -308,7 +313,7 @@ export default function CustomerSearchPanel({
                   </button>
                 )}
               </div>
-              {!mapsReady && (
+              {!isLoaded && (
                 <p className="text-[8px] text-purple-400/40 mt-1 uppercase font-bold tracking-tighter">
                   Initialising...
                 </p>
@@ -325,7 +330,7 @@ export default function CustomerSearchPanel({
                   type="text"
                   value={manualLocation}
                   onChange={(e) => setManualLocation(e.target.value)}
-                  placeholder="Enter your area (e.g. Ikeja, Lagos)"
+                  placeholder="Enter your area (e.g. Allen, Ikeja, Lagos)"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
                 />
                 {manualLocation && (

@@ -154,3 +154,56 @@ body {
 }
 
 
+/* ===============================
+   GOOGLE PLACES AUTOCOMPLETE
+==================================*/
+.pac-container {
+  z-index: 9999 !important;
+  border-radius: 12px;
+  margin-top: 4px;
+  background-color: #1f2937 !important;
+  border: 1px solid #4b5563 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+  font-family: inherit;
+}
+
+.pac-item {
+  font-size: 13px;
+  padding: 12px 16px;
+  color: #e5e7eb !important;
+  background-color: #1f2937 !important;
+  cursor: pointer;
+  border-bottom: 1px solid #374151;
+  transition: background-color 0.15s ease;
+}
+
+.pac-item:last-child {
+  border-bottom: none;
+}
+
+.pac-item.pac-selected,
+.pac-item:hover {
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+.pac-item-query {
+  color: #a78bfa !important;
+}
+
+.pac-matched {
+  font-weight: 600;
+  color: #a78bfa !important;
+}
+
+.pac-icon {
+  background-image: none !important;
+  margin-right: 8px;
+}
+
+.pac-icon::after {
+  content: "📍";
+  font-size: 14px;
+}
+
+
