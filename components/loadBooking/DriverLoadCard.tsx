@@ -30,6 +30,22 @@ const getSeatsColor = (booked: number, total: number) => {
   return "text-green-400 bg-green-500/10 border-green-500/20";
 };
 
+const getTrustColor = (score: number) => {
+  if (score >= 80) return { bg: "bg-green-500/20", text: "text-green-400", border: "border-green-500/30" };
+  if (score >= 60) return { bg: "bg-yellow-500/20", text: "text-yellow-400", border: "border-yellow-500/30" };
+  if (score >= 40) return { bg: "bg-orange-500/20", text: "text-orange-400", border: "border-orange-500/30" };
+  if (score >= 20) return { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30" };
+  return { bg: "bg-red-800/20", text: "text-red-600", border: "border-red-800/30" };
+};
+
+const getTrustLabel = (score: number) => {
+  if (score >= 80) return "Trusted";
+  if (score >= 60) return "Good";
+  if (score >= 40) return "Fair";
+  if (score >= 20) return "Low";
+  return "Poor";
+};
+
 export default function DriverLoadCard({
   booking,
   onSelect,
@@ -93,6 +109,16 @@ export default function DriverLoadCard({
             <p className="text-purple-300 text-[10px] font-bold uppercase tracking-widest">
               {booking.vehicleType}
             </p>
+            {/* Driver trust score badge */}
+            {booking.driverTrustScore !== undefined && (() => {
+              const t = getTrustColor(booking.driverTrustScore);
+              return (
+                <div className={`inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md border text-[8px] font-black uppercase tracking-widest ${t.bg} ${t.text} ${t.border}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${t.bg.replace("/20", "")}`} />
+                  Driver Trust: {booking.driverTrustScore}% · {getTrustLabel(booking.driverTrustScore)}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Seats badge */}
@@ -158,7 +184,7 @@ export default function DriverLoadCard({
         </div>
 
         {/* Seat mini-bar */}
-        <div className="flex gap-1 mb-4">
+        <div className="flex gap-1 mb-3">
           {Array.from({ length: booking.totalSeats }).map((_, i) => (
             <div
               key={i}
@@ -167,6 +193,34 @@ export default function DriverLoadCard({
               }`}
             />
           ))}
+        </div>
+
+        {/* Car side-view image */}
+        <div className="rounded-xl overflow-hidden mb-4 relative bg-gray-900/60 border border-white/5" style={{ height: "100px" }}>
+          {booking.vehicleSideImage ? (
+            <>
+              <img
+                src={booking.vehicleSideImage}
+                alt={`${booking.vehicleName} view`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  // If side image fails, it might be a broken link
+                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Vehicle+Image';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              <span className="absolute bottom-1.5 left-2.5 text-[8px] font-black text-white/70 uppercase tracking-widest">
+                {booking.vehicleName} · {booking.vehicleColor}
+              </span>
+            </>
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+              <FaCar className="text-gray-700" size={28} />
+              <p className="text-gray-700 text-[8px] font-black uppercase tracking-widest">
+                {booking.vehicleName}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

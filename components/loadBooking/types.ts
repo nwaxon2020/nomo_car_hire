@@ -12,6 +12,7 @@ export interface LoadBooking {
   vehicleType: string;
   vehicleColor: string;
   vehiclePlate: string;
+  vehicleSideImage?: string;   // side-view photo of the car
   totalSeats: number;
   bookedCount: number;
   destination: string;
@@ -28,6 +29,7 @@ export interface LoadBooking {
   driverState: string;
   vipLevel?: number;
   isVerified?: boolean;
+  driverTrustScore?: number;  // driver's trust score at time of booking creation
   createdAt: any;
   updatedAt: any;
 }

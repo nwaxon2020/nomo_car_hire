@@ -167,8 +167,10 @@ export default function LoadBookingUi() {
   const [loading, setLoading] = useState(true);
   const [isDriver, setIsDriver] = useState(false);
   const [viewMode, setViewMode] = useState<"driver" | "customer">("customer");
+  const [isMaintenance, setIsMaintenance] = useState(false);
 
   useEffect(() => {
+    setIsMaintenance(isMaintenanceTime());
     logFeatureUsage("load-booking");
   }, []);
 
@@ -283,6 +285,20 @@ export default function LoadBookingUi() {
     return () => unsub();
   }, [user, isDriver]);
 
+  /* ── Handle driver cancel (trust deduction already done inside DriverActiveSession) ── */
+  const handleDriverCancelOccurred = useCallback(async () => {
+    if (!user) return;
+    // Re-read the user document to refresh trust info in the UI
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if (!snap.exists()) return;
+    const data = snap.data();
+    // Update trust badge in the header
+    setTrustInfo(prev => ({
+      ...prev,
+      trustScore: data.driverTrustScore ?? prev.trustScore,
+    }));
+  }, [user]);
+
   /* ── Handle customer cancel (trust deduction) ── */
   const handleCancelOccurred = useCallback(async () => {
     if (!user || isDriver) return;
@@ -332,7 +348,7 @@ export default function LoadBookingUi() {
   }, [user, isDriver]);
 
   /* ── Maintenance Mode ── */
-  if (isMaintenanceTime()) {
+  if (isMaintenance) {
     return <MaintenanceScreen />;
   }
 
@@ -368,6 +384,7 @@ export default function LoadBookingUi() {
     driverLocation: userData?.location,
     vipLevel: userData?.vipLevel || 0,
     isVerified: userData?.isVerified || userData?.isDriverApproved || false,
+    driverTrustScore: userData?.driverTrustScore ?? 100,
   };
 
   const customerInfo = {
@@ -467,6 +484,7 @@ export default function LoadBookingUi() {
                     driverName={driverInfo.driverName}
                     trustScore={trustInfo.trustScore}
                     onEndSession={() => setActiveBooking(null)}
+                    onCancelOccurred={handleDriverCancelOccurred}
                   />
                 </div>
               ) : vehiclesLoading ? (
@@ -479,14 +497,35 @@ export default function LoadBookingUi() {
                     <div className="w-1.5 h-4 bg-amber-400 rounded-full" />
                     <h2 className="text-white font-black text-sm uppercase tracking-tight">Set Up Your Trip</h2>
                   </div>
-                  <DriverSetupPanel
-                    {...driverInfo}
-                    vehicles={driverVehicles}
-                    lockedVehicleId={lockedVehicleId}
-                    onSessionCreated={(id) => {
-                      // The onSnapshot listener will pick this up automatically
-                    }}
-                  />
+                  {/* Block driver if their trust is at 0 and they're blocked today */}
+                  {userData?.driverLoadBlockedUntil && userData.driverLoadBlockedUntil >= getTodayString() ? (
+                    <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-8 text-center">
+                      <div className="w-14 h-14 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                        <FaShieldAlt className="text-red-400" size={24} />
+                      </div>
+                      <h3 className="text-white font-black text-base uppercase mb-2">Trip Setup Blocked</h3>
+                      <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-3">
+                        You cancelled a trip with booked passengers and your driver trust hit 0%.
+                      </p>
+                      <div className="bg-red-600/10 border border-red-500/20 rounded-xl p-3">
+                        <p className="text-red-400 text-[10px] font-black uppercase tracking-wider">
+                          Access restores: {userData.driverLoadBlockedUntil === getTomorrowString() ? "Tomorrow" : userData.driverLoadBlockedUntil}
+                        </p>
+                      </div>
+                      <p className="text-gray-700 text-[9px] font-bold uppercase tracking-widest mt-3">
+                        Driver trust score resets to 100% on the 1st of every month.
+                      </p>
+                    </div>
+                  ) : (
+                    <DriverSetupPanel
+                      {...driverInfo}
+                      vehicles={driverVehicles}
+                      lockedVehicleId={lockedVehicleId}
+                      onSessionCreated={(id) => {
+                        // The onSnapshot listener will pick this up automatically
+                      }}
+                    />
+                  )}
                 </div>
               )}
             </div>

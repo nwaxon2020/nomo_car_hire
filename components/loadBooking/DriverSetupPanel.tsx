@@ -1,19 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLoadScript, Autocomplete } from "@react-google-maps/api";
 import {
   FaCar, FaMapMarkerAlt, FaMoneyBillWave, FaClock,
   FaLock, FaCheckCircle, FaChevronRight, FaBan,
 } from "react-icons/fa";
 import { EligibleVehicle, isVehicleEligible, getPassengerSeats, getTodayString } from "./types";
 import DriverVehicleConfirmModal from "./DriverVehicleConfirmModal";
-import { doc, setDoc, collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import toast from "react-hot-toast";
-
-const GOOGLE_LIBRARIES: ("places")[] = ["places"];
 
 interface DriverSetupPanelProps {
   driverId: string;
@@ -26,6 +23,7 @@ interface DriverSetupPanelProps {
   driverLocation?: { lat?: number; lng?: number; address?: string };
   vipLevel?: number;
   isVerified?: boolean;
+  driverTrustScore?: number;
   vehicles: EligibleVehicle[];
   lockedVehicleId?: string; // already locked for today
   onSessionCreated: (bookingId: string) => void;
@@ -42,6 +40,7 @@ export default function DriverSetupPanel({
   driverLocation,
   vipLevel,
   isVerified,
+  driverTrustScore,
   vehicles,
   lockedVehicleId,
   onSessionCreated,
@@ -50,10 +49,12 @@ export default function DriverSetupPanel({
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [step, setStep] = useState<"select" | "setup">("select");
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [mapsReady, setMapsReady] = useState(false);
 
   // Form fields
   const [destination, setDestination] = useState("");
+  const [destinationLat, setDestinationLat] = useState(0);
+  const [destinationLng, setDestinationLng] = useState(0);
   const [meetingPoint, setMeetingPoint] = useState(driverLocation?.address || "");
   const [meetingLat, setMeetingLat] = useState(driverLocation?.lat || 0);
   const [meetingLng, setMeetingLng] = useState(driverLocation?.lng || 0);
@@ -61,10 +62,60 @@ export default function DriverSetupPanel({
   const [departureTime, setDepartureTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: GOOGLE_LIBRARIES,
-  });
+  const destInputRef = useRef<HTMLInputElement>(null);
+  const meetingInputRef = useRef<HTMLInputElement>(null);
+  const destAcRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const meetingAcRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  // Detect when Google Maps API is ready
+  useEffect(() => {
+    const checkReady = () => {
+      if (typeof window !== "undefined" && (window as any).google?.maps?.places) {
+        setMapsReady(true);
+      } else {
+        setTimeout(checkReady, 300);
+      }
+    };
+    checkReady();
+  }, []);
+
+  // Attach Google Places Autocomplete directly to destination input
+  useEffect(() => {
+    if (!mapsReady || !destInputRef.current || destAcRef.current) return;
+    const ac = new google.maps.places.Autocomplete(destInputRef.current, {
+      fields: ["formatted_address", "name", "geometry"],
+    });
+    ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      const addr = place.formatted_address || place.name || "";
+      setDestination(addr);
+      if (destInputRef.current) destInputRef.current.value = addr;
+      if (place.geometry?.location) {
+        setDestinationLat(place.geometry.location.lat());
+        setDestinationLng(place.geometry.location.lng());
+      }
+    });
+    destAcRef.current = ac;
+  }, [mapsReady]);
+
+  // Attach Google Places Autocomplete directly to meeting point input
+  useEffect(() => {
+    if (!mapsReady || !meetingInputRef.current || meetingAcRef.current) return;
+    const ac = new google.maps.places.Autocomplete(meetingInputRef.current, {
+      fields: ["formatted_address", "name", "geometry"],
+    });
+    ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      const addr = place.formatted_address || place.name || "";
+      setMeetingPoint(addr);
+      if (meetingInputRef.current) meetingInputRef.current.value = addr;
+      if (place.geometry?.location) {
+        setMeetingLat(place.geometry.location.lat());
+        setMeetingLng(place.geometry.location.lng());
+      }
+    });
+    meetingAcRef.current = ac;
+  }, [mapsReady]);
 
   // Pre-select locked vehicle
   const lockedVehicle = vehicles.find((v) => v.id === lockedVehicleId);
@@ -108,20 +159,16 @@ export default function DriverSetupPanel({
     }
   };
 
-  const handlePlaceChanged = () => {
-    if (!autocomplete) return;
-    const place = autocomplete.getPlace();
-    if (place.formatted_address) {
-      setDestination(place.formatted_address);
-    } else if (place.name) {
-      setDestination(place.name);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!selectedVehicle) return;
-    if (!destination.trim()) { toast.error("Enter a destination"); return; }
-    if (!meetingPoint.trim()) { toast.error("Enter your meeting point"); return; }
+
+    // Use refs to get the absolutely latest value, avoiding keystroke state lag
+    const finalDestination = destInputRef.current?.value || destination;
+    const finalMeeting = meetingInputRef.current?.value || meetingPoint;
+
+    if (!finalDestination.trim()) { toast.error("Enter a destination"); return; }
+    if (!finalMeeting.trim()) { toast.error("Enter your meeting point"); return; }
     if (!fare || Number(fare) < 1) { toast.error("Enter a valid fare amount"); return; }
     if (!departureTime) { toast.error("Set your departure time"); return; }
 
@@ -140,10 +187,13 @@ export default function DriverSetupPanel({
         vehicleType: selectedVehicle.carType,
         vehicleColor: selectedVehicle.exteriorColor,
         vehiclePlate: selectedVehicle.plateNumber,
+        vehicleSideImage: selectedVehicle.images?.side || selectedVehicle.images?.front || "",
         totalSeats: passengerSeats,
         bookedCount: 0,
-        destination: destination.trim(),
-        meetingPoint: meetingPoint.trim(),
+        destination: finalDestination,
+        destinationLat: destinationLat || 0,
+        destinationLng: destinationLng || 0,
+        meetingPoint: finalMeeting,
         meetingPointLat: meetingLat || 0,
         meetingPointLng: meetingLng || 0,
         fare: Number(fare),
@@ -154,6 +204,7 @@ export default function DriverSetupPanel({
         driverState,
         vipLevel: vipLevel || 0,
         isVerified: isVerified || false,
+        driverTrustScore: driverTrustScore ?? 100,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -220,7 +271,7 @@ export default function DriverSetupPanel({
               const eligible = isVehicleEligible(v.passengers, v.carType);
               const isKeke = v.carType?.toLowerCase() === "keke";
               const pSeats = getPassengerSeats(v.passengers, v.carType);
-              const img = v.images?.front || v.images?.side || "/car_select.jpg";
+              const img = v.images?.side || v.images?.front || "/car_select.jpg";
               const isLocked = lockedVehicleId && lockedVehicleId !== v.id;
               const isThisLocked = lockedVehicleId === v.id;
 
@@ -229,13 +280,12 @@ export default function DriverSetupPanel({
                   key={v.id}
                   whileHover={eligible && !isLocked ? { scale: 1.01 } : {}}
                   onClick={() => eligible && !isLocked && handleSelectVehicle(v)}
-                  className={`relative rounded-xl border overflow-hidden transition-all ${
-                    isThisLocked
-                      ? "border-amber-500/60 bg-amber-500/10 cursor-pointer"
-                      : eligible && !isLocked
+                  className={`relative rounded-xl border overflow-hidden transition-all ${isThisLocked
+                    ? "border-amber-500/60 bg-amber-500/10 cursor-pointer"
+                    : eligible && !isLocked
                       ? "border-white/10 bg-gray-800/50 cursor-pointer hover:border-amber-500/40"
                       : "border-white/5 bg-gray-800/30 cursor-not-allowed"
-                  } ${!eligible ? "opacity-50" : ""}`}
+                    } ${!eligible ? "opacity-50" : ""}`}
                 >
                   {/* Blur overlay for ineligible */}
                   {!eligible && (
@@ -278,11 +328,10 @@ export default function DriverSetupPanel({
                           <p className="text-gray-500 text-[9px] font-mono mt-0.5">{v.plateNumber}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            eligible
-                              ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                              : "bg-red-500/20 text-red-400 border border-red-500/30"
-                          }`}>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${eligible
+                            ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                            : "bg-red-500/20 text-red-400 border border-red-500/30"
+                            }`}>
                             {pSeats} seats
                           </span>
                           {isThisLocked && (
@@ -310,14 +359,31 @@ export default function DriverSetupPanel({
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           {/* Selected vehicle chip */}
           {selectedVehicle && (
-            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-5">
-              <FaCar className="text-amber-400" size={14} />
+            <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-5">
+              <div className="w-12 h-10 rounded-lg overflow-hidden border border-amber-500/20 bg-gray-900 flex-shrink-0">
+                {(selectedVehicle.images?.side || selectedVehicle.images?.front) ? (
+                  <img 
+                    src={selectedVehicle.images?.side || selectedVehicle.images?.front} 
+                    alt="Vehicle" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <FaCar className="text-amber-500/40" size={16} />
+                  </div>
+                )}
+              </div>
               <div className="flex-1">
-                <p className="text-white font-black text-sm">
-                  {selectedVehicle.carName} {selectedVehicle.carModel}
-                </p>
-                <p className="text-amber-400 text-[9px] font-bold uppercase tracking-widest">
-                  {getPassengerSeats(selectedVehicle.passengers, selectedVehicle.carType)} passenger seats • {selectedVehicle.plateNumber}
+                <div className="flex items-center gap-2">
+                  <p className="text-white font-black text-xs uppercase tracking-tight">
+                    {selectedVehicle.carName} {selectedVehicle.carModel}
+                  </p>
+                  <span className="bg-amber-500/20 text-amber-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-amber-500/20">
+                    {selectedVehicle.carType}
+                  </span>
+                </div>
+                <p className="text-amber-500/60 text-[9px] font-bold uppercase tracking-widest mt-0.5">
+                  {getPassengerSeats(selectedVehicle.passengers, selectedVehicle.carType)} Seats · {selectedVehicle.plateNumber} · {selectedVehicle.exteriorColor}
                 </p>
               </div>
               <div className="bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
@@ -329,54 +395,42 @@ export default function DriverSetupPanel({
           <div className="space-y-4">
             {/* Destination */}
             <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
+              <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
                 <FaMapMarkerAlt className="text-red-400" size={9} /> Destination / Last Bus Stop
               </label>
-              {isLoaded ? (
-                <Autocomplete
-                  onLoad={(a) => setAutocomplete(a)}
-                  onPlaceChanged={handlePlaceChanged}
-                >
-                  <input
-                    type="text"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="e.g. Ojota Bus Stop, Lagos"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500 placeholder-gray-600 transition-colors"
-                  />
-                </Autocomplete>
-              ) : (
-                <input
-                  type="text"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="e.g. Ojota Bus Stop, Lagos"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500 placeholder-gray-600 transition-colors"
-                />
+              <input
+                ref={destInputRef}
+                type="text"
+                defaultValue={destination}
+                placeholder="e.g. Ojota Bus Stop, Lagos"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500 placeholder-gray-600 transition-colors"
+              />
+              {!mapsReady && (
+                <p className="text-[9px] text-gray-600 mt-1">Loading location suggestions...</p>
               )}
             </div>
 
             {/* Meeting Point */}
             <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
-                <FaMapMarkerAlt className="text-green-400" size={9} /> Your Meeting Point (Current Location)
+              <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
+                <FaMapMarkerAlt className="text-green-400" size={9} /> Your Meeting Point (Where customers board)
               </label>
               <input
+                ref={meetingInputRef}
                 type="text"
-                value={meetingPoint}
-                onChange={(e) => setMeetingPoint(e.target.value)}
-                placeholder="Where customers should meet you"
+                defaultValue={meetingPoint}
+                placeholder="e.g. Ikeja City Mall, Ikeja"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500 placeholder-gray-600 transition-colors"
               />
-              <p className="text-[9px] text-gray-600 font-medium mt-1">
-                Auto-filled from your GPS. Must be a safe, public location.
+              <p className="text-[10px] text-orange-300 font-semibold mt-1">
+                Ensure this is a safe, recognizable, and public location.
               </p>
             </div>
 
             {/* Fare */}
             <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
-                <FaMoneyBillWave className="text-emerald-400" size={9} /> Fare Per Seat (₦)
+              <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
+                <FaMoneyBillWave className="text-emerald-400" size={9} /> Amount Per Seat (₦)
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-black text-sm">₦</span>
@@ -393,7 +447,7 @@ export default function DriverSetupPanel({
 
             {/* Departure Time */}
             <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
+              <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-gray-400 mb-1.5 block flex items-center gap-1.5">
                 <FaClock className="text-blue-400" size={9} /> Estimated Departure Time
               </label>
               <input

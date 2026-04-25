@@ -8,10 +8,10 @@ import {
   FaFlag, FaCheckCircle, FaBell, FaStop,
 } from "react-icons/fa";
 import {
-  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, Timestamp
+  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, deleteDoc
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
-import { LoadBooking, LoadSeat, getSeatLayout } from "./types";
+import { LoadBooking, LoadSeat, getSeatLayout, getTodayString, getTomorrowString } from "./types";
 import LoadFlagOverlay from "./LoadFlagOverlay";
 import toast from "react-hot-toast";
 
@@ -23,6 +23,7 @@ interface DriverActiveSessionProps {
   driverName: string;
   trustScore?: number;
   onEndSession: () => void;
+  onCancelOccurred?: () => void;
 }
 
 const getTrustColor = (score?: number) => {
@@ -40,6 +41,7 @@ export default function DriverActiveSession({
   driverName,
   trustScore,
   onEndSession,
+  onCancelOccurred,
 }: DriverActiveSessionProps) {
   const [seats, setSeats] = useState<LoadSeat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,10 @@ export default function DriverActiveSession({
   const [tripStarted, setTripStarted] = useState(booking.status === "departed");
   const [arriving, setArriving] = useState(false);
   const [tripIds, setTripIds] = useState<string[]>([]);
+
+  // Cancel flow state
+  const [showCancelWarning, setShowCancelWarning] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const { isLoaded: mapLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
@@ -70,6 +76,56 @@ export default function DriverActiveSession({
     });
     return () => unsub();
   }, [booking.id]);
+
+  // Handle cancel session
+  const handleCancelSession = async () => {
+    setCancelling(true);
+    try {
+      const today = getTodayString();
+
+      // 1. Mark the booking as cancelled
+      await updateDoc(doc(db, "loadBookings", booking.id), {
+        status: "cancelled",
+        cancelledAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // 2. If there were booked passengers, apply trust penalty
+      if (bookedSeats > 0) {
+        const driverRef = doc(db, "users", driverId);
+        const snap = await getDoc(driverRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          const currentScore = data.driverTrustScore ?? 100;
+          const newScore = Math.max(0, currentScore - 25);
+
+          const updates: any = {
+            driverTrustScore: newScore,
+            driverTrustCancels: (data.driverTrustCancels ?? 0) + 1,
+          };
+
+          if (newScore === 0) {
+            updates.driverTrustExhaustedAt = today;
+            updates.driverLoadBlockedUntil = getTomorrowString();
+          }
+
+          await updateDoc(driverRef, updates);
+        }
+        onCancelOccurred?.();
+        toast.error("Session cancelled. Trust score reduced by 25%.");
+      } else {
+        toast.success("Session cancelled.");
+      }
+
+      setShowCancelWarning(false);
+      onEndSession();
+    } catch (error) {
+      console.error("Cancel error:", error);
+      toast.error("Failed to cancel session.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // Start Trip: Creates ACTIVE trips for all passengers, marks booking as departed
   const handleStartTrip = async () => {
@@ -228,7 +284,18 @@ export default function DriverActiveSession({
       {/* Trip Info Card */}
       <div className="bg-gray-800/50 border border-white/10 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-white font-black text-sm uppercase tracking-tight">Active Session</h3>
+          <div className="flex items-center gap-3">
+            {booking.vehicleSideImage && (
+              <div className="w-10 h-8 rounded-lg overflow-hidden border border-white/10 bg-gray-900 shrink-0">
+                <img
+                  src={booking.vehicleSideImage}
+                  alt="Vehicle"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <h3 className="text-white font-black text-sm uppercase tracking-tight">Active Session</h3>
+          </div>
           <div className="flex items-center gap-2">
             <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
@@ -427,34 +494,57 @@ export default function DriverActiveSession({
       {/* Start/Arrive Button Section */}
       <div className="pt-2">
         {!tripStarted ? (
-          showEndConfirm ? (
-            <div className="bg-amber-600/10 border border-amber-500/30 rounded-xl p-4">
-              <p className="text-amber-400 font-black text-[11px] uppercase tracking-widest mb-3 text-center">
-                Ready to depart with {bookedSeats} passengers?
+          isFullyBooked ? (
+            showEndConfirm ? (
+              <div className="bg-amber-600/10 border border-amber-500/30 rounded-xl p-4">
+                <p className="text-amber-400 font-black text-[11px] uppercase tracking-widest mb-3 text-center">
+                  Ready to depart with {bookedSeats} passengers?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowEndConfirm(false)}
+                    className="flex-1 py-2.5 bg-gray-800 border border-gray-700 text-gray-400 rounded-xl font-black uppercase tracking-widest text-[10px]"
+                  >
+                    Wait
+                  </button>
+                  <button
+                    onClick={handleStartTrip}
+                    disabled={endingSession}
+                    className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-1.5"
+                  >
+                    {endingSession ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Start Trip"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowEndConfirm(true)}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
+              >
+                <FaCheckCircle size={9} /> Start Trip / Departed
+              </button>
+            )
+          ) : (
+            /* Waiting for all seats to be booked */
+            <div className="bg-gray-800/60 border border-white/10 rounded-xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                <p className="text-amber-400 font-black text-[11px] uppercase tracking-widest">
+                  Waiting for passengers
+                </p>
+              </div>
+              <p className="text-gray-500 text-[10px] font-bold">
+                {booking.totalSeats - bookedSeats} seat{booking.totalSeats - bookedSeats !== 1 ? "s" : ""} remaining before you can start the trip.
               </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowEndConfirm(false)}
-                  className="flex-1 py-2.5 bg-gray-800 border border-gray-700 text-gray-400 rounded-xl font-black uppercase tracking-widest text-[10px]"
-                >
-                  Wait
-                </button>
-                <button
-                  onClick={handleStartTrip}
-                  disabled={endingSession}
-                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-1.5"
-                >
-                  {endingSession ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Start Trip"}
-                </button>
+              <div className="flex gap-1 mt-3">
+                {Array.from({ length: booking.totalSeats }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`flex-1 h-1.5 rounded-full transition-colors ${i < bookedSeats ? "bg-amber-500" : "bg-gray-700"}`}
+                  />
+                ))}
               </div>
             </div>
-          ) : (
-            <button
-              onClick={() => setShowEndConfirm(true)}
-              className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
-            >
-              <FaCheckCircle size={9} /> Start Trip / Departed
-            </button>
           )
         ) : (
           <button
@@ -471,6 +561,18 @@ export default function DriverActiveSession({
         )}
       </div>
 
+      {/* Cancel Session Button — only before trip starts */}
+      {!tripStarted && (
+        <div className="pt-1">
+          <button
+            onClick={() => setShowCancelWarning(true)}
+            className="w-full py-2.5 bg-red-600/10 border border-red-500/30 text-red-400 hover:bg-red-600/20 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-colors"
+          >
+            <FaStop size={8} /> Cancel Session
+          </button>
+        </div>
+      )}
+
       {/* Flag Overlay */}
       <AnimatePresence>
         {flagTarget && (
@@ -486,6 +588,81 @@ export default function DriverActiveSession({
             }}
             reporterUser={{ uid: driverId, fullName: driverName }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Cancel Warning Modal */}
+      <AnimatePresence>
+        {showCancelWarning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-gray-950 border border-red-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            >
+              <div className="w-12 h-12 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FaStop className="text-red-400" size={18} />
+              </div>
+
+              {bookedSeats > 0 ? (
+                <>
+                  <p className="text-red-400 font-black text-[11px] uppercase tracking-widest text-center mb-1">Trust Penalty Warning</p>
+                  <p className="text-white font-bold text-sm text-center mb-3">
+                    {bookedSeats} passenger{bookedSeats !== 1 ? "s have" : " has"} already booked!
+                  </p>
+                  <div className="bg-red-600/10 border border-red-500/20 rounded-xl p-3 mb-4">
+                    <p className="text-red-300 text-[10px] font-bold text-center">
+                      Cancelling now will reduce your driver trust score by <span className="text-red-400 font-black">25%</span>.
+                      {(trustScore ?? 100) <= 25 ? " Your trust will hit 0% and you won't be able to set up another trip today." : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCancelWarning(false)}
+                      className="flex-1 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 rounded-xl font-black uppercase tracking-widest text-[10px]"
+                    >
+                      Keep Session
+                    </button>
+                    <button
+                      onClick={handleCancelSession}
+                      disabled={cancelling}
+                      className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-1.5"
+                    >
+                      {cancelling ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Cancel Anyway"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-white font-bold text-sm text-center mb-2">Cancel this session?</p>
+                  <p className="text-gray-500 text-[10px] font-bold text-center mb-4">
+                    No passengers have booked yet. Your trust score won't be affected.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCancelWarning(false)}
+                      className="flex-1 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 rounded-xl font-black uppercase tracking-widest text-[10px]"
+                    >
+                      Keep Session
+                    </button>
+                    <button
+                      onClick={handleCancelSession}
+                      disabled={cancelling}
+                      className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-1.5"
+                    >
+                      {cancelling ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Yes, Cancel"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

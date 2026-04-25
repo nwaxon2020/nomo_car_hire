@@ -343,7 +343,7 @@ const ListingCard = ({ item }: { item: TransportListing }) => {
                     <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">
                         {item.company?.charAt(0) || '?'}
                     </div>
-                    <h3 className="font-bold text-slate-200">{item.company}</h3>
+                    <h3 className="font-bold text-pink-300">{item.company}</h3>
                 </div>
                 <div className="flex items-center gap-3">
                     <p className="text-lg font-black text-white">{item.from}</p>
