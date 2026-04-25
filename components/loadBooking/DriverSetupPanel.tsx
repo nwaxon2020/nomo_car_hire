@@ -11,6 +11,9 @@ import DriverVehicleConfirmModal from "./DriverVehicleConfirmModal";
 import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import toast from "react-hot-toast";
+import { useJsApiLoader } from "@react-google-maps/api";
+
+const GOOGLE_LIBRARIES: ("places" | "geometry")[] = ["places"];
 
 interface DriverSetupPanelProps {
   driverId: string;
@@ -49,7 +52,12 @@ export default function DriverSetupPanel({
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [step, setStep] = useState<"select" | "setup">("select");
-  const [mapsReady, setMapsReady] = useState(false);
+
+  // Load Google Maps API
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries: GOOGLE_LIBRARIES,
+  });
 
   // Form fields
   const [destination, setDestination] = useState("");
@@ -67,55 +75,131 @@ export default function DriverSetupPanel({
   const destAcRef = useRef<google.maps.places.Autocomplete | null>(null);
   const meetingAcRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  // Detect when Google Maps API is ready
-  useEffect(() => {
-    const checkReady = () => {
-      if (typeof window !== "undefined" && (window as any).google?.maps?.places) {
-        setMapsReady(true);
-      } else {
-        setTimeout(checkReady, 300);
-      }
-    };
-    checkReady();
-  }, []);
-
   // Attach Google Places Autocomplete directly to destination input
   useEffect(() => {
-    if (!mapsReady || !destInputRef.current || destAcRef.current) return;
+    if (!isLoaded || !destInputRef.current || destAcRef.current) return;
     const ac = new google.maps.places.Autocomplete(destInputRef.current, {
-      fields: ["formatted_address", "name", "geometry"],
+      fields: ["formatted_address", "name", "geometry", "address_components"],
     });
     ac.addListener("place_changed", () => {
       const place = ac.getPlace();
-      const addr = place.formatted_address || place.name || "";
-      setDestination(addr);
-      if (destInputRef.current) destInputRef.current.value = addr;
+      // Get detailed components for Nigeria (LGA, City, State)
+      const name = place.name || "";
+      const addressComponents = place.address_components || [];
+      const lga = addressComponents.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
+      const city = addressComponents.find(c => c.types.includes("locality"))?.long_name || "";
+      const state = addressComponents.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "";
+      let fullAddr = place.formatted_address || "";
+      
+      // Clean up the full address of Plus Codes
+      fullAddr = fullAddr.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim().replace(/^[,.\s]+|[,.\s]+$/g, "");
+
+      const firstPart = fullAddr.split(",")[0].trim();
+      let displayName = (name && !name.includes("+")) ? name : firstPart;
+      displayName = displayName.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim();
+
+      // Build a verbose header: Name, City/LGA, State
+      const headerParts = [displayName];
+      const area = city || lga; // Use City or LGA as the second part
+      if (area && !displayName.toLowerCase().includes(area.toLowerCase())) headerParts.push(area);
+      if (state && !displayName.toLowerCase().includes(state.toLowerCase()) && !area.toLowerCase().includes(state.toLowerCase())) {
+        headerParts.push(state);
+      }
+      
+      const header = headerParts.join(", ");
+      let cleanAddr = `${header} (${fullAddr})`;
+      cleanAddr = cleanAddr.replace(/^[,.\s]+|[,.\s]+$/g, "");
+      
+      setDestination(cleanAddr);
+      if (destInputRef.current) destInputRef.current.value = cleanAddr;
       if (place.geometry?.location) {
         setDestinationLat(place.geometry.location.lat());
         setDestinationLng(place.geometry.location.lng());
       }
     });
     destAcRef.current = ac;
-  }, [mapsReady]);
+  }, [isLoaded]);
 
   // Attach Google Places Autocomplete directly to meeting point input
   useEffect(() => {
-    if (!mapsReady || !meetingInputRef.current || meetingAcRef.current) return;
+    if (!isLoaded || !meetingInputRef.current || meetingAcRef.current) return;
     const ac = new google.maps.places.Autocomplete(meetingInputRef.current, {
-      fields: ["formatted_address", "name", "geometry"],
+      fields: ["formatted_address", "name", "geometry", "address_components"],
     });
     ac.addListener("place_changed", () => {
       const place = ac.getPlace();
-      const addr = place.formatted_address || place.name || "";
-      setMeetingPoint(addr);
-      if (meetingInputRef.current) meetingInputRef.current.value = addr;
+      const name = place.name || "";
+      const addressComponents = place.address_components || [];
+      const lga = addressComponents.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
+      const city = addressComponents.find(c => c.types.includes("locality"))?.long_name || "";
+      const state = addressComponents.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "";
+      let fullAddr = place.formatted_address || "";
+      
+      fullAddr = fullAddr.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim().replace(/^[,.\s]+|[,.\s]+$/g, "");
+
+      const firstPart = fullAddr.split(",")[0].trim();
+      let displayName = (name && !name.includes("+")) ? name : firstPart;
+      displayName = displayName.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim();
+
+      const headerParts = [displayName];
+      const area = city || lga;
+      if (area && !displayName.toLowerCase().includes(area.toLowerCase())) headerParts.push(area);
+      if (state && !displayName.toLowerCase().includes(state.toLowerCase()) && !area.toLowerCase().includes(state.toLowerCase())) {
+        headerParts.push(state);
+      }
+      
+      const header = headerParts.join(", ");
+      let cleanAddr = `${header} (${fullAddr})`;
+      cleanAddr = cleanAddr.replace(/^[,.\s]+|[,.\s]+$/g, "");
+
+      setMeetingPoint(cleanAddr);
+      if (meetingInputRef.current) meetingInputRef.current.value = cleanAddr;
       if (place.geometry?.location) {
         setMeetingLat(place.geometry.location.lat());
         setMeetingLng(place.geometry.location.lng());
       }
     });
     meetingAcRef.current = ac;
-  }, [mapsReady]);
+  }, [isLoaded]);
+
+  // FIX: Force Google Suggestions to follow the input on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>;
+      pacContainers.forEach(container => {
+        container.style.display = 'none'; // Hide it when scrolling to avoid "floating" artifacts
+      });
+    };
+
+    // Listen to the main dashboard scroll if it exists, otherwise window
+    const scrollContainer = document.querySelector('.overflow-y-auto') || window;
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // FIX: Match suggestions width to input width
+  useEffect(() => {
+    const matchWidth = (e: FocusEvent) => {
+      const input = e.target as HTMLInputElement;
+      const width = input.offsetWidth;
+      // We use a small delay to ensure the container has been created/rendered by Google
+      setTimeout(() => {
+        const containers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>;
+        containers.forEach(c => {
+          c.style.width = `${width}px`;
+        });
+      }, 10);
+    };
+
+    const dIn = destInputRef.current;
+    const mIn = meetingInputRef.current;
+    dIn?.addEventListener('focus', matchWidth);
+    mIn?.addEventListener('focus', matchWidth);
+    return () => {
+      dIn?.removeEventListener('focus', matchWidth);
+      mIn?.removeEventListener('focus', matchWidth);
+    };
+  }, [isLoaded]);
 
   // Pre-select locked vehicle
   const lockedVehicle = vehicles.find((v) => v.id === lockedVehicleId);
@@ -406,8 +490,8 @@ export default function DriverSetupPanel({
                 placeholder="e.g. Ojota Bus Stop, Lagos"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500 placeholder-gray-600 transition-colors"
               />
-              {!mapsReady && (
-                <p className="text-[9px] text-gray-600 mt-1">Loading location suggestions...</p>
+              {!isLoaded && (
+                <p className="text-[9px] text-gray-600 mt-1 italic">Loading location suggestions...</p>
               )}
             </div>
 

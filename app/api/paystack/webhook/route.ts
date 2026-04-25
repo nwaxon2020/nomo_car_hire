@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import crypto from 'crypto';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+// Removed top-level adminDb import to prevent build-time initialization
+// Removed top-level adminDb import to prevent build-time initialization
 
 export async function POST(req: Request) {
+  // Dynamically import adminDb only when the webhook is actually called
+  const { adminDb } = await import('@/lib/firebaseAdmin');
+  const { Timestamp, FieldValue } = await import('firebase-admin/firestore');
+
   const secret = process.env.PAYSTACK_SECRET_KEY;
   const signature = req.headers.get('x-paystack-signature');
 

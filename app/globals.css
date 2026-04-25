@@ -23,7 +23,9 @@
 }
 
 /* Basic page setup */
-html, body, :root {
+html,
+body,
+:root {
   height: 100%;
 }
 
@@ -112,8 +114,15 @@ body {
 
 /* Quick Car Hire Dropdown */
 @keyframes fadeSlide {
-  0% { opacity: 0; transform: translateY(-10px) scale(0.95); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .animate-fadeSlide {
@@ -123,8 +132,15 @@ body {
 
 /* CHAT MESSAGE SLIDE */
 @keyframes messageSlide {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-messageSlide {
@@ -134,8 +150,15 @@ body {
 
 /* CHAT MODAL POP-UP */
 @keyframes modalSlide {
-  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .animate-modalSlide {
@@ -145,8 +168,15 @@ body {
 
 /* TYPING INDICATOR (3 pulsing dots) */
 @keyframes pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .animate-pulse {
@@ -159,11 +189,12 @@ body {
 ==================================*/
 .pac-container {
   z-index: 9999 !important;
+  width: auto !important;
   border-radius: 12px;
-  margin-top: 4px;
-  background-color: #1f2937 !important;
-  border: 1px solid #4b5563 !important;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+  margin-top: -2px;
+  background-color: #111827 !important;
+  border: 1px solid #374151 !important;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8) !important;
   font-family: inherit;
 }
 
@@ -205,5 +236,3 @@ body {
   content: "📍";
   font-size: 14px;
 }
-
-

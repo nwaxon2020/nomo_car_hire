@@ -5,7 +5,8 @@ import { getFirestore } from "firebase-admin/firestore";
 // Helper to format the private key correctly for Vercel/Linux environments
 const formatPrivateKey = (key: string | undefined) => {
   if (!key) return undefined;
-  return key.replace(/\\n/g, "\n").replace(/"/g, "");
+  // Replace escaped \\n with actual newlines, remove quotes, and trim
+  return key.replace(/\\n/g, '\n').replace(/"/g, '').trim();
 };
 
 const firebaseAdminConfig = {
