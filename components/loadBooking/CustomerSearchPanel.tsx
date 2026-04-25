@@ -210,6 +210,17 @@ export default function CustomerSearchPanel({
     checkSeats();
   }, [bookings, currentUser.uid]);
 
+  // Broadcast active seat state globally so the sidebar can intercept navigation
+  useEffect(() => {
+    const event = new CustomEvent("loadBookingState", { detail: hasActiveBooking });
+    window.dispatchEvent(event);
+    
+    return () => {
+      // Clear state when unmounting
+      window.dispatchEvent(new CustomEvent("loadBookingState", { detail: false }));
+    };
+  }, [hasActiveBooking]);
+
   // Haversine distance formula
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // km

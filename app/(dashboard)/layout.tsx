@@ -51,6 +51,7 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
   const [isDisabled, setIsDisabled] = useState(false);
   const [adminEmail, setAdminEmail] = useState("nomopoventures@yahoo.com");
   const [hasFullyBookedLoad, setHasFullyBookedLoad] = useState(false); // Load Booking full-seat alert
+  const [hasActiveLoadSeat, setHasActiveLoadSeat] = useState(false); // Customer active seat check
 
   // PWA Install states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -233,6 +234,15 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
     return () => unsubLoad();
   }, [userId, isDriver]);
 
+  // Listen for customer active load seat globally to prevent navigation
+  useEffect(() => {
+    const handleLoadBookingState = (e: any) => {
+      setHasActiveLoadSeat(e.detail);
+    };
+    window.addEventListener("loadBookingState", handleLoadBookingState);
+    return () => window.removeEventListener("loadBookingState", handleLoadBookingState);
+  }, []);
+
   const handleOpenNotifs = async () => {
     setNotifOpen(true);
     if (userId) {
@@ -353,7 +363,12 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
             {menuItems.map((item: any) => (
               <div key={item.name} className={`mb-1 ${item.name === "Home" ? "md:hidden" : "block"}`}>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    if (item.name === "Bookings" && hasActiveLoadSeat) {
+                      e.preventDefault();
+                      alert("You have an active Load Booking seat selected. Please cancel it first to avoid confusion.");
+                      return;
+                    }
                     if (item.name === "Logout") handleLogout();
                     else if (item.isDropdown) setAboutOpen(!aboutOpen);
                     else if (item.href) { router.push(item.href); setSidebarOpen(false); }
