@@ -8,7 +8,7 @@ import {
   FaCar, FaUsers, FaInfoCircle, FaChevronRight, FaTimes,
 } from "react-icons/fa";
 import {
-  collection, query, where, onSnapshot, getDocs,
+  collection, query, where, onSnapshot, getDocs, doc,
 } from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebaseConfig";
@@ -16,6 +16,7 @@ import { LoadBooking, getTodayString } from "./types";
 import DriverLoadCard from "./DriverLoadCard";
 import SeatSelectionOverlay from "./SeatSelectionOverlay";
 import LoadFlagOverlay from "./LoadFlagOverlay";
+import BookingTrackingMap from "@/components/map/BookingTrackingMap";
 
 const GOOGLE_LIBRARIES: ("places")[] = ["places"];
 
@@ -163,7 +164,7 @@ export default function CustomerSearchPanel({
     const today = getTodayString();
     const q = query(
       collection(db, "loadBookings"),
-      where("status", "==", "active"),
+      where("status", "in", ["active", "departed"]),
       where("date", "==", today)
     );
 
@@ -180,13 +181,18 @@ export default function CustomerSearchPanel({
   }, []);
 
   // Check if user already has an active seat somewhere
+  const [activeBookingObj, setActiveBookingObj] = useState<LoadBooking | null>(null);
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
+
   useEffect(() => {
-    if (!currentUser.uid || bookings.length === 0) return;
+    if (!currentUser.uid || bookings.length === 0) {
+      setHasActiveBooking(false);
+      setActiveBookingObj(null);
+      return;
+    }
 
     const checkSeats = async () => {
-      let found = false;
-      let driverName = "";
-      let foundId: string | null = null;
+      let foundBooking: LoadBooking | null = null;
 
       for (const booking of bookings) {
         const seatsSnap = await getDocs(
@@ -196,19 +202,43 @@ export default function CustomerSearchPanel({
           (d) => d.data().customerId === currentUser.uid && d.data().status === "booked"
         );
         if (mySeat) {
-          found = true;
-          driverName = booking.driverName;
-          foundId = booking.id;
+          foundBooking = booking;
           break;
         }
       }
-      setHasActiveBooking(found);
-      setActiveBookingDriverName(driverName);
-      setActiveBookingId(foundId);
+
+      if (foundBooking) {
+        setHasActiveBooking(true);
+        setActiveBookingDriverName(foundBooking.driverName);
+        setActiveBookingId(foundBooking.id);
+        setActiveBookingObj(foundBooking);
+      } else {
+        setHasActiveBooking(false);
+        setActiveBookingObj(null);
+      }
     };
 
     checkSeats();
   }, [bookings, currentUser.uid]);
+
+  // Sync driver location if trip is active
+  useEffect(() => {
+    if (!activeBookingObj || activeBookingObj.status !== 'departed') {
+      setDriverLocation(null);
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, "users", activeBookingObj.driverId), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.location?.lat && data.location?.lng) {
+          setDriverLocation({ lat: data.location.lat, lng: data.location.lng });
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [activeBookingObj]);
 
   // Broadcast active seat state globally so the sidebar can intercept navigation
   useEffect(() => {
@@ -555,24 +585,75 @@ export default function CustomerSearchPanel({
           </div>
         </div>
 
-        {/* Active booking notice */}
+        {/* Active booking notice & Tracking Map */}
         <AnimatePresence>
-          {hasActiveBooking && (
+          {hasActiveBooking && activeBookingObj && (
             <motion.div
-              initial={{ opacity: 0, y: -5 }}
+              initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5"
+              className="space-y-4"
             >
-              <FaInfoCircle className="text-amber-400 shrink-0 mt-0.5" size={12} />
-              <div>
-                <p className="text-amber-400 font-black text-[10px] uppercase tracking-widest">
-                  You have an active seat
-                </p>
-                <p className="text-gray-400 text-[9px] font-medium mt-0.5">
-                  You're booked with <strong className="text-white">{activeBookingDriverName}</strong>.
-                  Cancel that seat first before booking another driver.
-                </p>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 shadow-lg">
+                <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center shrink-0 border border-amber-500/30">
+                  <FaInfoCircle className="text-amber-400" size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-amber-400 font-black text-xs uppercase tracking-widest">
+                    You have an active seat
+                  </p>
+                  <p className="text-gray-300 text-[10px] font-medium mt-1 leading-relaxed">
+                    You're booked with <strong className="text-white">{activeBookingDriverName}</strong> for a ride to <strong className="text-white">{activeBookingObj.destination}</strong>.
+                    {activeBookingObj.status === 'departed' 
+                      ? " Your trip has started! Tracking map is active below." 
+                      : " Wait for the driver at the meeting point."}
+                  </p>
+                </div>
               </div>
+
+              {/* LIVE TRACKING MAP FOR LOAD BOOKING */}
+              {activeBookingObj.status === 'departed' && (
+                <div className="bg-gray-900 border border-purple-500/30 rounded-[2.5rem] overflow-hidden shadow-2xl relative h-[450px]">
+                  <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-purple-600 via-emerald-500 to-blue-600 z-10"></div>
+                  
+                  <BookingTrackingMap
+                    pickup={{ 
+                      lat: activeBookingObj.meetingPointLat || 0, 
+                      lng: activeBookingObj.meetingPointLng || 0, 
+                      address: activeBookingObj.meetingPoint 
+                    }}
+                    driver={{ 
+                      lat: driverLocation?.lat || activeBookingObj.meetingPointLat || 0, 
+                      lng: driverLocation?.lng || activeBookingObj.meetingPointLng || 0 
+                    }}
+                    destination={{ 
+                      lat: activeBookingObj.destinationLat || 0, 
+                      lng: activeBookingObj.destinationLng || 0, 
+                      address: activeBookingObj.destination 
+                    }}
+                    customerImage={currentUser.photoURL || "/default-avatar.png"}
+                    driverImage={activeBookingObj.driverImage}
+                    plateNumber={activeBookingObj.vehiclePlate}
+                    viewerRole="customer"
+                    destinationLabel={activeBookingObj.destination}
+                  />
+
+                  {/* Tracking Overlay Info */}
+                  <div className="absolute top-6 left-6 right-6 flex items-center justify-between pointer-events-none">
+                    <div className="bg-gray-900/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl">
+                      <p className="text-emerald-400 font-black text-[8px] uppercase tracking-widest mb-0.5">Trip Status</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <p className="text-white font-black text-xs uppercase tracking-tighter">In Progress</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-900/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl text-right">
+                      <p className="text-purple-400 font-black text-[8px] uppercase tracking-widest mb-0.5">Heading To</p>
+                      <p className="text-white font-black text-xs uppercase tracking-tighter truncate max-w-[120px]">{activeBookingObj.destination}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

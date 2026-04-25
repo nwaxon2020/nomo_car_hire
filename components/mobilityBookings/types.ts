@@ -136,9 +136,11 @@ export interface HiredCar {
 export interface Trip {
     id: string;
     driverId: string;
+    driverName?: string;
     vehicleId: string;
     customerId: string;
     customerName: string;
+    type?: string;
     pickupLocation: string;
     destination: string;
     fare: number;
@@ -189,6 +191,11 @@ export interface DirectOffer {
     fare?: number;
     pickupLocation?: string;
     destination?: string;
+    destinationLocation?: {
+        lat: number;
+        lng: number;
+    };
+    tripId?: string;
 }
 
 export interface BookingRequest {

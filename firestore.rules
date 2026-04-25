@@ -51,7 +51,7 @@ service cloud.firestore {
         'customersCarried', 'customersCarriedMonth',
         'trustScore', 'trustCancels', 'trustLastReset', 'trustExhaustedAt', 
         'loadOnceAllowed', 'loadOnceUsedDate', 'loadBlockedUntil',
-        'contactedDrivers', 'hiredCars', 'lastBookedCarId', 'carSwitchCount'
+        'contactedDrivers', 'hiredCars', 'lastBookedCarId', 'carSwitchCount', 'tripHistory'
       ];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
     }

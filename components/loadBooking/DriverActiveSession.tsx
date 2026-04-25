@@ -8,7 +8,7 @@ import {
   FaFlag, FaCheckCircle, FaBell, FaStop,
 } from "react-icons/fa";
 import {
-  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, deleteDoc
+  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, deleteDoc, arrayUnion
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { LoadBooking, LoadSeat, getSeatLayout, getTodayString, getTomorrowString } from "./types";
@@ -209,13 +209,49 @@ export default function DriverActiveSession({
         idsToComplete = snap.docs.map(d => d.id);
       }
 
-      // Mark ALL trips as completed (this triggers trip history for each passenger)
+      // Mark ALL trips as completed and update profile histories
       for (const tripId of idsToComplete) {
-        await updateDoc(doc(db, 'trips', tripId), {
-          status: 'completed',
-          endTime,
-          updatedAt: serverTimestamp(),
-        });
+        const tripRef = doc(db, 'trips', tripId);
+        const tripSnap = await getDoc(tripRef);
+        
+        if (tripSnap.exists()) {
+          const tripData = tripSnap.data();
+          const historyItem = {
+            tripId,
+            driverId: tripData.driverId,
+            driverName: tripData.driverName || "Driver",
+            customerId: tripData.customerId,
+            pickupLocation: tripData.pickupLocation,
+            destination: tripData.destination,
+            fare: tripData.fare,
+            status: 'completed',
+            startTime: tripData.startTime,
+            endTime,
+            createdAt: tripData.createdAt,
+            updatedAt: serverTimestamp(),
+            type: 'load_booking'
+          };
+
+          await updateDoc(tripRef, {
+            status: 'completed',
+            endTime,
+            updatedAt: serverTimestamp(),
+          });
+
+          // Push to customer history
+          if (tripData.customerId) {
+            await updateDoc(doc(db, 'users', tripData.customerId), {
+              tripHistory: arrayUnion(historyItem)
+            });
+          }
+          
+          // Push to driver history (optional but good for bookkeeping)
+          if (tripData.driverId) {
+            await updateDoc(doc(db, 'users', tripData.driverId), {
+              tripHistory: arrayUnion(historyItem)
+            });
+          }
+        }
       }
 
       // Update load booking as completed

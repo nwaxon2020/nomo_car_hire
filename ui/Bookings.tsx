@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image";
+import { useJsApiLoader } from "@react-google-maps/api";
 import { motion } from "framer-motion";
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
@@ -67,6 +68,25 @@ const NegotiationNotice = () => (
                 Bookings are negotiations between drivers and customers. Please ensure a proper agreement on fare and terms is reached before starting your trip.
             </p>
         </div>
+    </div>
+);
+
+const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: string }) => (
+    <div className="max-w-md mx-auto mt-10 p-8 bg-white border border-gray-100 rounded-[2.5rem] shadow-2xl text-center animate-in fade-in zoom-in duration-500">
+        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+            <FaCar className="text-amber-500 text-3xl" />
+        </div>
+        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-2">Active Booking Found</h2>
+        <p className="text-gray-500 text-sm font-medium mb-8 leading-relaxed px-4">
+            You currently have an active {type} booking. Please complete or cancel it before starting a new search.
+        </p>
+        <button
+            onClick={() => window.location.href = targetPath}
+            className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+        >
+            <FaMapMarkerAlt size={14} />
+            Return to Active Booking
+        </button>
     </div>
 );
 
@@ -221,6 +241,46 @@ export default function BookingUi() {
     const [showDestinationOverlay, setShowDestinationOverlay] = useState(false);
     const [tempBookingData, setTempBookingData] = useState<{ driver: DriverWithVehicle; vehicle: VehicleLog } | null>(null);
     const [destinationInput, setDestinationInput] = useState("");
+    const [activeTripId, setActiveTripId] = useState<string | null>(null);
+    const [showRatingCard, setShowRatingCard] = useState<boolean>(false);
+    const [ratingValue, setRatingValue] = useState(0);
+    const [ratingComment, setRatingComment] = useState("");
+    const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+    const [destinationLocation, setDestinationLocation] = useState<{ lat: number, lng: number } | null>(null);
+    const destinationInputRef = useRef<HTMLInputElement>(null);
+    const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+
+    const { isLoaded: isGoogleMapsLoaded } = useJsApiLoader({
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+        libraries: ['places']
+    });
+
+    useEffect(() => {
+        if (isGoogleMapsLoaded && destinationInputRef.current && !autocomplete) {
+            const auto = new google.maps.places.Autocomplete(destinationInputRef.current, {
+                componentRestrictions: { country: "ng" },
+                fields: ["formatted_address", "geometry"]
+            });
+
+            auto.addListener("place_changed", () => {
+                const place = auto.getPlace();
+                if (place.formatted_address) {
+                    setDestinationInput(place.formatted_address);
+                }
+                if (place.geometry && place.geometry.location) {
+                    setDestinationLocation({
+                        lat: place.geometry.location.lat(),
+                        lng: place.geometry.location.lng()
+                    });
+                }
+            });
+
+            setAutocomplete(auto);
+        }
+    }, [isGoogleMapsLoaded, autocomplete]);
+
+    // NEW: Active Load Booking Check
+    const [hasActiveLoadSeat, setHasActiveLoadSeat] = useState(false);
 
 
     // Initialize auth and load history from Firebase
@@ -232,6 +292,7 @@ export default function BookingUi() {
                 setCurrentUserId(user.uid)
                 loadUserHistory(user.uid)
                 loadNotificationData(user.uid)
+                checkActiveLoadBooking(user.uid)
             } else {
                 setCurrentUser(null)
                 setCurrentUserId("")
@@ -268,6 +329,32 @@ export default function BookingUi() {
     useEffect(() => {
         logFeatureUsage("bookings");
     }, []);
+
+    const checkActiveLoadBooking = async (userId: string) => {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const q = query(
+                collection(db, "loadBookings"),
+                where("status", "==", "active"),
+                where("date", "==", today)
+            );
+            
+            const snap = await getDocs(q);
+            let hasSeat = false;
+            
+            for (const docSnap of snap.docs) {
+                const seatsRef = collection(db, "loadBookings", docSnap.id, "seats");
+                const seatsSnap = await getDocs(query(seatsRef, where("customerId", "==", userId), where("status", "==", "booked")));
+                if (!seatsSnap.empty) {
+                    hasSeat = true;
+                    break;
+                }
+            }
+            setHasActiveLoadSeat(hasSeat);
+        } catch (err) {
+            console.error("Error checking load bookings:", err);
+        }
+    };
 
     // New function to load notification data
     const loadNotificationData = async (userId: string) => {
@@ -1533,6 +1620,22 @@ export default function BookingUi() {
         window.open(whatsappUrl, '_blank')
     }
 
+    const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const calculateETA = (loc1: any, loc2: any) => {
+        if (!loc1 || !loc2 || !loc1.lat || !loc1.lng || !loc2.lat || !loc2.lng) return null;
+        const dist = haversineDistance(loc1.lat, loc1.lng, loc2.lat, loc2.lng);
+        const mins = Math.ceil(dist / 0.5); // 30km/h approx 0.5km/min
+        if (mins < 1) return "Arriving";
+        return `${mins} mins`;
+    };
+
     // Start a new trip
     const startTrip = async (driverId: string, vehicleId: string, pickupLocation: string, destination: string) => {
         if (!currentUser) {
@@ -1556,6 +1659,7 @@ export default function BookingUi() {
 
             const tripData = {
                 driverId,
+                driverName: currentUser.displayName || 'Driver',
                 vehicleId,
                 customerId: incomingOffer?.customerId || currentUser.uid,
                 customerName: incomingOffer?.customerName || (currentUser.displayName || 'Customer'),
@@ -1583,86 +1687,77 @@ export default function BookingUi() {
             // Update vehicle status to 'on-trip'
             const vehicleRef = doc(db, 'vehicleLog', vehicleId);
             await updateDoc(vehicleRef, {
-                status: 'on-trip',
-                currentTripId: tripDoc.id,
-                updatedAt: serverTimestamp()
+                status: 'on-trip'
             });
 
-            // Update incoming offer status if exists
-            if (incomingOffer) {
-                await updateDoc(doc(db, "directOffers", incomingOffer.id), {
-                    status: 'started',
-                    tripId: tripDoc.id,
+            return tripDoc.id;
+        } catch (err) {
+            console.error("Error starting trip:", err);
+            return null;
+        } finally {
+            setIsStartingTrip(false);
+        }
+    };
+
+    const handleRateDriver = async () => {
+        if (!currentUser || !pendingOffer) return;
+        if (ratingValue === 0) {
+            toast.error("Please select a rating star!");
+            return;
+        }
+
+        setIsSubmittingRating(true);
+        try {
+            const tripId = pendingOffer.tripId;
+            if (tripId) {
+                await updateDoc(doc(db, "trips", tripId), {
+                    rating: ratingValue,
+                    review: ratingComment,
                     updatedAt: serverTimestamp()
                 });
             }
 
-            // Update driver's customersCarried on a Monthly Reset basis
-            const driverRef = doc(db, 'users', driverId);
-            const driverDoc = await getDoc(driverRef);
-            const driverData = driverDoc.data() || {};
+            const driverId = pendingOffer.driverId;
+            if (driverId) {
+                const driverRef = doc(db, "users", driverId);
+                const driverSnap = await getDoc(driverRef);
+                if (driverSnap.exists()) {
+                    const data = driverSnap.data();
+                    const newRatingObj = {
+                        userId: currentUser.uid,
+                        userName: currentUser.displayName || "Passenger",
+                        rating: ratingValue,
+                        comment: ratingComment,
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    const totalRatings = (data.totalRatings || 0) + 1;
+                    const newAverage = ((data.averageRating || 0) * (data.totalRatings || 0) + ratingValue) / totalRatings;
 
-            const currentCustomers = driverData.customersCarried || [];
-            const lastMonth = driverData.customersCarriedMonth || "";
-            const currentMonth = new Date().toISOString().slice(0, 7); // e.g., '2024-04'
-
-            let newCustomers = currentCustomers;
-            if (lastMonth !== currentMonth) {
-                newCustomers = []; // Clear array for the new month
+                    await updateDoc(driverRef, {
+                        comments: arrayUnion(newRatingObj),
+                        averageRating: newAverage,
+                        totalRatings: totalRatings,
+                        updatedAt: serverTimestamp()
+                    });
+                }
             }
 
-            // Add this trip directly as a unique entry to increment the passenger stats
-            const uniqueTripEntry = `${currentUser.uid}_${tripDoc.id}`;
-            const updatedCustomers = [...newCustomers, uniqueTripEntry];
+            if (pendingOffer.id) {
+                await deleteDoc(doc(db, "directOffers", pendingOffer.id));
+            }
 
-            await updateDoc(driverRef, {
-                customersCarried: updatedCustomers,
-                customersCarriedMonth: currentMonth,
-                updatedAt: Timestamp.now()
-            });
-
-            // Set active trip locally
-            setActiveTrip({
-                ...tripData,
-                id: tripDoc.id
-            } as Trip);
-
-            // Update the selected driver in local state
-            setSelectedDriver(prev => prev ? {
-                ...prev,
-                customersCarried: updatedCustomers
-            } : null);
-
-            // Refresh drivers list to hide the unavailable vehicle
-            fetchDriversAndVehicles();
-
-            // Show success message
-            setTripSuccessMessage(`Trip started successfully! Live tracking activated.`);
-            setShowTripSuccess(true);
-
-            // Update trip info state
-            setTripInfo({
-                pickupLocation,
-                destination,
-                fare,
-                status: 'active',
-                startTime: Timestamp.now(),
-                endTime: null
-            });
-
-            // Auto-hide success message after 3 seconds
-            setTimeout(() => {
-                setShowTripSuccess(false);
-            }, 3000);
-
-            return tripDoc.id;
-
-        } catch (error) {
-            console.error('Error starting trip:', error);
-            setTripSuccessMessage('Failed to start trip. Please try again.');
-            setShowTripSuccess(true);
-            setTimeout(() => setShowTripSuccess(false), 3000);
-            return null;
+            toast.success("Thank you for your rating!");
+            setShowRatingCard(false);
+            setPendingOffer(null);
+            setAcceptanceMap(false);
+            setRatingValue(0);
+            setRatingComment("");
+        } catch (err) {
+            console.error("Error rating driver:", err);
+            toast.error("Failed to submit rating.");
+        } finally {
+            setIsSubmittingRating(false);
         }
     };
 
@@ -1716,6 +1811,30 @@ export default function BookingUi() {
                 // Refresh trip history
                 if (currentUser) {
                     loadUserHistory(currentUser.uid);
+
+                    // NEW: Push to tripHistory array for redundancy and profile performance
+                    const historyItem = {
+                        tripId: tripId,
+                        driverId: tripData.driverId,
+                        driverName: tripData.driverName || "Driver",
+                        customerId: tripData.customerId,
+                        pickupLocation: tripData.pickupLocation,
+                        destination: tripData.destination,
+                        fare: tripData.fare,
+                        status: 'completed',
+                        startTime: tripData.startTime,
+                        endTime: updates.endTime,
+                        createdAt: tripData.createdAt || Timestamp.now(),
+                        updatedAt: Timestamp.now(),
+                        type: tripData.type || 'regular_booking'
+                    };
+
+                    await updateDoc(doc(db, 'users', tripData.customerId), {
+                        tripHistory: arrayUnion(historyItem)
+                    });
+                    await updateDoc(doc(db, 'users', tripData.driverId), {
+                        tripHistory: arrayUnion(historyItem)
+                    });
                 }
             }
 
@@ -1853,6 +1972,7 @@ export default function BookingUi() {
                 plateNumber: vehicle.plateNumber || "N/A",
                 pickupLocation: 'Current Location', // Simplified for now
                 destination: destinationInput,
+                destinationLocation: destinationLocation,
             };
 
             const docRef = await addDoc(collection(db, 'directOffers'), offerData);
@@ -1985,7 +2105,7 @@ export default function BookingUi() {
         const q = query(
             collection(db, 'directOffers'),
             where('customerId', '==', currentUser.uid),
-            where('status', 'in', ['pending', 'accepted', 'rejected', 'cancelled', 'timeout']),
+            where('status', 'in', ['pending', 'accepted', 'started', 'completed', 'rejected', 'cancelled', 'timeout']),
             where('createdAt', '>=', Timestamp.fromDate(recentThreshold)),
             orderBy('createdAt', 'desc')
         );
@@ -2000,9 +2120,12 @@ export default function BookingUi() {
                 } else if (offer.status === 'accepted') {
                     setPendingOffer(offer);
                     setAcceptanceMap(true);
-                } else if (offer.status === 'started' || offer.status === 'completed') {
-                    setPendingOffer(null);
-                    setAcceptanceMap(false);
+                } else if (offer.status === 'started') {
+                    setPendingOffer(offer);
+                    setAcceptanceMap(true);
+                } else if (offer.status === 'completed') {
+                    setPendingOffer(offer);
+                    setShowRatingCard(true);
                 } else if (offer.status === 'rejected') {
                     setDriverResponse("busy");
                     // Show "Driver Busy" card before clearing
@@ -2050,7 +2173,7 @@ export default function BookingUi() {
         const q = query(
             collection(db, 'directOffers'),
             where('driverId', '==', currentUser.uid),
-            where('status', 'in', ['pending', 'cancelled', 'accepted']),
+            where('status', 'in', ['pending', 'accepted', 'started', 'completed', 'cancelled']),
             where('createdAt', '>=', Timestamp.fromDate(recentThreshold)),
             orderBy('createdAt', 'desc')
         );
@@ -2202,6 +2325,7 @@ export default function BookingUi() {
                             <BookingTrackingMap
                                 pickup={pendingOffer?.customerLocation || incomingOffer?.customerLocation || { lat: 0, lng: 0, address: "" }}
                                 driver={pendingOffer?.driverLocation || incomingOffer?.driverLocation || { lat: 0, lng: 0, address: "" }}
+                                destination={((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') && (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation)) ? (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation) : undefined}
                                 customerImage={pendingOffer?.customerImage || incomingOffer?.customerImage}
                                 driverImage={pendingOffer?.driverImage || incomingOffer?.driverImage}
                                 plateNumber={pendingOffer?.plateNumber || incomingOffer?.plateNumber}
@@ -2209,10 +2333,27 @@ export default function BookingUi() {
                                 destinationLabel={pendingOffer?.destination || incomingOffer?.destination}
                             />
 
+                            {/* ETA Display Overlay */}
+                            <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
+                                <div className="bg-white/95 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-500/20 shadow-2xl flex flex-col items-end">
+                                    <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Estimated Arrival</span>
+                                    <span className="text-xl font-black text-gray-900 leading-none">
+                                        {calculateETA(
+                                            (pendingOffer?.driverLocation || incomingOffer?.driverLocation),
+                                            ((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') 
+                                                ? (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation)
+                                                : (pendingOffer?.customerLocation || incomingOffer?.customerLocation))
+                                        ) || "-- mins"}
+                                    </span>
+                                </div>
+                            </div>
+
                             {/* Visual Pulse for active tracking */}
                             <div className="absolute top-8 left-8 flex items-center gap-3 bg-gray-900/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 shadow-xl">
                                 <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping" />
-                                <span className="text-[10px] font-black text-white uppercase tracking-tighter">Live Connection Active</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-tighter">
+                                    {(pendingOffer?.status === 'started' || incomingOffer?.status === 'started') ? "Trip In Progress" : "Driver En Route"}
+                                </span>
                             </div>
                         </div>
 
@@ -2236,10 +2377,15 @@ export default function BookingUi() {
                                     <button
                                         onClick={async () => {
                                             try {
-                                                await updateDoc(doc(db, "directOffers", incomingOffer.id), { status: "started", updatedAt: serverTimestamp() });
-                                                startTrip(currentUser.uid, incomingOffer.vehicleId, incomingOffer.pickupLocation || "Current Location", incomingOffer.destination || "Not Set");
-                                                setAcceptanceMap(false);
-                                                setIncomingOffer(null);
+                                                const tripId = await startTrip(currentUser.uid, incomingOffer.vehicleId, incomingOffer.pickupLocation || "Current Location", incomingOffer.destination || "Not Set");
+                                                if (tripId) {
+                                                    await updateDoc(doc(db, "directOffers", incomingOffer.id), { 
+                                                        status: "started", 
+                                                        tripId: tripId,
+                                                        updatedAt: serverTimestamp() 
+                                                    });
+                                                    // Note: We keep setAcceptanceMap(true) and incomingOffer so the map stays open
+                                                }
                                             } catch (err) {
                                                 console.error(err);
                                             }
@@ -2250,6 +2396,61 @@ export default function BookingUi() {
                                     </button>
                                 </>
                             )}
+                            {incomingOffer && incomingOffer.status === 'started' && (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const tripId = incomingOffer.tripId;
+                                            await updateDoc(doc(db, "directOffers", incomingOffer.id), { 
+                                                status: "completed", 
+                                                updatedAt: serverTimestamp() 
+                                            });
+                                            if (tripId) {
+                                                await updateDoc(doc(db, "trips", tripId), { 
+                                                    status: "completed", 
+                                                    endTime: serverTimestamp(),
+                                                    updatedAt: serverTimestamp() 
+                                                });
+                                            }
+                                            // Free the vehicle
+                                            await updateDoc(doc(db, 'vehicleLog', incomingOffer.vehicleId), { status: 'available' });
+                                            
+                                            // Push to tripHistory
+                                            const historyItem = {
+                                                tripId: tripId,
+                                                driverId: incomingOffer.driverId,
+                                                driverName: incomingOffer.driverName || "Driver",
+                                                customerId: incomingOffer.customerId,
+                                                pickupLocation: incomingOffer.pickupLocation,
+                                                destination: incomingOffer.destination,
+                                                fare: incomingOffer.fare,
+                                                status: 'completed',
+                                                startTime: serverTimestamp(), // Approximate if not stored
+                                                endTime: serverTimestamp(),
+                                                createdAt: serverTimestamp(),
+                                                updatedAt: serverTimestamp(),
+                                                type: 'direct_booking'
+                                            };
+
+                                            await updateDoc(doc(db, 'users', incomingOffer.customerId), {
+                                                tripHistory: arrayUnion(historyItem)
+                                            });
+                                            await updateDoc(doc(db, 'users', incomingOffer.driverId), {
+                                                tripHistory: arrayUnion(historyItem)
+                                            });
+
+                                            setAcceptanceMap(false);
+                                            setIncomingOffer(null);
+                                            toast.success("Trip completed successfully!");
+                                        } catch (err) {
+                                            console.error(err);
+                                        }
+                                    }}
+                                    className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:bg-blue-700 transition-all"
+                                >
+                                    Complete Trip
+                                </button>
+                            )}
                             <button
                                 onClick={() => setShowCancelWarning(true)}
                                 className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
@@ -2258,6 +2459,69 @@ export default function BookingUi() {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: Trip Rating Card Overlay */}
+            {showRatingCard && pendingOffer && (
+                <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="max-w-md w-full bg-white rounded-[2.5rem] p-8 text-center shadow-2xl overflow-hidden relative"
+                    >
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 via-blue-500 to-purple-600"></div>
+                        
+                        <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                            <FaCar className="text-emerald-500 text-3xl" />
+                        </div>
+
+                        <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-2">Trip Arrived!</h3>
+                        <p className="text-gray-500 text-sm font-medium mb-8">
+                            How was your trip with <span className="text-gray-900 font-bold">{pendingOffer.driverName}</span>?
+                        </p>
+
+                        <div className="flex justify-center gap-3 mb-8">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                    key={star}
+                                    onClick={() => setRatingValue(star)}
+                                    className={`text-3xl transition-all duration-300 ${ratingValue >= star ? 'text-amber-400 scale-125' : 'text-gray-200 hover:text-amber-200'}`}
+                                >
+                                    ★
+                                </button>
+                            ))}
+                        </div>
+
+                        <textarea
+                            placeholder="Write a quick review (optional)..."
+                            value={ratingComment}
+                            onChange={(e) => setRatingComment(e.target.value)}
+                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 text-sm placeholder:text-gray-400 focus:border-emerald-500/30 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all mb-8 min-h-[100px] resize-none"
+                        />
+
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={handleRateDriver}
+                                disabled={isSubmittingRating}
+                                className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl active:scale-95 disabled:opacity-50"
+                            >
+                                {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    // Just close and clear
+                                    if (pendingOffer.id) await deleteDoc(doc(db, "directOffers", pendingOffer.id));
+                                    setShowRatingCard(false);
+                                    setPendingOffer(null);
+                                    setAcceptanceMap(false);
+                                }}
+                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-500 font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all"
+                            >
+                                Close Without Rating
+                            </button>
+                        </div>
+                    </motion.div>
                 </div>
             )}
 
@@ -2388,6 +2652,7 @@ export default function BookingUi() {
                                     <FaMapMarkerAlt size={16} />
                                 </div>
                                 <input
+                                    ref={destinationInputRef}
                                     type="text"
                                     placeholder="Enter drop-off location..."
                                     value={destinationInput}
@@ -2458,55 +2723,61 @@ export default function BookingUi() {
 
                     {viewMode === 'customer' ? (
                         <>
-                            <NegotiationNotice />
-                            <QuickViewHistory
-                                quickViewHistory={quickViewHistory}
-                                driverInfo={driverInfo}
-                                handleQuickViewClick={handleQuickViewClick}
-                                handleClearQuickView={handleClearQuickView}
-                                formatDate={formatDate}
-                            />
+                            {hasActiveLoadSeat ? (
+                                <ActiveBookingBanner type="Load" targetPath="/user/mobility/load-booking" />
+                            ) : (
+                                <>
+                                    <NegotiationNotice />
+                                    <QuickViewHistory
+                                        quickViewHistory={quickViewHistory}
+                                        driverInfo={driverInfo}
+                                        handleQuickViewClick={handleQuickViewClick}
+                                        handleClearQuickView={handleClearQuickView}
+                                        formatDate={formatDate}
+                                    />
 
 
-                            <SearchFilters
-                                searchLocation={searchLocation}
-                                setSearchLocation={setSearchLocation}
-                                selectedCategory={selectedCategory}
-                                setSelectedCategory={setSelectedCategory}
-                                showACOnly={showACOnly}
-                                setShowACOnly={setShowACOnly}
-                                showVerifiedOnly={showVerifiedOnly}
-                                setShowVerifiedOnly={setShowVerifiedOnly}
-                                filteredDriversCount={filteredDrivers.length}
-                                customerCity={currentUser?.city}
-                            />
+                                    <SearchFilters
+                                        searchLocation={searchLocation}
+                                        setSearchLocation={setSearchLocation}
+                                        selectedCategory={selectedCategory}
+                                        setSelectedCategory={setSelectedCategory}
+                                        showACOnly={showACOnly}
+                                        setShowACOnly={setShowACOnly}
+                                        showVerifiedOnly={showVerifiedOnly}
+                                        setShowVerifiedOnly={setShowVerifiedOnly}
+                                        filteredDriversCount={filteredDrivers.length}
+                                        customerCity={currentUser?.city}
+                                    />
 
-                            <div className="px-3 pb-8">
-                                <BookingGrid
-                                    filteredDrivers={filteredDrivers}
-                                    currentUser={currentUser}
-                                    customerLocation={customerLocation}
-                                    onBook={handleBookNow}
-                                    onSelect={handleDriverSelect}
-                                    onPreChat={handlePreChatClick}
-                                    onWhatsApp={(d, v) => handleWhatsAppMessage(d, v)}
-                                    onCall={handlePhoneCall}
-                                    onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
-                                />
+                                    <div className="px-3 pb-8">
+                                        <BookingGrid
+                                            filteredDrivers={filteredDrivers}
+                                            currentUser={currentUser}
+                                            customerLocation={customerLocation}
+                                            onBook={handleBookNow}
+                                            onSelect={handleDriverSelect}
+                                            onPreChat={handlePreChatClick}
+                                            onWhatsApp={(d, v) => handleWhatsAppMessage(d, v)}
+                                            onCall={handlePhoneCall}
+                                            onFlag={(d, v) => setFlagDriverOverlay({ show: true, driver: d, vehicle: v })}
+                                        />
 
-                                {hasMoreDrivers && (
-                                    <div className="flex justify-center mt-8">
-                                        <button
-                                            onClick={() => fetchDriversAndVehicles(true)}
-                                            disabled={isLoadingMore}
-                                            className="px-8 py-3 bg-gray-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-black transition-all shadow-xl hover:scale-105 active:scale-95 border border-gray-700 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
-                                        >
-                                            {isLoadingMore && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                                            {isLoadingMore ? 'Loading...' : 'Load More Drivers'}
-                                        </button>
+                                        {hasMoreDrivers && (
+                                            <div className="flex justify-center mt-8">
+                                                <button
+                                                    onClick={() => fetchDriversAndVehicles(true)}
+                                                    disabled={isLoadingMore}
+                                                    className="px-8 py-3 bg-gray-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-black transition-all shadow-xl hover:scale-105 active:scale-95 border border-gray-700 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                                                >
+                                                    {isLoadingMore && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                                                    {isLoadingMore ? 'Loading...' : 'Load More Drivers'}
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                </>
+                            )}
                         </>
                     ) : (
                         <div className="relative">

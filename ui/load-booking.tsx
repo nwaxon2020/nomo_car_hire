@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
   doc, onSnapshot, updateDoc, serverTimestamp,
-  collection, query, where, getDocs, getDoc,
+  collection, query, where, getDocs, getDoc, Timestamp,
 } from "firebase/firestore";
 import {
   FaTruck, FaCar, FaShieldAlt, FaUsers, FaTools, FaClock,
@@ -159,6 +159,25 @@ function MaintenanceScreen() {
   );
 }
 
+const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: string }) => (
+    <div className="max-w-md mx-auto mt-10 p-8 bg-gray-900 border border-purple-500/20 rounded-[2.5rem] shadow-2xl text-center animate-in fade-in zoom-in duration-500">
+        <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-purple-500/20 shadow-inner">
+            <FaCar className="text-purple-500 text-3xl" />
+        </div>
+        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Active Booking Found</h2>
+        <p className="text-gray-400 text-sm font-medium mb-8 leading-relaxed px-4">
+            You currently have an active {type} booking request. Please complete or cancel it before booking a shared seat.
+        </p>
+        <button
+            onClick={() => window.location.href = targetPath}
+            className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+        >
+            <FaCar size={14} />
+            Return to Active Booking
+        </button>
+    </div>
+);
+
 /* ─────────────────────────── MAIN COMPONENT ─────────────────────────── */
 
 export default function LoadBookingUi() {
@@ -168,6 +187,9 @@ export default function LoadBookingUi() {
   const [isDriver, setIsDriver] = useState(false);
   const [viewMode, setViewMode] = useState<"driver" | "customer">("customer");
   const [isMaintenance, setIsMaintenance] = useState(false);
+
+  // NEW: Active Regular Booking Check
+  const [hasActiveRegularBooking, setHasActiveRegularBooking] = useState(false);
 
   useEffect(() => {
     setIsMaintenance(isMaintenanceTime());
@@ -240,7 +262,22 @@ export default function LoadBookingUi() {
         setLoading(false);
       });
 
-      return () => unsubDoc();
+      // NEW: Regular Booking Listener
+      const recentThreshold = new Date(Date.now() - 30 * 60 * 1000);
+      const qReg = query(
+        collection(db, "directOffers"),
+        where("customerId", "==", firebaseUser.uid),
+        where("status", "in", ["pending", "accepted"]),
+        where("createdAt", ">=", Timestamp.fromDate(recentThreshold))
+      );
+      const unsubReg = onSnapshot(qReg, (regSnap) => {
+        setHasActiveRegularBooking(!regSnap.empty);
+      });
+
+      return () => {
+        unsubDoc();
+        unsubReg();
+      };
     });
 
     return () => unsub();
@@ -535,36 +572,42 @@ export default function LoadBookingUi() {
           {/* ── CUSTOMER VIEW ── */}
           {viewMode === "customer" && (
             <div>
-              {/* Once-allowed notice */}
-              {trustInfo.trustScore === 0 && trustInfo.loadOnceAllowed && !trustInfo.loadOnceUsedDate && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 mb-4 flex items-start gap-2.5"
-                >
-                  <FaShieldAlt className="text-orange-400 shrink-0 mt-0.5" size={13} />
-                  <div>
-                    <p className="text-orange-400 font-black text-[10px] uppercase tracking-widest">
-                      Final Booking Chance
-                    </p>
-                    <p className="text-gray-400 text-[9px] font-medium mt-0.5">
-                      Your trust is at 0%. You have ONE more booking today. If you cancel, you'll be blocked until tomorrow.
-                    </p>
+              {hasActiveRegularBooking ? (
+                <ActiveBookingBanner type="Private" targetPath="/user/mobility/bookings" />
+              ) : (
+                <>
+                  {/* Once-allowed notice */}
+                  {trustInfo.trustScore === 0 && trustInfo.loadOnceAllowed && !trustInfo.loadOnceUsedDate && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 mb-4 flex items-start gap-2.5"
+                    >
+                      <FaShieldAlt className="text-orange-400 shrink-0 mt-0.5" size={13} />
+                      <div>
+                        <p className="text-orange-400 font-black text-[10px] uppercase tracking-widest">
+                          Final Booking Chance
+                        </p>
+                        <p className="text-gray-400 text-[9px] font-medium mt-0.5">
+                          Your trust is at 0%. You have ONE more booking today. If you cancel, you'll be blocked until tomorrow.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-4 bg-purple-400 rounded-full" />
+                    <h2 className="text-white font-black text-sm uppercase tracking-tight">Available Rides</h2>
                   </div>
-                </motion.div>
+
+                  <Suspense fallback={<div className="h-40 bg-gray-800/40 animate-pulse rounded-xl" />}>
+                    <CustomerSearchPanel
+                      currentUser={customerInfo}
+                      onCancelOccurred={handleCancelOccurred}
+                    />
+                  </Suspense>
+                </>
               )}
-
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1.5 h-4 bg-purple-400 rounded-full" />
-                <h2 className="text-white font-black text-sm uppercase tracking-tight">Available Rides</h2>
-              </div>
-
-              <Suspense fallback={<div className="h-40 bg-gray-800/40 animate-pulse rounded-xl" />}>
-                <CustomerSearchPanel
-                  currentUser={customerInfo}
-                  onCancelOccurred={handleCancelOccurred}
-                />
-              </Suspense>
             </div>
           )}
         </div>
