@@ -161,9 +161,9 @@ export default function CustomerSearchPanel({
 
       const bCity = (b.driverCity || "").toLowerCase();
       const bState = (b.driverState || "").toLowerCase();
-      
+
       // Locality match: Check if driver is in user's city/state
-      const localityMatch = 
+      const localityMatch =
         (userCity && (bCity.includes(userCity) || userCity.includes(bCity))) ||
         (userState && (bState.includes(userState) || userState.includes(bState))) ||
         (locAddr && (bCity.includes(locAddr) || locAddr.includes(bCity) || bState.includes(locAddr) || locAddr.includes(bState)));
@@ -175,7 +175,7 @@ export default function CustomerSearchPanel({
       } else {
         // Destination search
         const q = destination.trim().toLowerCase();
-        const destMatch = 
+        const destMatch =
           b.destination.toLowerCase().includes(q) ||
           b.meetingPoint.toLowerCase().includes(q) ||
           b.driverName.toLowerCase().includes(q) ||
@@ -250,72 +250,86 @@ export default function CustomerSearchPanel({
             </div>
           </div>
 
-          {/* Destination input */}
-          <div className="mb-3">
-            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5 block flex items-center gap-1">
-              <FaMapMarkerAlt className="text-red-400" size={8} /> Search by Destination / Bus Stop
-            </label>
-            <div className="relative">
-              <input
-                ref={destInputRef}
-                type="text"
-                defaultValue={destination}
-                onChange={(e) => {
-                  if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-                  const val = e.target.value;
-                  debounceTimerRef.current = setTimeout(() => {
-                    setDestination(val);
-                  }, 50);
-                }}
-                placeholder="Where are you going? (e.g. Oshodi, Lagos)"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
-              />
-              {destination && (
-                <button
-                  onClick={handleClearDestination}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-gray-700 hover:bg-gray-600 rounded-full text-gray-400 hover:text-white transition-colors"
-                >
-                  <FaTimes size={10} />
-                </button>
-              )}
-            </div>
-            {!mapsReady && (
-              <p className="text-[8px] text-purple-400/40 mt-1 uppercase font-bold tracking-tighter">
-                Initialising search engine...
-              </p>
-            )}
-          </div>
-
-          {/* Location info & Manual Input */}
-          <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 block flex items-center gap-1">
-              <FaMapMarkerAlt className="text-green-400" size={8} /> Your Current Locality
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={manualLocation}
-                onChange={(e) => setManualLocation(e.target.value)}
-                placeholder="Enter your city or area (e.g. Sagamu)"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
-              />
-              {manualLocation && (
-                <button
-                  onClick={() => setManualLocation("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-                >
-                  <FaTimes size={10} />
-                </button>
-              )}
-            </div>
-            
-            <div className="bg-gray-800/40 border border-white/5 rounded-xl p-2 flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Auto-detected</p>
-                <p className="text-gray-400 text-[9px] font-bold truncate">
-                  {currentUser.location?.address || `${currentUser.city || ""} ${currentUser.state || ""}`.trim() || "Location not found"}
-                </p>
+          <div className="flex flex-col md:flex-row gap-3">
+            {/* Destination input */}
+            <div className="flex-1">
+              <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5 block flex items-center gap-1">
+                <FaMapMarkerAlt className="text-red-400" size={8} /> Destination / Bus Stop
+              </label>
+              <div className="relative">
+                <input
+                  ref={destInputRef}
+                  type="text"
+                  defaultValue={destination}
+                  onChange={(e) => {
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    const val = e.target.value;
+                    debounceTimerRef.current = setTimeout(() => {
+                      setDestination(val);
+                    }, 50);
+                  }}
+                  placeholder="Where are you going?"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
+                />
+                {destination && (
+                  <button
+                    onClick={handleClearDestination}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-gray-700 hover:bg-gray-600 rounded-full text-gray-400 hover:text-white transition-colors"
+                  >
+                    <FaTimes size={10} />
+                  </button>
+                )}
               </div>
+              {!mapsReady && (
+                <p className="text-[8px] text-purple-400/40 mt-1 uppercase font-bold tracking-tighter">
+                  Initialising...
+                </p>
+              )}
+            </div>
+
+            {/* Location info & Manual Input */}
+            <div className="flex-1">
+              <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5 block flex items-center gap-1">
+                <FaMapMarkerAlt className="text-green-400" size={8} /> Your Locality
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={manualLocation}
+                  onChange={(e) => setManualLocation(e.target.value)}
+                  placeholder="Enter your area (e.g. Ikeja, Lagos)"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-xs outline-none focus:border-purple-500 placeholder-gray-600 transition-colors pr-10"
+                />
+                {manualLocation && (
+                  <button
+                    onClick={() => setManualLocation("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  >
+                    <FaTimes size={10} />
+                  </button>
+                )}
+              </div>
+
+              {/* Clickable Auto-detected location */}
+              {(() => {
+                const autoAddr = currentUser.location?.address || `${currentUser.city || ""} ${currentUser.state || ""}`.trim();
+                if (!autoAddr || autoAddr === "Location not found") return null;
+
+                return (
+                  <button
+                    onClick={() => setManualLocation(autoAddr)}
+                    className="mt-1.5 w-full flex items-center gap-1.5 px-2 py-1 bg-green-500/5 hover:bg-green-500/10 border border-green-500/20 rounded-lg transition-all group text-left"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[7px] font-black text-green-500/70 uppercase tracking-widest leading-none">Auto-detected · Tap to use</p>
+                      <p className="text-green-400/90 text-[9px] font-bold truncate mt-0.5 group-hover:text-green-300">
+                        {autoAddr}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -334,7 +348,7 @@ export default function CustomerSearchPanel({
                   You have an active seat
                 </p>
                 <p className="text-gray-400 text-[9px] font-medium mt-0.5">
-                  You're booked with <strong className="text-white">{activeBookingDriverName}</strong>. 
+                  You're booked with <strong className="text-white">{activeBookingDriverName}</strong>.
                   Cancel that seat first before booking another driver.
                 </p>
               </div>
