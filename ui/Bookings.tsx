@@ -143,6 +143,12 @@ export default function BookingUi() {
     const [showVerifiedOnly, setShowVerifiedOnly] = useState(false)
     const [visibleCount, setVisibleCount] = useState(20)
 
+    const GOOGLE_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
+    const { isLoaded: isGoogleLoaded } = useJsApiLoader({
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+        libraries: GOOGLE_LIBRARIES,
+    });
+
     // New state to handle review form inputs
     const [reviewForm, setReviewForm] = useState({
         comment: "",
@@ -248,27 +254,45 @@ export default function BookingUi() {
     const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [destinationLocation, setDestinationLocation] = useState<{ lat: number, lng: number } | null>(null);
     const destinationInputRef = useRef<HTMLInputElement>(null);
-    const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
 
-    const { isLoaded: isGoogleMapsLoaded } = useJsApiLoader({
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-        libraries: ['places', 'geometry']
-    });
-
+    // ✅ NEW: Attach Autocomplete to destination input for premium address formatting
     useEffect(() => {
-        if (!isGoogleMapsLoaded || !showDestinationOverlay || !destinationInputRef.current) return;
+        if (!isGoogleLoaded || !showDestinationOverlay || !destinationInputRef.current) return;
 
         const auto = new google.maps.places.Autocomplete(destinationInputRef.current, {
-            componentRestrictions: { country: "ng" },
-            fields: ["formatted_address", "geometry"]
+            fields: ["formatted_address", "name", "geometry", "address_components"],
+            componentRestrictions: { country: "ng" }
         });
 
         auto.addListener("place_changed", () => {
             const place = auto.getPlace();
-            if (place.formatted_address) {
-                setDestinationInput(place.formatted_address);
+            const name = place.name || "";
+            const addressComponents = place.address_components || [];
+            const lga = addressComponents.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
+            const city = addressComponents.find(c => c.types.includes("locality"))?.long_name || "";
+            const state = addressComponents.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "";
+            let fullAddr = place.formatted_address || "";
+            
+            fullAddr = fullAddr.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim().replace(/^[,.\s]+|[,.\s]+$/g, "");
+
+            const firstPart = fullAddr.split(",")[0].trim();
+            let displayName = (name && !name.includes("+")) ? name : firstPart;
+            displayName = displayName.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim();
+
+            const headerParts = [displayName];
+            const area = city || lga;
+            if (area && !displayName.toLowerCase().includes(area.toLowerCase())) headerParts.push(area);
+            if (state && !displayName.toLowerCase().includes(state.toLowerCase()) && !area.toLowerCase().includes(state.toLowerCase())) {
+                headerParts.push(state);
             }
-            if (place.geometry && place.geometry.location) {
+            
+            const header = headerParts.join(", ");
+            let cleanAddr = `${header} (${fullAddr})`;
+            cleanAddr = cleanAddr.replace(/^[,.\s]+|[,.\s]+$/g, "");
+            
+            setDestinationInput(cleanAddr);
+            if (destinationInputRef.current) destinationInputRef.current.value = cleanAddr;
+            if (place.geometry?.location) {
                 setDestinationLocation({
                     lat: place.geometry.location.lat(),
                     lng: place.geometry.location.lng()
@@ -279,7 +303,7 @@ export default function BookingUi() {
         return () => {
             google.maps.event.clearInstanceListeners(auto);
         };
-    }, [isGoogleMapsLoaded, showDestinationOverlay]);
+    }, [isGoogleLoaded, showDestinationOverlay]);
 
     // NEW: Active Load Booking Check
     const [hasActiveLoadSeat, setHasActiveLoadSeat] = useState(false);
@@ -2947,6 +2971,22 @@ export default function BookingUi() {
                                                         </button>
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    ) : incomingOffer.status === 'started' ? (
+                                        <div className="max-w-lg mx-auto w-full px-2 sm:px-4">
+                                            <div className="bg-slate-900 rounded-[2.5rem] border border-emerald-500/20 p-8 text-center shadow-2xl">
+                                                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
+                                                    <FaCar className="text-emerald-500 text-2xl animate-pulse" />
+                                                </div>
+                                                <h3 className="text-white font-black text-xl uppercase tracking-tight mb-2">Trip in Progress</h3>
+                                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-8">Navigation and tracking are active.</p>
+                                                <button
+                                                    onClick={() => setAcceptanceMap(true)}
+                                                    className="w-full py-4 bg-emerald-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-3"
+                                                >
+                                                    <FaMapMarkerAlt size={14} /> Resume Navigation Map
+                                                </button>
                                             </div>
                                         </div>
                                     ) : (

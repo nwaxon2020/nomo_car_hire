@@ -47,8 +47,6 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
     const [driverName, setDriverName] = useState('Nomo Driver');
     const [status, setStatus] = useState('Connecting...');
     const [isOnline, setIsOnline] = useState(true);
-    const [showFallback, setShowFallback] = useState(false);
-    const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // ─── Load Google Maps API via useJsApiLoader (fixes Bug A & B) ────────────
     const { isLoaded, loadError } = useJsApiLoader({
@@ -56,34 +54,12 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
         libraries: LIBRARIES,
     });
 
-    // ─── Fallback: if Google Maps errors or takes > 15s, show OSM ────────────
+    // ─── Error handling for Google Maps ──────────────────────────────────────────
     useEffect(() => {
         if (loadError) {
-            setShowFallback(true);
-            setStatus('Backup Map Active');
-            return;
+            setStatus('Map Load Error');
         }
-
-        // Safety timeout: show OSM fallback if Maps takes too long on slow connections
-        fallbackTimerRef.current = setTimeout(() => {
-            if (!isLoaded) {
-                setShowFallback(true);
-                setStatus('Backup Map Active');
-            }
-        }, 15000);
-
-        return () => {
-            if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        };
-    }, [loadError, isLoaded]);
-
-    // ─── Clear fallback once Maps loads successfully ──────────────────────────
-    useEffect(() => {
-        if (isLoaded && !loadError) {
-            setShowFallback(false);
-            if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        }
-    }, [isLoaded, loadError]);
+    }, [loadError]);
 
     // ─── Network monitoring ────────────────────────────────────────────────────
     useEffect(() => {
@@ -231,22 +207,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
         <div className="py-4 md:py-10 relative w-full rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-[#0a0a0a] group">
 
             {/* ─── Map Canvas ─────────────────────────────────────────────── */}
-            {showFallback ? (
-                /* OpenStreetMap fallback */
-                <div className="relative w-full h-[450px] md:h-[550px] bg-slate-800 overflow-hidden">
-                    <iframe
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                        scrolling="no"
-                        src={osmSrc}
-                        title="Backup Map"
-                    />
-                    <div className="absolute top-2 left-2 right-2 bg-amber-500/90 text-black text-[9px] font-black uppercase px-2 py-1 rounded shadow-lg z-10">
-                        Backup Map Active — Google Maps unavailable
-                    </div>
-                </div>
-            ) : !isLoaded ? (
+            {!isLoaded ? (
                 /* Loading state */
                 <div className="w-full h-[450px] md:h-[550px] bg-slate-900 flex flex-col items-center justify-center text-white">
                     <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -362,7 +323,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
             </div>
 
             {/* ─── Waiting for Driver Overlay ──────────────────────────────── */}
-            {!locationData && isLoaded && !showFallback && (
+            {!locationData && isLoaded && (
                 <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
                     <div className="text-center p-6 bg-slate-900/90 rounded-2xl border border-white/10 max-w-sm">
                         <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">

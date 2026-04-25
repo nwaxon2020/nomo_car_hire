@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, OverlayView } from '@react-google-maps/api';
+import { FaExclamationTriangle } from 'react-icons/fa';
 
 // Defined outside component to prevent referential instability warning from useJsApiLoader
 const GOOGLE_MAPS_LIBRARIES: ('places' | 'geometry')[] = ['places', 'geometry'];
@@ -37,9 +38,8 @@ export default function BookingTrackingMap({
   viewerRole = 'customer',
   destinationLabel
 }: BookingTrackingMapProps) {
-  const [loadError, setLoadError] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const pickupValid = pickup.lat !== 0 && pickup.lng !== 0;
   const driverValid = driver.lat !== 0 && driver.lng !== 0;
@@ -55,53 +55,39 @@ export default function BookingTrackingMap({
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  // Safety Timeout and Error Interception for Google Maps
+  // Safety Error Interception for Google Maps
   useEffect(() => {
     const originalConsoleError = console.error;
     console.error = (...args) => {
       if (typeof args[0] === 'string' && args[0].includes('Google Maps JavaScript API error')) {
         setLoadError(true);
-        setShowFallback(true);
         return; // Suppress the hard error overlay
       }
       originalConsoleError(...args);
     };
 
-    // Increased to 15s — mobile connections load Maps slower than desktop
-    const timer = setTimeout(() => {
-      if (!isLoaded) setShowFallback(true);
-    }, 15000);
-
     (window as any).gm_authFailure = () => {
       setLoadError(true);
-      setShowFallback(true);
     };
 
     return () => {
-      clearTimeout(timer);
       console.error = originalConsoleError;
     };
-  }, [isLoaded]);
-
-  // ✅ If Google Maps successfully loaded, clear any fallback triggered prematurely by the timeout
-  useEffect(() => {
-    if (isLoaded && !googleLoadError) {
-      setShowFallback(false);
-      setLoadError(false);
-    }
-  }, [isLoaded, googleLoadError]);
+  }, []);
 
   useEffect(() => {
     if (googleLoadError) {
       setLoadError(true);
-      setShowFallback(true);
     }
   }, [googleLoadError]);
 
   // Fit bounds when map is ready - Optimized to prevent flickering
   const fittedRef = useRef(false);
+  const lastFitTimeRef = useRef(0);
+
   useEffect(() => {
-    if (map && isLoaded && !showFallback) {
+    if (map && isLoaded) {
+      const now = Date.now();
       const bounds = new google.maps.LatLngBounds();
       let hasPoints = false;
 
@@ -110,20 +96,38 @@ export default function BookingTrackingMap({
       if (destValid && destination) { bounds.extend(destination); hasPoints = true; }
 
       if (hasPoints) {
-        // Only fit bounds on first load or if driver moves significantly out of view
         const currentBounds = map.getBounds();
-        const shouldFit = !fittedRef.current || (currentBounds && !currentBounds.contains(new google.maps.LatLng(driver.lat, driver.lng)));
+        
+        // REFINED FLICKER PREVENTION:
+        // 1. Always fit on initial load
+        // 2. Only re-fit if driver moves OUTSIDE current viewport (with 10% buffer)
+        // 3. Throttle re-fits to once every 10 seconds to prevent "jumping"
+        
+        let shouldFit = !fittedRef.current;
+        
+        if (!shouldFit && currentBounds && driverValid) {
+          const driverPos = new google.maps.LatLng(driver.lat, driver.lng);
+          // Check if driver is outside OR very close to the edge (10% buffer)
+          if (!currentBounds.contains(driverPos)) {
+             // Only re-fit if we haven't done it in the last 10 seconds
+             if (now - lastFitTimeRef.current > 10000) {
+               shouldFit = true;
+             }
+          }
+        }
         
         if (shouldFit) {
-          map.fitBounds(bounds, 50); // Added padding
+          map.fitBounds(bounds, 80); // Increased padding for better framing
           fittedRef.current = true;
+          lastFitTimeRef.current = now;
         }
-      } else {
+      } else if (!fittedRef.current) {
         map.setCenter({ lat: 9.0765, lng: 7.3986 });
         map.setZoom(10);
+        fittedRef.current = true;
       }
     }
-  }, [map, isLoaded, pickup, driver, destination, showFallback, pickupValid, driverValid, destValid]);
+  }, [map, isLoaded, pickup, driver, destination, pickupValid, driverValid, destValid]);
 
   // ─── Identity card shown in every state ───────────────────────────────────
   const IdentityCards = () => (
@@ -153,7 +157,7 @@ export default function BookingTrackingMap({
   );
 
   // ─── No location yet ──────────────────────────────────────────────────────
-  if (!mapCenter && !showFallback && !loadError) {
+  if (!mapCenter && !loadError) {
     return (
       <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white p-6 text-center relative">
         <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -180,49 +184,13 @@ export default function BookingTrackingMap({
     );
   }
 
-  // ─── Fallback: OpenStreetMap ──────────────────────────────────────────────
-  if (showFallback || loadError) {
-    const bbox = pickupValid && driverValid
-      ? `${Math.min(pickup.lng, driver.lng) - 0.01}%2C${Math.min(pickup.lat, driver.lat) - 0.01}%2C${Math.max(pickup.lng, driver.lng) + 0.01}%2C${Math.max(pickup.lat, driver.lat) + 0.01}`
-      : pickupValid
-        ? `${pickup.lng - 0.02}%2C${pickup.lat - 0.02}%2C${pickup.lng + 0.02}%2C${pickup.lat + 0.02}`
-        : driverValid
-          ? `${driver.lng - 0.02}%2C${driver.lat - 0.02}%2C${driver.lng + 0.02}%2C${driver.lat + 0.02}`
-          : null;
-
-    const markerParam = pickupValid
-      ? `&marker=${pickup.lat}%2C${pickup.lng}`
-      : driverValid
-        ? `&marker=${driver.lat}%2C${driver.lng}`
-        : '';
-
+  // ─── Error state ──────────────────────────────────────────────────────────
+  if (loadError) {
     return (
-      <div className="w-full h-full relative bg-slate-800 overflow-hidden">
-        {bbox ? (
-          <iframe
-            width="100%"
-            height="100%"
-            frameBorder="0"
-            scrolling="no"
-            marginHeight={0}
-            marginWidth={0}
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik${markerParam}`}
-          />
-        ) : (
-          <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-400 text-xs">
-            Waiting for location...
-          </div>
-        )}
-
-        <div className="absolute top-2 left-2 right-2 bg-amber-500/90 text-black text-[9px] font-black uppercase px-2 py-1 rounded shadow-lg flex items-center justify-between z-10">
-          <span>Backup Map Active</span>
-          <div className="flex gap-2">
-            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-600" /> {driverLabel}</div>
-            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-600" /> {customerLabel}</div>
-          </div>
-        </div>
-
-        <IdentityCards />
+      <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white p-6 text-center">
+        <FaExclamationTriangle className="text-red-500 text-3xl mb-4" />
+        <p className="font-black uppercase tracking-widest text-[10px]">Google Maps Failed to Load</p>
+        <p className="text-slate-500 text-[9px] mt-1">Please check your internet connection and try again.</p>
       </div>
     );
   }
