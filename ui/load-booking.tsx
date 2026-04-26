@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
@@ -181,6 +182,8 @@ const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: s
 /* ─────────────────────────── MAIN COMPONENT ─────────────────────────── */
 
 export default function LoadBookingUi() {
+  const searchParams = useSearchParams();
+  const search = searchParams.get("search");
   const [user, setUser] = useState<any>(null);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -222,7 +225,12 @@ export default function LoadBookingUi() {
         setUserData(data);
         setIsDriver(data.isDriver === true);
         if (data.isDriver === true) {
-          setViewMode(prev => prev === "customer" && !userData ? "driver" : prev);
+          // If there's a search query, force 'customer' view even for drivers
+          if (search) {
+            setViewMode("customer");
+          } else {
+            setViewMode(prev => prev === "customer" && !userData ? "driver" : prev);
+          }
         }
 
         /* ── Monthly trust reset ── */
