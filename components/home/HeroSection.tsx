@@ -1,11 +1,11 @@
-"use client";
-
+import { useState, useEffect, useRef } from "react";
 import { FaKey, FaArrowRight, FaArrowLeft, FaCar, FaMapMarkerAlt } from "react-icons/fa";
 import Link from "next/link";
 
 export default function HeroSection({
   user,
   stats,
+  isGoogleLoaded,
   searchQuery,
   setSearchQuery,
   handleSearch,
@@ -15,6 +15,49 @@ export default function HeroSection({
   data // Pulling CMS data here
 }: any) {
   const content = data || {};
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isGoogleLoaded || !searchInputRef.current) return;
+
+    const autocomplete = new google.maps.places.Autocomplete(searchInputRef.current, {
+      fields: ["formatted_address", "name", "geometry", "address_components"],
+      componentRestrictions: { country: "ng" }
+    });
+
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      const name = place.name || "";
+      const addressComponents = place.address_components || [];
+      const lga = addressComponents.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
+      const city = addressComponents.find(c => c.types.includes("locality"))?.long_name || "";
+      const state = addressComponents.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "";
+      let fullAddr = place.formatted_address || "";
+      
+      fullAddr = fullAddr.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim().replace(/^[,.\s]+|[,.\s]+$/g, "");
+
+      const firstPart = fullAddr.split(",")[0].trim();
+      let displayName = (name && !name.includes("+")) ? name : firstPart;
+      displayName = displayName.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,8}/g, "").trim();
+
+      const headerParts = [displayName];
+      const area = city || lga;
+      if (area && !displayName.toLowerCase().includes(area.toLowerCase())) headerParts.push(area);
+      if (state && !displayName.toLowerCase().includes(state.toLowerCase()) && !area.toLowerCase().includes(state.toLowerCase())) {
+          headerParts.push(state);
+      }
+      
+      const header = headerParts.join(", ");
+      let cleanAddr = `${header} (${fullAddr})`;
+      cleanAddr = cleanAddr.replace(/^[,.\s]+|[,.\s]+$/g, "");
+      
+      setSearchQuery(cleanAddr);
+    });
+
+    return () => {
+      google.maps.event.clearInstanceListeners(autocomplete);
+    };
+  }, [isGoogleLoaded]);
 
   // Construct the dynamic background style from DB
   const heroStyle = {
@@ -108,6 +151,7 @@ export default function HeroSection({
                   <div className="relative">
                     <FaMapMarkerAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
                     <input
+                      ref={searchInputRef}
                       type="text"
                       placeholder={content.searchPlaceholder || "Enter destination, city, or place"}
                       value={searchQuery}

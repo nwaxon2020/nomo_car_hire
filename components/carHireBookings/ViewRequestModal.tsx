@@ -16,7 +16,7 @@ interface ViewRequestModalProps {
   openOfferCard: (request: BookingRequestType, e?: React.MouseEvent) => void;
   onContactUser: (request: BookingRequestType) => void;
   onEditOffer: (request: BookingRequestType, offer: OfferType) => void;
-  onRemoveBid: (requestId: string, offerIndex: number) => void;
+  onRemoveBid: (requestId: string, driverId: string) => void;
 }
 
 export default function ViewRequestModal({
@@ -163,9 +163,8 @@ export default function ViewRequestModal({
                     </div>
                     <button
                       onClick={() => {
-                        const offerIndex = request.offers.findIndex(o => o.driverId === userId);
-                        if (offerIndex !== -1) {
-                          onRemoveBid(request.id, offerIndex);
+                        if (userId) {
+                          onRemoveBid(request.id, userId);
                         }
                       }}
                       className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs sm:text-sm whitespace-nowrap"
@@ -173,6 +172,20 @@ export default function ViewRequestModal({
                       <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                       Remove Your Bid
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Blocked Status Explanation */}
+              {isDriver && request.userIsBlocked && (
+                <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 animate-pulse">
+                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-red-400 uppercase tracking-tight">Bidding Blocked</p>
+                    <p className="text-[11px] text-red-200/70 mt-1 leading-relaxed">
+                      You've been blocked from this specific request because your offers were rejected twice by this customer. 
+                      This policy helps maintain a fair environment and prevents persistent low-value bidding.
+                    </p>
                   </div>
                 </div>
               )}

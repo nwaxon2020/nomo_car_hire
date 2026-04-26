@@ -43,52 +43,15 @@ import SearchFilters from "@/components/mobilityBookings/SearchFilters";
 import BookingGrid from "@/components/mobilityBookings/BookingGrid";
 import DriverDetailsModal from "@/components/mobilityBookings/DriverDetailsModal";
 import MyVehiclesSelector from "@/components/mobilityBookings/MyVehiclesSelector";
+import SubtleDriverNotice from "@/components/mobilityBookings/ui/SubtleDriverNotice";
+import NegotiationNotice from "@/components/mobilityBookings/ui/NegotiationNotice";
+import ActiveBookingBanner from "@/components/mobilityBookings/ui/ActiveBookingBanner";
+import IncomingOfferModal from "@/components/mobilityBookings/IncomingOfferModal";
+import DirectBookingStatus from "@/components/mobilityBookings/DirectBookingStatus";
+import DestinationInputOverlay from "@/components/mobilityBookings/DestinationInputOverlay";
+import ActiveTripBanner from "@/components/mobilityBookings/ActiveTripBanner";
 
-const SubtleDriverNotice = () => (
-    <div className="mb-2 p-2 bg-gray-900 border border-gray-800 rounded-xl flex items-center gap-3">
-        <div className="bg-emerald-600 p-1.5 rounded-lg text-white shadow-lg">
-            <FaCar size={12} />
-        </div>
-        <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Fleet Active</p>
-            <p className="text-[10px] font-medium text-gray-400">Tap a vehicle below to set your active booking car.</p>
-        </div>
-    </div>
-);
-
-// Negotiation Notice ///////////////////////////////////////////////////////////
-const NegotiationNotice = () => (
-    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 flex items-center gap-2 shadow-sm">
-        <div className="bg-blue-600 px-2 py-1 rounded-xl text-white shadow-md shrink-0">
-            <FaInfoCircle size={14} />
-        </div>
-        <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-900">Fair Negotiation Policy</p>
-            <p className="text-[11px] font-medium text-gray-600 leading-tight">
-                Bookings are negotiations between drivers and customers. Please ensure a proper agreement on fare and terms is reached before starting your trip.
-            </p>
-        </div>
-    </div>
-);
-
-const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: string }) => (
-    <div className="max-w-md mx-auto mt-10 p-8 bg-white border border-gray-100 rounded-[2.5rem] shadow-2xl text-center animate-in fade-in zoom-in duration-500">
-        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-            <FaCar className="text-amber-500 text-3xl" />
-        </div>
-        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-2">Active Booking Found</h2>
-        <p className="text-gray-500 text-sm font-medium mb-8 leading-relaxed px-4">
-            You currently have an active {type} booking. Please complete or cancel it before starting a new search.
-        </p>
-        <button
-            onClick={() => window.location.href = targetPath}
-            className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
-        >
-            <FaMapMarkerAlt size={14} />
-            Return to Active Booking
-        </button>
-    </div>
-);
+// Components are now imported from @/components/mobilityBookings/ui/
 
 
 
@@ -2644,65 +2607,13 @@ export default function BookingUi() {
                 </div>
             )}
 
-            {/* ✅ NEW: Waiting for Driver Overlay */}
-            {pendingOffer && pendingOffer.status === 'pending' && (
-                <div className="fixed inset-0 z-[180] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-                    <div className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 text-center shadow-2xl">
-                        <div className="relative w-36 h-36 mx-auto mb-8">
-                            {/* Rotating Spinner Border */}
-                            <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
-                            <motion.div
-                                animate={{ rotate: 360 }}
-                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent z-10"
-                            ></motion.div>
-
-                            {/* Driver Image Container */}
-                            <div className="absolute inset-2 rounded-full overflow-hidden bg-gray-800 border-4 border-gray-900 shadow-inner">
-                                {pendingOffer.driverImage ? (
-                                    <Image
-                                        src={pendingOffer.driverImage}
-                                        alt={pendingOffer.driverName}
-                                        width={144}
-                                        height={144}
-                                        className="object-cover w-full h-full"
-                                    />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-blue-600/20 text-blue-500">
-                                        <FaCar size={40} />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Countdown Badge */}
-                            <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center text-lg font-black shadow-xl z-20 border-4 border-gray-900">
-                                {countdown > 0 ? countdown : "..."}
-                            </div>
-                        </div>
-                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Connecting to Driver</h3>
-                        <p className="text-gray-400 text-sm mb-8">Driver {pendingOffer.driverName} is reviewing your booking request. Please stay on this page.</p>
-                        <button
-                            onClick={() => setShowCancelWarning(true)}
-                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-red-400 font-bold rounded-2xl transition-all border border-red-500/20"
-                        >
-                            Cancel Request
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* ✅ NEW: Driver Busy Overlay (Passenger sees this when driver rejects) */}
-            {pendingOffer && driverResponse === 'busy' && (
-                <div className="fixed inset-0 z-[180] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-                    <div className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 text-center shadow-2xl">
-                        <div className="w-24 h-24 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <FaExclamationTriangle className="text-orange-500 text-4xl" />
-                        </div>
-                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Driver is Busy</h3>
-                        <p className="text-gray-400 text-sm mb-8">The driver is currently unavailable or busy. Please try another driver.</p>
-                    </div>
-                </div>
-            )}
+            {/* ✅ NEW: Direct Booking Overlays (Consolidated) */}
+            <DirectBookingStatus 
+                pendingOffer={pendingOffer}
+                driverResponse={driverResponse}
+                countdown={countdown}
+                onCancel={() => setShowCancelWarning(true)}
+            />
 
             {/* ✅ NEW: Cancel Warning Card Overlay */}
             {showCancelWarning && (
@@ -2735,79 +2646,18 @@ export default function BookingUi() {
             )}
 
             {/* ✅ NEW: Destination Input Overlay */}
-            {showDestinationOverlay && tempBookingData && (
-                <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="max-w-md w-full bg-gray-900 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden"
-                    >
-                        {/* Decorative background elements */}
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
-
-                        <button
-                            onClick={() => {
-                                setShowDestinationOverlay(false);
-                                setDestinationInput("");
-                                setTempBookingData(null);
-                            }}
-                            className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors"
-                        >
-                            <FaTimes size={20} />
-                        </button>
-
-                        <div className="text-center mb-8">
-                            <div className="w-16 h-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-500/30">
-                                <FaMapMarkerAlt className="text-emerald-500 text-2xl" />
-                            </div>
-                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Set Your Destination</h3>
-                            <p className="text-gray-400 text-xs">Tell {tempBookingData.driver.firstName} where you are heading.</p>
-                        </div>
-
-                        <div className="space-y-6 relative z-10">
-                            <div className="relative">
-                                <div className="absolute top-1/2 left-5 -translate-y-1/2 text-emerald-500">
-                                    <FaMapMarkerAlt size={16} />
-                                </div>
-                                <input
-                                    ref={destinationInputRef}
-                                    type="text"
-                                    placeholder="Enter drop-off location..."
-                                    defaultValue={destinationInput}
-                                    className="w-full pl-12 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder:text-gray-600 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-medium"
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="bg-gray-800/50 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
-                                    <Image
-                                        src={tempBookingData.driver.profileImage || "/per.png"}
-                                        alt="Driver"
-                                        width={48}
-                                        height={48}
-                                        className="object-cover w-full h-full"
-                                    />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Driver Selected</p>
-                                    <p className="text-sm font-bold text-white">{tempBookingData.driver.fullName}</p>
-                                    <p className="text-[10px] text-gray-500">{tempBookingData.vehicle.carName} • {tempBookingData.vehicle.plateNumber}</p>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={finalizeBooking}
-                                disabled={!destinationInput.trim()}
-                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-50 text-white hover:text-emerald-900 font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 disabled:hover:text-white"
-                            >
-                                Confirm & Send Request
-                            </button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
+            <DestinationInputOverlay 
+                show={showDestinationOverlay}
+                tempBookingData={tempBookingData}
+                destinationInput={destinationInput}
+                destinationInputRef={destinationInputRef}
+                onClose={() => {
+                    setShowDestinationOverlay(false);
+                    setDestinationInput("");
+                    setTempBookingData(null);
+                }}
+                onFinalize={finalizeBooking}
+            />
 
             <div className="px-2 pt-4 md:px-4 md:pt-2 relative bg-[#F9FAF9]">
                 {/* ✅ NEW: View Mode Toggles */}
@@ -2843,6 +2693,13 @@ export default function BookingUi() {
                         <>
                             {hasActiveLoadSeat ? (
                                 <ActiveBookingBanner type="Load" targetPath="/user/mobility/load-booking" />
+                            ) : activeTrip ? (
+                                <ActiveTripBanner 
+                                    activeTrip={activeTrip} 
+                                    onOpenMap={() => setAcceptanceMap(true)} 
+                                    currentUser={currentUser}
+                                    updateTripStatus={updateTripStatus}
+                                />
                             ) : (
                                 <>
                                     <NegotiationNotice />
@@ -2919,152 +2776,31 @@ export default function BookingUi() {
                                                 <p className="text-red-700/70 mt-1 text-xs sm:text-sm">The customer cancelled this request at the last minute.</p>
                                             </div>
                                         </div>
-                                    ) : incomingOffer.status === 'accepted' ? (
-                                        <div className="max-w-lg mx-auto w-full px-2 sm:px-4">
-                                            <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl overflow-hidden">
-                                                <div className="bg-emerald-500 py-2.5 text-center">
-                                                    <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Active Trip Signal Connected</p>
-                                                </div>
-                                                <div className="p-6 md:p-8 text-center">
-                                                    <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                        <FaCar className="text-emerald-500 text-xl" />
-                                                    </div>
-                                                    <h3 className="text-xl font-black text-gray-900 mb-1">Trip with {incomingOffer.customerName}</h3>
-                                                    <p className="text-gray-500 text-[10px] sm:text-xs mb-6 font-medium">Map tracking is active. You can minimize this view to see your other requests.</p>
-
-                                                    <div className="flex flex-col gap-3">
-                                                        <div className="flex gap-3">
-                                                            <button
-                                                                onClick={() => setAcceptanceMap(true)}
-                                                                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all"
-                                                            >
-                                                                Open Map
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (incomingOffer.pickupLocation && incomingOffer.destination) {
-                                                                        startTrip(
-                                                                            incomingOffer.driverId,
-                                                                            incomingOffer.vehicleId,
-                                                                            incomingOffer.pickupLocation,
-                                                                            incomingOffer.destination
-                                                                        );
-                                                                    } else {
-                                                                        toast.error("Trip details incomplete");
-                                                                    }
-                                                                }}
-                                                                disabled={isStartingTrip}
-                                                                className="flex-1 py-3.5 bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                                                            >
-                                                                {isStartingTrip ? (
-                                                                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                                ) : (
-                                                                    <><FaCar size={10} /> Start Trip</>
-                                                                )}
-                                                            </button>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setShowCancelWarning(true)} // Used as Cancel here
-                                                            className="w-full py-3.5 bg-gray-50 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
-                                                        >
-                                                            Terminate
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : incomingOffer.status === 'started' ? (
-                                        <div className="max-w-lg mx-auto w-full px-2 sm:px-4">
-                                            <div className="bg-slate-900 rounded-[2.5rem] border border-emerald-500/20 p-8 text-center shadow-2xl">
-                                                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
-                                                    <FaCar className="text-emerald-500 text-2xl animate-pulse" />
-                                                </div>
-                                                <h3 className="text-white font-black text-xl uppercase tracking-tight mb-2">Trip in Progress</h3>
-                                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-8">Navigation and tracking are active.</p>
-                                                <button
-                                                    onClick={() => setAcceptanceMap(true)}
-                                                    className="w-full py-4 bg-emerald-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-3"
-                                                >
-                                                    <FaMapMarkerAlt size={14} /> Resume Navigation Map
-                                                </button>
-                                            </div>
-                                        </div>
                                     ) : (
-                                        <div className="p-1 sm:p-2 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 shadow-2xl flex items-center justify-center max-w-lg mx-auto w-full">
-                                            <div className="bg-white rounded-[1.5rem] p-6 sm:p-8 text-center w-full">
-                                                <div className="flex justify-center mb-6">
-                                                    <div className="relative w-24 h-24">
-                                                        <div className="absolute inset-0 bg-amber-500 rounded-full animate-ping opacity-25"></div>
-                                                        <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-amber-500 shadow-xl bg-gray-100">
-                                                            {incomingOffer.customerImage ? (
-                                                                <Image
-                                                                    src={incomingOffer.customerImage}
-                                                                    alt={incomingOffer.customerName}
-                                                                    width={96}
-                                                                    height={96}
-                                                                    className="object-cover w-full h-full"
-                                                                />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center bg-amber-100 text-amber-600">
-                                                                    <FaCar size={32} />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 mb-2 drop-shadow-sm">New Booking Offer</p>
-                                                <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2 leading-tight tracking-tighter">
-                                                    {incomingOffer.customerName} <span className="text-amber-500 flex flex-col sm:inline">wants to book you!</span>
-                                                </h3>
-                                                <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">Accept request from {incomingOffer.customerName} to see the location.</p>
-
-                                                {ownVehicles.find(v => v.id === incomingOffer.vehicleId) && (
-                                                    <div className="bg-amber-50 rounded-xl p-3 mb-4 border border-amber-200 shadow-inner flex items-center justify-center gap-3 w-full">
-                                                        <div className="text-center">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 mb-0.5">Target Vehicle</p>
-                                                            <p className="font-bold text-gray-900 text-xs">
-                                                                {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carName}{" "}
-                                                                {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carModel}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Customer's Destination */}
-                                                {incomingOffer.destination && (
-                                                    <div className="bg-emerald-50 rounded-xl p-3 mb-6 border border-emerald-200 shadow-inner w-full">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
-                                                                <FaMapMarkerAlt className="text-white" size={14} />
-                                                            </div>
-                                                            <div className="text-left">
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-0.5">Customer&apos;s Destination</p>
-                                                                <p className="font-bold text-gray-900 text-sm leading-tight">{incomingOffer.destination}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex gap-3 w-full">
-                                                    <button
-                                                        onClick={() => handleRejectOffer(incomingOffer)}
-                                                        className="flex-1 py-3 sm:py-4 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 font-black tracking-widest uppercase rounded-xl transition-all text-[10px] sm:text-xs"
-                                                    >
-                                                        Reject
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleAcceptOffer(incomingOffer)}
-                                                        disabled={isAcceptingOffer}
-                                                        className={`flex-1 py-3 sm:py-4 font-black tracking-widest uppercase rounded-xl transition-all text-[10px] sm:text-xs flex items-center justify-center gap-2 ${isAcceptingOffer
-                                                            ? "bg-gray-400 cursor-not-allowed text-white"
-                                                            : "bg-gray-900 hover:bg-black text-white shadow-xl"
-                                                            }`}
-                                                    >
-                                                        {isAcceptingOffer ? "Wait..." : "Accept"}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <IncomingOfferModal 
+                                            incomingOffer={incomingOffer}
+                                            ownVehicles={ownVehicles}
+                                            isAcceptingOffer={isAcceptingOffer}
+                                            isStartingTrip={isStartingTrip}
+                                            onAccept={handleAcceptOffer}
+                                            onReject={handleRejectOffer}
+                                            onStartTrip={async (driverId, vehicleId, pickup, destination) => {
+                                                try {
+                                                    const tripId = await startTrip(driverId, vehicleId, pickup, destination);
+                                                    if (tripId) {
+                                                        await updateDoc(doc(db, "directOffers", incomingOffer.id), { 
+                                                            status: "started", 
+                                                            tripId: tripId,
+                                                            updatedAt: serverTimestamp() 
+                                                        });
+                                                    }
+                                                } catch (err) {
+                                                    console.error(err);
+                                                }
+                                            }}
+                                            onTerminate={() => setShowCancelWarning(true)}
+                                            onResumeMap={() => setAcceptanceMap(true)}
+                                        />
                                     )}
                                 </div>
                             ) : (

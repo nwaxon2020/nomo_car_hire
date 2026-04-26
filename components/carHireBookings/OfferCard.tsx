@@ -10,8 +10,8 @@ interface OfferCardProps {
   userName?: string;
   isDriverView?: boolean;
   onClose: () => void;
-  onDeleteOffer: (requestId: string, offerIndex: number) => void;
-  onMarkAsRead: (requestId: string, offerIndex: number) => void;
+  onDeleteOffer: (requestId: string, driverId: string) => void;
+  onMarkAsRead: (requestId: string, driverId: string) => void;
   onMarkAllRead: (requestId: string) => void;
   onWhatsAppContact: (phoneNumber: string, driverName: string, price: string) => void;
   onChatDriver: (otherUserId: string, otherUserName: string, request?: BookingRequestType, driverPhone?: string) => void;
@@ -38,7 +38,7 @@ export default function OfferCard({
   contactedDriverIds = []
 }: OfferCardProps) {
   const isRequestOwner = request.userId === userId;
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ offerIndex: number, driverName: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ driverId: string, driverName: string } | null>(null);
 
   // Filter offers based on user type
   let displayOffers = request.offers || [];
@@ -143,7 +143,7 @@ export default function OfferCard({
                           </span>
                           {(isUsersOffer || isRequestOwner) && !isDriverView && (
                             <button
-                              onClick={() => setShowDeleteConfirm({ offerIndex: originalIndex, driverName: offer.driverName })}
+                              onClick={() => setShowDeleteConfirm({ driverId: offer.driverId, driverName: offer.driverName })}
                               className="text-red-400 hover:text-red-300 transition-colors p-1"
                               title={isUsersOffer ? "Remove your offer" : "Remove this offer"}
                             >
@@ -152,7 +152,7 @@ export default function OfferCard({
                           )}
                           {isUsersOffer && isDriverView && (
                             <button
-                              onClick={() => setShowDeleteConfirm({ offerIndex: originalIndex, driverName: offer.driverName })}
+                              onClick={() => setShowDeleteConfirm({ driverId: offer.driverId, driverName: offer.driverName })}
                               className="text-red-400 hover:text-red-300 transition-colors p-1"
                               title="Remove your offer"
                             >
@@ -200,7 +200,7 @@ export default function OfferCard({
                       <div className="flex flex-wrap gap-2">
                         {isUnread && !isDriverView && (
                           <button
-                            onClick={() => onMarkAsRead(request.id, originalIndex)}
+                            onClick={() => onMarkAsRead(request.id, offer.driverId)}
                             className="px-3 py-1.5 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-xs font-medium transition-all flex items-center gap-1"
                           >
                             <Check className="w-3.5 h-3.5" /> Mark Read
@@ -218,7 +218,7 @@ export default function OfferCard({
                             <button
                               onClick={() => {
                                 onChatDriver(offer.driverId, offer.driverName, request, offer.driverPhone);
-                                if (isUnread) onMarkAsRead(request.id, originalIndex);
+                                if (isUnread) onMarkAsRead(request.id, offer.driverId);
                               }}
                               className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-sm"
                             >
@@ -300,7 +300,7 @@ export default function OfferCard({
                 </button>
                 <button
                   onClick={() => {
-                    onDeleteOffer(request.id, showDeleteConfirm.offerIndex);
+                    onDeleteOffer(request.id, showDeleteConfirm.driverId);
                     setShowDeleteConfirm(null);
                   }}
                   className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-600/20"

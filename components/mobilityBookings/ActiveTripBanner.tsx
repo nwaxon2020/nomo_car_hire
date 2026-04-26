@@ -7,27 +7,29 @@ import { Trip, DriverWithVehicle, VehicleLog } from './types';
 
 interface ActiveTripBannerProps {
     activeTrip: Trip | null;
-    selectedDriver: DriverWithVehicle | null;
-    selectedVehicle: VehicleLog | null;
-    currentUser: any;
-    updateTripStatus: (tripId: string, status: 'completed' | 'cancelled') => Promise<void>;
+    currentUser?: any;
+    updateTripStatus?: (tripId: string, status: 'completed' | 'cancelled') => Promise<void>;
+    onOpenMap: () => void;
+    selectedDriver?: DriverWithVehicle | null;
+    selectedVehicle?: VehicleLog | null;
 }
 
 export default function ActiveTripBanner({ 
     activeTrip, 
+    currentUser,
+    updateTripStatus,
+    onOpenMap,
     selectedDriver, 
     selectedVehicle, 
-    currentUser, 
-    updateTripStatus 
 }: ActiveTripBannerProps) {
     if (!activeTrip) return null;
 
     return (
-        <div className="mb-4 rounded-xl overflow-hidden shadow-xl border border-blue-200">
-            {/* Banner Header with Gradient */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+        <div className="max-w-4xl mx-auto mb-8 bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-700">
+            {/* Header / Status Bar */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 md:p-8">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
                         <div className="bg-white/20 p-2 rounded-full">
                             <FaCar className="text-white text-lg" />
                         </div>
@@ -36,9 +38,17 @@ export default function ActiveTripBanner({
                             <p className="text-blue-100 text-sm">Real-time tracking enabled</p>
                         </div>
                     </div>
-                    <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
-                        🟢 LIVE
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={onOpenMap}
+                            className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                        >
+                            View Map
+                        </button>
+                        <span className="px-2 py-1 bg-white/20 text-white text-xs rounded-full">
+                            🟢 LIVE
+                        </span>
+                    </div>
                 </div>
 
                 {/* Route Info */}
@@ -68,14 +78,14 @@ export default function ActiveTripBanner({
             <div className="p-3 bg-white border-t border-gray-100">
                 <div className="flex flex-col sm:flex-row gap-2">
                     <button
-                        onClick={() => updateTripStatus(activeTrip.id, 'completed')}
+                        onClick={() => updateTripStatus?.(activeTrip.id, 'completed')}
                         className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
                     >
                         <FaCheckCircle />
                         Mark Completed
                     </button>
                     <button
-                        onClick={() => updateTripStatus(activeTrip.id, 'cancelled')}
+                        onClick={() => updateTripStatus?.(activeTrip.id, 'cancelled')}
                         className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
                     >
                         <FaTimesCircle />
@@ -95,7 +105,7 @@ export default function ActiveTripBanner({
                         tripId={activeTrip.id}
                         driverId={selectedDriver?.id || activeTrip.driverId}
                         driverName={selectedDriver?.fullName || 'Driver'}
-                        vehicleDetails={`${selectedVehicle?.carName} ${selectedVehicle?.carModel}`}
+                        vehicleDetails={selectedVehicle ? `${selectedVehicle.carName} ${selectedVehicle.carModel}` : 'Vehicle'}
                         pickup={activeTrip.pickupLocation}
                         destination={activeTrip.destination}
                         currentUserId={currentUser?.uid}

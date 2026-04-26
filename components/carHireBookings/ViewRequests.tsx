@@ -17,7 +17,10 @@ import {
   setDoc,
   writeBatch,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  limit,
+  orderBy,
+  startAfter
 } from "firebase/firestore";
 import toast from 'react-hot-toast';
 import { X, Check, Phone, Car, Calendar, Users, MapPin, MessageCircle, AlertCircle, Trash2, Edit2, Send, Eye, Navigation, Crown } from 'lucide-react';
@@ -78,7 +81,7 @@ export default function ViewRequests({
   // Standalone offer card state
   const [showOfferCard, setShowOfferCard] = useState(false);
   const [offerCardRequest, setOfferCardRequest] = useState<BookingRequestType | null>(null);
-  const [showDriverDeleteConfirm, setShowDriverDeleteConfirm] = useState<{ requestId: string, offerIndex: number } | null>(null);
+  const [showDriverDeleteConfirm, setShowDriverDeleteConfirm] = useState<{ requestId: string, driverId: string } | null>(null);
   const [showReBidWarning, setShowReBidWarning] = useState(false);
   const [pendingReBidRequest, setPendingReBidRequest] = useState<BookingRequestType | null>(null);
 
@@ -126,6 +129,10 @@ export default function ViewRequests({
 
   // Track previous offers per driver to detect new bids and prevent double counting
   const [previousDriverOffers, setPreviousDriverOffers] = useState<Record<string, Record<string, number>>>({});
+
+  // Pagination states
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   // Track if warning has been shown in this session
   const [warningShown, setWarningShown] = useState(false);
@@ -326,139 +333,104 @@ export default function ViewRequests({
     return false;
   };
 
-  useEffect(() => {
+  const fetchRequests = async (isLoadMore = false) => {
     if (!userId) return;
-
-    setLoading(true);
-    setError("");
+    
+    if (!isLoadMore) {
+      setLoading(true);
+      setLastDoc(null);
+    }
 
     try {
       const requestsRef = collection(db, "bookingRequests");
       let q;
 
+      const constraints: any[] = [
+        where("status", "==", "active"),
+        orderBy("createdAt", "desc"),
+        limit(20)
+      ];
+
       if (!isDriver) {
-        // Customers: only see their own requests
-        if (filter === "urgent") {
-          q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"), where("urgent", "==", true));
-        } else {
-          q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"));
-        }
-      } else {
-        // Drivers: see ALL active requests
-        if (filter === "urgent") {
-          q = query(requestsRef, where("status", "==", "active"), where("urgent", "==", true));
-        } else {
-          q = query(requestsRef, where("status", "==", "active"));
+        constraints.unshift(where("userId", "==", userId));
+      }
+
+      if (filter === "urgent") {
+        constraints.push(where("urgent", "==", true));
+      }
+
+      if (isLoadMore && lastDoc) {
+        constraints.push(startAfter(lastDoc));
+      }
+
+      q = query(requestsRef, ...constraints);
+      
+      const snapshot = await getDocs(q);
+      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+      setLastDoc(lastVisible);
+      setHasMore(snapshot.docs.length === 20);
+
+      const requestsList: BookingRequestType[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        requestsList.push({
+          id: doc.id,
+          ...data,
+          offers: data.offers || []
+        } as BookingRequestType);
+      });
+
+      let accessibleRequests = requestsList;
+
+      // Ticket collection check for drivers
+      if (isDriver && adminConfig?.startTicketCollect) {
+        const hasValidTicket = userData?.hasActiveTicket &&
+          userData?.ticketExpiryDate?.toDate() > new Date();
+
+        const isTrialActive = () => {
+          if (!userData?.newDriverConfig?.registeredAt) return false;
+          const regDate = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt);
+          const trialDays = adminConfig?.newDriver?.freeTrialDays || 60;
+          const trialEnd = new Date(regDate);
+          trialEnd.setDate(trialEnd.getDate() + trialDays);
+          return new Date() < trialEnd;
+        };
+
+        if (!hasValidTicket && !isTrialActive()) {
+          accessibleRequests = [];
         }
       }
 
-      const unsubscribe = onSnapshot(q,
-        (snapshot) => {
-          const requestsList: BookingRequestType[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            requestsList.push({
-              id: doc.id,
-              ...data,
-              offers: data.offers || []
-            } as BookingRequestType);
-          });
+      // For drivers: mark which ones they've made offers on
+      let processedRequests = accessibleRequests;
+      if (isDriver) {
+        processedRequests = accessibleRequests.map(request => ({
+          ...request,
+          userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false,
+          userWasRejected: request.rejectedOnce?.includes(userId || "") || false,
+          userIsBlocked: request.rejectedTwice?.includes(userId || "") || false
+        }));
+      }
 
-          let accessibleRequests = requestsList;
+      const sortedRequests = processedRequests; // Already sorted by orderBy in query
 
-          // Ticket collection check for drivers
-          if (isDriver && adminConfig?.startTicketCollect) {
-            const hasValidTicket = userData?.hasActiveTicket &&
-              userData?.ticketExpiryDate?.toDate() > new Date();
+      if (isLoadMore) {
+        setRequests(prev => [...prev, ...sortedRequests]);
+      } else {
+        setRequests(sortedRequests);
+      }
 
-            const isTrialActive = () => {
-              if (!userData?.newDriverConfig?.registeredAt) return false;
-              const regDate = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt);
-              const trialDays = adminConfig?.newDriver?.freeTrialDays || 60;
-              const trialEnd = new Date(regDate);
-              trialEnd.setDate(trialEnd.getDate() + trialDays);
-              return new Date() < trialEnd;
-            };
-
-            if (!hasValidTicket && !isTrialActive()) {
-              accessibleRequests = [];
-            }
-          }
-
-          // For drivers: mark which ones they've made offers on
-          let processedRequests = accessibleRequests;
-          if (isDriver) {
-            processedRequests = accessibleRequests.map(request => ({
-              ...request,
-              userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false,
-              userWasRejected: request.rejectedOnce?.includes(userId || "") || false,
-              userIsBlocked: request.rejectedTwice?.includes(userId || "") || false
-            }));
-          }
-
-          const sortedRequests = processedRequests.sort((a, b) => {
-            const vipA = (a as any).vipLevel || 0;
-            const vipB = (b as any).vipLevel || 0;
-            if (vipB !== vipA) {
-              return vipB - vipA;
-            }
-            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
-            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
-            return dateB.getTime() - dateA.getTime();
-          });
-
-          setRequests(sortedRequests);
-          setVisibleCount(20); // Reset on filter change
-
-          let finalFiltered = sortedRequests;
-
-          if (filter === "urgent") {
-            finalFiltered = finalFiltered.filter(req => req.urgent);
-          }
-
-          if (filter === "nearby" && isDriver) {
-            finalFiltered = finalFiltered.filter(request =>
-              checkLocationMatch(request, driverState, driverCity)
-            );
-          }
-
-          // Detect new bids for customers AND for drivers (when they are request owners)
-          if (!isDriver) {
-            // Customers: detect unread offers on their own requests
-            const newRequests = finalFiltered.map(request => {
-              const hasUnread = request.offers?.some(o => o.read === false) || false;
-              return { ...request, hasNewBid: hasUnread };
-            });
-            setRequests(newRequests);
-          } else {
-            // Drivers: also detect unread offers on requests they OWN (as customers)
-            const processedWithNotifications = finalFiltered.map(request => {
-              // If this is the driver's OWN request (they posted it as a customer)
-              if (request.userId === userId) {
-                const hasUnread = request.offers?.some(o => o.read === false) || false;
-                return { ...request, hasNewBid: hasUnread };
-              }
-              return { ...request, hasNewBid: false };
-            });
-            setRequests(processedWithNotifications);
-          }
-
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Firestore error:", error);
-          setError(`Error loading requests: ${error.message}`);
-          setLoading(false);
-        }
-      );
-
-      return () => unsubscribe();
+      setLoading(false);
     } catch (error: any) {
-      console.error("Error setting up query:", error);
+      console.error("Error fetching requests:", error);
       setError(`Error: ${error.message}`);
       setLoading(false);
     }
-  }, [filter, driverState, driverCity, isDriver, userId, adminConfig, userData]);
+  };
+
+  useEffect(() => {
+    fetchRequests();
+  }, [filter, isDriver, userId, adminConfig, userData]);
 
 
   const getStats = () => {
@@ -573,7 +545,7 @@ export default function ViewRequests({
     }
   };
 
-  const handleDeleteOffer = async (requestId: string, offerIndex: number, isDriverSelfDelete: boolean = false) => {
+  const handleDeleteOffer = async (requestId: string, driverId: string, isDriverSelfDelete: boolean = false) => {
     const deleteToast = toast.loading(isDriverSelfDelete ? "Removing your bid..." : "Removing offer...");
 
     try {
@@ -582,6 +554,13 @@ export default function ViewRequests({
 
       if (request) {
         const updatedOffers = [...request.offers];
+        const offerIndex = updatedOffers.findIndex(o => o.driverId === driverId);
+        
+        if (offerIndex === -1) {
+          toast.error("Offer not found", { id: deleteToast });
+          return;
+        }
+
         const offerToDelete = updatedOffers[offerIndex];
         updatedOffers.splice(offerIndex, 1);
 
@@ -735,14 +714,16 @@ export default function ViewRequests({
     setShowContactModal(true);
   };
 
-  const handleMarkAsRead = async (requestId: string, offerIndex: number) => {
+  const handleMarkAsRead = async (requestId: string, driverId: string) => {
     try {
       const requestRef = doc(db, "bookingRequests", requestId);
       const requestSnap = await getDoc(requestRef);
       if (requestSnap.exists()) {
         const data = requestSnap.data();
         const offers = [...(data.offers || [])];
-        if (offers[offerIndex]) {
+        const offerIndex = offers.findIndex(o => o.driverId === driverId);
+        
+        if (offerIndex !== -1 && offers[offerIndex]) {
           offers[offerIndex].read = true;
           await updateDoc(requestRef, { offers });
 
@@ -751,8 +732,9 @@ export default function ViewRequests({
             prevRequests.map(req => {
               if (req.id === requestId) {
                 const updatedOffers = [...req.offers];
-                if (updatedOffers[offerIndex]) {
-                  updatedOffers[offerIndex].read = true;
+                const localOfferIndex = updatedOffers.findIndex(o => o.driverId === driverId);
+                if (localOfferIndex !== -1 && updatedOffers[localOfferIndex]) {
+                  updatedOffers[localOfferIndex].read = true;
                 }
                 // Check if any offers are still unread
                 const stillHasUnread = updatedOffers.some(o => o.read === false);
@@ -765,8 +747,9 @@ export default function ViewRequests({
           // Update the offer card if it's open
           if (offerCardRequest?.id === requestId) {
             const updatedOffers = [...offerCardRequest.offers];
-            if (updatedOffers[offerIndex]) {
-              updatedOffers[offerIndex].read = true;
+            const cardOfferIndex = updatedOffers.findIndex(o => o.driverId === driverId);
+            if (cardOfferIndex !== -1 && updatedOffers[cardOfferIndex]) {
+              updatedOffers[cardOfferIndex].read = true;
             }
             const stillHasUnread = updatedOffers.some(o => o.read === false);
             setOfferCardRequest({ ...offerCardRequest, offers: updatedOffers, hasNewBid: stillHasUnread });
@@ -1166,10 +1149,10 @@ export default function ViewRequests({
       )}
 
       {/* Load More Button */}
-      {requests.length > visibleCount && (
+      {hasMore && (
         <div className="mt-8 flex justify-center pb-10">
           <button
-            onClick={() => setVisibleCount(prev => prev + 20)}
+            onClick={() => fetchRequests(true)}
             className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-500 transition-all shadow-xl active:scale-95"
           >
             Load More Requests
@@ -1203,8 +1186,8 @@ export default function ViewRequests({
             });
             setShowContactModal(true);
           }}
-          onRemoveBid={(requestId, offerIndex) => {
-            setShowDriverDeleteConfirm({ requestId, offerIndex });
+          onRemoveBid={(requestId, driverId) => {
+            setShowDriverDeleteConfirm({ requestId, driverId });
           }}
         />
       )}
@@ -1217,7 +1200,7 @@ export default function ViewRequests({
           confirmLabel="Remove Bid"
           onConfirm={() => {
             if (showDriverDeleteConfirm) {
-              handleDeleteOffer(showDriverDeleteConfirm.requestId, showDriverDeleteConfirm.offerIndex, true);
+              handleDeleteOffer(showDriverDeleteConfirm.requestId, showDriverDeleteConfirm.driverId, true);
             }
           }}
           onCancel={() => setShowDriverDeleteConfirm(null)}

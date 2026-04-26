@@ -22,12 +22,20 @@ import DriverPartner from "@/components/home/DriverPartner";
 import PassengerSafety from "@/components/home/PassengerSafety";
 import CTASection from "@/components/home/CTASection";
 import Reviews from "@/components/Reviews";
+import { useJsApiLoader } from "@react-google-maps/api";
+
+const GOOGLE_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
 export default function HomePageUi() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isDriver, setIsDriver] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  const { isLoaded: isGoogleLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries: GOOGLE_LIBRARIES,
+  });
   
   // Stats initialized with your defaults, but will be overwritten by fetch
   const [stats, setStats] = useState({ drivers: 1250, rides: 45000, cities: 0, rating: 4.8 });
@@ -161,6 +169,7 @@ export default function HomePageUi() {
         data={cmsData?.hero}
         user={user} 
         stats={stats}
+        isGoogleLoaded={isGoogleLoaded}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         handleSearch={handleSearch}

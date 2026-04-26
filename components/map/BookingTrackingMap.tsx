@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, OverlayView } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, OverlayView, Polyline } from '@react-google-maps/api';
 import { FaExclamationTriangle } from 'react-icons/fa';
 
 // Defined outside component to prevent referential instability warning from useJsApiLoader
@@ -84,10 +84,30 @@ export default function BookingTrackingMap({
   // Fit bounds when map is ready - Optimized to prevent flickering
   const fittedRef = useRef(false);
   const lastFitTimeRef = useRef(0);
+  const lastCoordsRef = useRef({ 
+    pickup: { lat: pickup.lat, lng: pickup.lng }, 
+    dest: { lat: destination?.lat || 0, lng: destination?.lng || 0 } 
+  });
 
   useEffect(() => {
     if (map && isLoaded) {
       const now = Date.now();
+      
+      // Check if critical points have moved significantly to warrant a re-fit
+      const coordsChanged = 
+        lastCoordsRef.current.pickup.lat !== pickup.lat || 
+        lastCoordsRef.current.pickup.lng !== pickup.lng ||
+        lastCoordsRef.current.dest.lat !== (destination?.lat || 0) ||
+        lastCoordsRef.current.dest.lng !== (destination?.lng || 0);
+
+      if (coordsChanged) {
+        fittedRef.current = false; // Trigger a re-fit
+        lastCoordsRef.current = { 
+          pickup: { lat: pickup.lat, lng: pickup.lng }, 
+          dest: { lat: destination?.lat || 0, lng: destination?.lng || 0 } 
+        };
+      }
+
       const bounds = new google.maps.LatLngBounds();
       let hasPoints = false;
 
@@ -98,18 +118,11 @@ export default function BookingTrackingMap({
       if (hasPoints) {
         const currentBounds = map.getBounds();
         
-        // REFINED FLICKER PREVENTION:
-        // 1. Always fit on initial load
-        // 2. Only re-fit if driver moves OUTSIDE current viewport (with 10% buffer)
-        // 3. Throttle re-fits to once every 10 seconds to prevent "jumping"
-        
         let shouldFit = !fittedRef.current;
         
         if (!shouldFit && currentBounds && driverValid) {
           const driverPos = new google.maps.LatLng(driver.lat, driver.lng);
-          // Check if driver is outside OR very close to the edge (10% buffer)
           if (!currentBounds.contains(driverPos)) {
-             // Only re-fit if we haven't done it in the last 10 seconds
              if (now - lastFitTimeRef.current > 10000) {
                shouldFit = true;
              }
@@ -117,7 +130,7 @@ export default function BookingTrackingMap({
         }
         
         if (shouldFit) {
-          map.fitBounds(bounds, 80); // Increased padding for better framing
+          map.fitBounds(bounds, 80); 
           fittedRef.current = true;
           lastFitTimeRef.current = now;
         }
@@ -219,6 +232,35 @@ export default function BookingTrackingMap({
         }}
         onLoad={m => setMap(m)}
       >
+        {/* Leg 1: Driver to Pickup (Dashed) */}
+        {driverValid && pickupValid && (
+          <Polyline
+            path={[driver, pickup]}
+            options={{
+              strokeColor: '#f59e0b', // Amber
+              strokeOpacity: 0,
+              strokeWeight: 3,
+              icons: [{
+                icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
+                offset: '0',
+                repeat: '15px'
+              }]
+            }}
+          />
+        )}
+
+        {/* Leg 2: Pickup to Destination (Solid) */}
+        {pickupValid && destValid && destination && (
+          <Polyline
+            path={[pickup, destination]}
+            options={{
+              strokeColor: '#ef4444', // Red
+              strokeOpacity: 0.6,
+              strokeWeight: 4,
+            }}
+          />
+        )}
+
         {/* Customer / Pickup marker */}
         {pickupValid && (
           customerImage ? (
