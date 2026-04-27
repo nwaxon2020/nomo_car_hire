@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { db, auth } from "@/lib/firebaseConfig";
+import { db } from "@/lib/firebaseConfig";
 import {
   collection,
   query,
   where,
   onSnapshot,
-  deleteDoc,
   doc,
   updateDoc,
   getDocs,
@@ -17,10 +16,7 @@ import {
   setDoc,
   writeBatch,
   arrayUnion,
-  arrayRemove,
-  limit,
-  orderBy,
-  startAfter
+  arrayRemove
 } from "firebase/firestore";
 import toast from 'react-hot-toast';
 import { X, Check, Phone, Car, Calendar, Users, MapPin, MessageCircle, AlertCircle, Trash2, Edit2, Send, Eye, Navigation, Crown } from 'lucide-react';
@@ -126,13 +122,6 @@ export default function ViewRequests({
     destination: ""
   });
 
-
-  // Track previous offers per driver to detect new bids and prevent double counting
-  const [previousDriverOffers, setPreviousDriverOffers] = useState<Record<string, Record<string, number>>>({});
-
-  // Pagination states
-  const [lastDoc, setLastDoc] = useState<any>(null);
-  const [hasMore, setHasMore] = useState(true);
 
   // Track if warning has been shown in this session
   const [warningShown, setWarningShown] = useState(false);
@@ -333,104 +322,131 @@ export default function ViewRequests({
     return false;
   };
 
-  const fetchRequests = async (isLoadMore = false) => {
+  useEffect(() => {
     if (!userId) return;
-    
-    if (!isLoadMore) {
-      setLoading(true);
-      setLastDoc(null);
-    }
+
+    setLoading(true);
+    setError("");
 
     try {
       const requestsRef = collection(db, "bookingRequests");
       let q;
 
-      const constraints: any[] = [
-        where("status", "==", "active"),
-        orderBy("createdAt", "desc"),
-        limit(20)
-      ];
-
       if (!isDriver) {
-        constraints.unshift(where("userId", "==", userId));
-      }
-
-      if (filter === "urgent") {
-        constraints.push(where("urgent", "==", true));
-      }
-
-      if (isLoadMore && lastDoc) {
-        constraints.push(startAfter(lastDoc));
-      }
-
-      q = query(requestsRef, ...constraints);
-      
-      const snapshot = await getDocs(q);
-      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
-      setLastDoc(lastVisible);
-      setHasMore(snapshot.docs.length === 20);
-
-      const requestsList: BookingRequestType[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        requestsList.push({
-          id: doc.id,
-          ...data,
-          offers: data.offers || []
-        } as BookingRequestType);
-      });
-
-      let accessibleRequests = requestsList;
-
-      // Ticket collection check for drivers
-      if (isDriver && adminConfig?.startTicketCollect) {
-        const hasValidTicket = userData?.hasActiveTicket &&
-          userData?.ticketExpiryDate?.toDate() > new Date();
-
-        const isTrialActive = () => {
-          if (!userData?.newDriverConfig?.registeredAt) return false;
-          const regDate = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt);
-          const trialDays = adminConfig?.newDriver?.freeTrialDays || 60;
-          const trialEnd = new Date(regDate);
-          trialEnd.setDate(trialEnd.getDate() + trialDays);
-          return new Date() < trialEnd;
-        };
-
-        if (!hasValidTicket && !isTrialActive()) {
-          accessibleRequests = [];
+        // Customers: only see their own requests
+        if (filter === "urgent") {
+          q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"), where("urgent", "==", true));
+        } else {
+          q = query(requestsRef, where("userId", "==", userId), where("status", "==", "active"));
+        }
+      } else {
+        // Drivers: see ALL active requests
+        if (filter === "urgent") {
+          q = query(requestsRef, where("status", "==", "active"), where("urgent", "==", true));
+        } else {
+          q = query(requestsRef, where("status", "==", "active"));
         }
       }
 
-      // For drivers: mark which ones they've made offers on
-      let processedRequests = accessibleRequests;
-      if (isDriver) {
-        processedRequests = accessibleRequests.map(request => ({
-          ...request,
-          userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false,
-          userWasRejected: request.rejectedOnce?.includes(userId || "") || false,
-          userIsBlocked: request.rejectedTwice?.includes(userId || "") || false
-        }));
-      }
+      const unsubscribe = onSnapshot(q,
+        (snapshot) => {
+          const requestsList: BookingRequestType[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            requestsList.push({
+              id: doc.id,
+              ...data,
+              offers: data.offers || []
+            } as BookingRequestType);
+          });
 
-      const sortedRequests = processedRequests; // Already sorted by orderBy in query
+          let accessibleRequests = requestsList;
 
-      if (isLoadMore) {
-        setRequests(prev => [...prev, ...sortedRequests]);
-      } else {
-        setRequests(sortedRequests);
-      }
+          // Ticket collection check for drivers
+          if (isDriver && adminConfig?.startTicketCollect) {
+            const hasValidTicket = userData?.hasActiveTicket &&
+              userData?.ticketExpiryDate?.toDate() > new Date();
 
-      setLoading(false);
+            const isTrialActive = () => {
+              if (!userData?.newDriverConfig?.registeredAt) return false;
+              const regDate = userData.newDriverConfig.registeredAt.toDate?.() || new Date(userData.newDriverConfig.registeredAt);
+              const trialDays = adminConfig?.newDriver?.freeTrialDays || 60;
+              const trialEnd = new Date(regDate);
+              trialEnd.setDate(trialEnd.getDate() + trialDays);
+              return new Date() < trialEnd;
+            };
+
+            if (!hasValidTicket && !isTrialActive()) {
+              accessibleRequests = [];
+            }
+          }
+
+          // For drivers: mark which ones they've made offers on
+          let processedRequests = accessibleRequests;
+          if (isDriver) {
+            processedRequests = accessibleRequests.map(request => ({
+              ...request,
+              userHasMadeOffer: request.offers?.some(offer => offer.driverId === userId) || false,
+              userWasRejected: request.rejectedOnce?.includes(userId || "") || false,
+              userIsBlocked: request.rejectedTwice?.includes(userId || "") || false
+            }));
+          }
+
+          // Sort: VIP first, then by newest createdAt
+          const sortedRequests = processedRequests.sort((a, b) => {
+            const vipA = (a as any).vipLevel || 0;
+            const vipB = (b as any).vipLevel || 0;
+            if (vipB !== vipA) return vipB - vipA;
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
+            return dateB.getTime() - dateA.getTime();
+          });
+
+          // Apply nearby filter client-side (no Firestore index needed)
+          let finalFiltered = sortedRequests;
+          if (filter === "nearby" && isDriver) {
+            finalFiltered = finalFiltered.filter(request =>
+              checkLocationMatch(request, driverState, driverCity)
+            );
+          }
+
+          // Detect new bids for customers AND for drivers (when they are request owners)
+          if (!isDriver) {
+            // Customers: detect unread offers on their own requests
+            const newRequests = finalFiltered.map(request => ({
+              ...request,
+              hasNewBid: request.offers?.some((o: any) => o.read === false) || false
+            }));
+            setRequests(newRequests);
+          } else {
+            // Drivers: detect unread offers on requests they OWN (as customers)
+            const processedWithNotifications = finalFiltered.map(request => {
+              if (request.userId === userId) {
+                const hasUnread = request.offers?.some((o: any) => o.read === false) || false;
+                return { ...request, hasNewBid: hasUnread };
+              }
+              return { ...request, hasNewBid: false };
+            });
+            setRequests(processedWithNotifications);
+          }
+
+          setVisibleCount(20); // Reset visible count on filter/data change
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Firestore error:", error);
+          setError(`Error loading requests: ${error.message}`);
+          setLoading(false);
+        }
+      );
+
+      return () => unsubscribe();
     } catch (error: any) {
-      console.error("Error fetching requests:", error);
+      console.error("Error setting up query:", error);
       setError(`Error: ${error.message}`);
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRequests();
-  }, [filter, isDriver, userId, adminConfig, userData]);
+  }, [filter, driverState, driverCity, isDriver, userId, adminConfig, userData]);
 
 
   const getStats = () => {
@@ -1140,6 +1156,7 @@ export default function ViewRequests({
           formatDate={formatDate}
           openOfferCard={openOfferCard}
           setViewingRequest={setViewingRequest}
+          setShowDeleteConfirm={setShowDeleteConfirm}
           driverState={driverState}
           driverCity={driverCity}
           filter={filter}
@@ -1148,11 +1165,11 @@ export default function ViewRequests({
         />
       )}
 
-      {/* Load More Button */}
-      {hasMore && (
+      {/* Load More Button — only shown when there are more than 20 cards */}
+      {requests.length > visibleCount && (
         <div className="mt-8 flex justify-center pb-10">
           <button
-            onClick={() => fetchRequests(true)}
+            onClick={() => setVisibleCount(prev => prev + 20)}
             className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-500 transition-all shadow-xl active:scale-95"
           >
             Load More Requests

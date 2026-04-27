@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, Calendar, MapPin, MessageCircle, AlertCircle, Edit2, Eye, Crown } from 'lucide-react';
+import { Car, Calendar, MapPin, MessageCircle, AlertCircle, Edit2, Eye, Crown, Trash2 } from 'lucide-react';
 
 interface DriverRequestsProps {
     requests: any[];
@@ -8,6 +8,7 @@ interface DriverRequestsProps {
     formatDate: (date: string) => string;
     openOfferCard: (request: any, e?: React.MouseEvent) => void;
     setViewingRequest: (request: any) => void;
+    setShowDeleteConfirm: (id: string) => void;
     driverState: string;
     driverCity: string;
     filter: string;
@@ -21,6 +22,7 @@ export default function DriverRequests({
     formatDate,
     openOfferCard,
     setViewingRequest,
+    setShowDeleteConfirm,
     driverState,
     driverCity,
     filter,
@@ -68,7 +70,7 @@ export default function DriverRequests({
                             key={request.id}
                             onClick={() => setViewingRequest(request)}
                             className={`w-full relative overflow-hidden rounded-xl shadow-lg transition-all cursor-pointer p-3 sm:p-4 group ${isOwnRequest
-                                ? 'bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900'
+                                ? 'bg-[#064E3B] bg-gradient-to-br from-emerald-900 to-teal-900'
                                 : request.userIsBlocked
                                     ? 'bg-red-900/40 border-red-600 shadow-[inset_0_0_20px_rgba(220,38,38,0.2)]'
                                     : request.userWasRejected
@@ -77,7 +79,7 @@ export default function DriverRequests({
                                             ? 'bg-gray-800/80'
                                             : 'bg-[#1E1B4B] bg-gradient-to-br from-indigo-900 to-purple-900'
                                 } border ${hasNewBids
-                                    ? 'border-2 border-green-500'
+                                    ? 'border-2 border-orange-500'
                                     : request.userIsBlocked
                                         ? 'border-red-600'
                                         : request.userWasRejected
@@ -87,15 +89,15 @@ export default function DriverRequests({
                                                 : 'border-purple-500/30 hover:border-purple-400'
                                 }`}
                         >
-                            {/* Green pulse border effect for new bids on OWN requests - only border animation */}
+                            {/* Orange pulse border effect for new bids on OWN requests - only border animation */}
                             {hasNewBids && (
-                                <div className="absolute inset-0 rounded-xl border-2 border-green-500 animate-pulse pointer-events-none" />
+                                <div className="absolute inset-0 rounded-xl border-2 border-orange-500 animate-pulse pointer-events-none" />
                             )}
 
-                            {/* New Bid Badge for OWN requests */}
+                            {/* New Bid Badge for OWN requests (Orange) */}
                             {hasNewBids && (
                                 <div className="absolute top-0 left-2 z-20">
-                                    <span className="text-[10px] font-bold bg-green-500 text-white px-2 py-0.5 rounded-full animate-pulse">
+                                    <span className="text-[10px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded-full animate-pulse">
                                         NEW OFFERS
                                     </span>
                                 </div>
@@ -119,12 +121,31 @@ export default function DriverRequests({
                                 </div>
                             )}
 
-                            {/* "Your Request" Badge for OWN requests */}
+                            {/* Action Buttons + YOUR REQUEST tag — top-right */}
                             {isOwnRequest && (
-                                <div className="absolute top-2 right-2 z-20">
+                                <div className="absolute top-2 right-2 flex flex-col gap-1 z-20 items-end">
+                                    {/* YOUR REQUEST label */}
                                     <span className="text-[10px] font-bold bg-purple-500 text-white px-2 py-0.5 rounded-full">
                                         YOUR REQUEST
                                     </span>
+                                    {/* View Offers button — only when there are offers */}
+                                    {request.offers && request.offers.length > 0 && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); openOfferCard(request, e); }}
+                                            className="p-2 bg-amber-500/80 hover:bg-amber-600 text-white rounded-full transition-all shadow-lg"
+                                            title="View Offers"
+                                        >
+                                            <MessageCircle className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    {/* Delete button */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(request.id); }}
+                                        className="p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full transition-all shadow-lg"
+                                        title="Delete Request"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             )}
 
@@ -204,7 +225,7 @@ export default function DriverRequests({
                                         >
                                             {/* Notification dot for new bids */}
                                             {hasNewBids && (
-                                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
+                                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full animate-pulse"></span>
                                             )}
                                             <span className={`${request.offers?.length ? 'bg-purple-500/30 text-white font-bold hover:bg-purple-500/50' : 'bg-black/20 text-gray-400 hover:bg-black/40'} flex items-center gap-1 px-2 py-0.5 rounded`}>
                                                 <MessageCircle className="w-3 h-3" /> {request.offers?.length || 0}
