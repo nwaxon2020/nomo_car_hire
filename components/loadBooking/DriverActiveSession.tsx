@@ -8,7 +8,7 @@ import {
   FaFlag, FaCheckCircle, FaBell, FaStop,
 } from "react-icons/fa";
 import {
-  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, deleteDoc, arrayUnion
+  collection, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, getDoc, deleteDoc, arrayUnion, writeBatch
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { LoadBooking, LoadSeat, getSeatLayout, getTodayString, getTomorrowString } from "./types";
@@ -89,6 +89,23 @@ export default function DriverActiveSession({
         cancelledAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // 1b. Also update all booked seats so passengers are released globally
+      const batch = writeBatch(db);
+      seats.forEach(seat => {
+        if (seat.status === "booked") {
+          const seatRef = doc(db, "loadBookings", booking.id, "seats", String(seat.seatNumber));
+          batch.update(seatRef, {
+            status: "available",
+            customerId: null,
+            customerName: null,
+            customerImage: null,
+            trustScore: null,
+            bookedAt: null,
+          });
+        }
+      });
+      await batch.commit();
 
       // 2. If there were booked passengers, apply trust penalty
       if (bookedSeats > 0) {
@@ -363,8 +380,11 @@ export default function DriverActiveSession({
             </p>
             <p className="text-white font-bold text-[11px]">{formatTime(booking.departureTime)}</p>
           </div>
-          <div className="bg-gray-900/50 rounded-lg p-2.5">
-            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1 mb-1">
+          <div 
+            onClick={() => document.getElementById('seat-manager')?.scrollIntoView({ behavior: 'smooth' })}
+            className="bg-gray-900/50 rounded-lg p-2.5 cursor-pointer hover:bg-gray-900 transition-colors group"
+          >
+            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1 mb-1 group-hover:text-purple-400 transition-colors">
               <FaUsers className="text-purple-400" size={7} /> Seats Booked
             </p>
             <p className="text-white font-bold text-[11px]">
@@ -436,7 +456,7 @@ export default function DriverActiveSession({
       </div>
 
       {/* Seat Manager */}
-      <div className="bg-gray-800/50 border border-white/10 rounded-xl p-4">
+      <div id="seat-manager" className="bg-gray-800/50 border border-white/10 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-white font-black text-[11px] uppercase tracking-widest flex items-center gap-1.5">
             <FaCar className="text-amber-400" size={11} /> Seat Status

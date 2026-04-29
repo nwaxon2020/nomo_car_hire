@@ -42,6 +42,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 }) => {
     const [game, setGame] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
+    const [isUpgrading, setIsUpgrading] = useState(false);
     const router = useRouter();
 
     const capitalizeFullName = (name: string) => {
@@ -305,10 +306,18 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => router.push(`/user/purchase-vip/${userId}`)}
+                            disabled={isUpgrading}
+                            onClick={() => {
+                                setIsUpgrading(true);
+                                router.push(`/user/purchase-vip/${userId}`);
+                            }}
                             className="w-full md:w-auto bg-gradient-to-r from-amber-500 to-yellow-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-yellow-700 transition-all shadow-lg flex items-center justify-center gap-2"
                         >
-                            <span>⭐</span> Upgrade VIP
+                            {isUpgrading ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                <><span>⭐</span> Upgrade VIP</>
+                            )}
                         </motion.button>
 
                         {/* Share Button - Click to open modal */}

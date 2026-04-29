@@ -15,6 +15,7 @@ import { auth } from "@/lib/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { logFeatureUsage } from "@/lib/analytics";
+import LocationGuard from "@/components/mobility/LocationGuard";
 
 import CreateRequest from "../components/carHireBookings/CreateRequest";
 import ViewRequests from "../components/carHireBookings/ViewRequests";
@@ -197,9 +198,11 @@ export default function CarHireUi({
   /* --------------------------------------------
    🔥 UI
   -------------------------------------------- */
-  return (
+  if (loading && !localUserId) return null;
 
-    <div className="mx-auto max-w-7xl border border-gray-300 bg-white shadow-sm">
+  return (
+    <LocationGuard>
+      <div className="mx-auto max-w-7xl border border-gray-300 bg-white shadow-sm">
       {/* HEADER */}
       <div className="max-w-full px-2 py-5 md:p-5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 text-white  shadow-lg">
         <div className="max-w-full flex flex-col md:flex-row justify-between items-center gap-2">
@@ -292,8 +295,8 @@ export default function CarHireUi({
             <span className="block text-[8px] text-green-600 font-bold">&copy;Nomopo Ventures</span>
           </span>
         </div>
+        </div>
       </div>
-    </div>
-
+    </LocationGuard>
   );
 }

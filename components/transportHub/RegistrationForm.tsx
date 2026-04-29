@@ -35,6 +35,37 @@ export default function RegistrationForm({ onClose, onSuccess, isRenewal = false
         idImageUrl: "",
     });
 
+    const [uploading, setUploading] = useState<{ [key: string]: boolean }>({});
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "garageImageUrl" | "idImageUrl") => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const user = auth.currentUser;
+        if (!user) {
+            toast.error("Please login to upload files");
+            return;
+        }
+
+        setUploading(prev => ({ ...prev, [field]: true }));
+        try {
+            const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+            const { storage } = await import("@/lib/firebaseConfig");
+            
+            const storageRef = ref(storage, `transportHub/${user.uid}/${field}_${Date.now()}`);
+            await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(storageRef);
+            
+            setFormData(prev => ({ ...prev, [field]: downloadUrl }));
+            toast.success("File uploaded successfully!");
+        } catch (error) {
+            console.error("Upload error:", error);
+            toast.error("Failed to upload file");
+        } finally {
+            setUploading(prev => ({ ...prev, [field]: false }));
+        }
+    };
+
     const [showPayment, setShowPayment] = useState(false);
 
     useEffect(() => {
@@ -148,8 +179,20 @@ export default function RegistrationForm({ onClose, onSuccess, isRenewal = false
                             <InputField label="Email Address" icon={<FiMail />} type="email" value={formData.email} onChange={v => setFormData({ ...formData, email: v })} required />
                             <InputField label="Phone Number" icon={<FiPhone />} value={formData.phone} onChange={v => setFormData({ ...formData, phone: v })} required />
                             <InputField label="Website URL" icon={<FiGlobe />} type="url" value={formData.websiteUrl} onChange={v => setFormData({ ...formData, websiteUrl: v })} required />
-                            <InputField label="Garage Image URL" icon={<FiCamera />} value={formData.garageImageUrl} onChange={v => setFormData({ ...formData, garageImageUrl: v })} required />
-                            <InputField label="CAC/ID Image URL" icon={<FiCamera />} value={formData.idImageUrl} onChange={v => setFormData({ ...formData, idImageUrl: v })} required />
+                            <FileUploadField 
+                                label="Garage Image" 
+                                value={formData.garageImageUrl} 
+                                uploading={uploading.garageImageUrl} 
+                                onChange={(e) => handleFileUpload(e, "garageImageUrl")} 
+                                required 
+                            />
+                            <FileUploadField 
+                                label="CAC / Owner ID" 
+                                value={formData.idImageUrl} 
+                                uploading={uploading.idImageUrl} 
+                                onChange={(e) => handleFileUpload(e, "idImageUrl")} 
+                                required 
+                            />
                         </div>
 
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-4">
@@ -281,3 +324,42 @@ function NumberInput({ label, value, onChange }: NumberInputProps) {
         </div>
     );
 }
+
+interface FileUploadFieldProps {
+    label: string;
+    value: string;
+    uploading: boolean;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    required?: boolean;
+}
+
+function FileUploadField({ label, value, uploading, onChange, required = false }: FileUploadFieldProps) {
+    return (
+        <div className="space-y-1.5">
+            <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">{label}</label>
+            <div className="relative group">
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={onChange}
+                    required={required && !value}
+                    className="hidden"
+                    id={`file-${label}`}
+                />
+                <label
+                    htmlFor={`file-${label}`}
+                    className={`w-full flex items-center gap-3 bg-slate-900/50 border ${value ? 'border-emerald-500/30' : 'border-white/10'} rounded-xl py-3 px-4 cursor-pointer hover:border-emerald-500/50 transition-all overflow-hidden`}
+                >
+                    <div className={`${value ? 'text-emerald-500' : 'text-slate-500'}`}>
+                        {uploading ? <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" /> : <FiCamera />}
+                    </div>
+                    <span className={`text-xs truncate ${value ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                        {uploading ? 'Uploading...' : value ? 'File Uploaded' : `Upload ${label}`}
+                    </span>
+                    {value && <FiCheckCircle className="text-emerald-500 ml-auto shrink-0" size={14} />}
+                </label>
+            </div>
+        </div>
+    );
+}
+

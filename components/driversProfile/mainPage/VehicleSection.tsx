@@ -29,6 +29,8 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
     const scrollRef = useRef<HTMLDivElement>(null);
     const [showLimitOverlay, setShowLimitOverlay] = useState(false);
 
+    const [isUpgrading, setIsUpgrading] = useState(false);
+
     // Live VIP limit check — reads vipLevel passed from driver-profile.tsx (from Firebase)
     const maxVehicles = getVehicleLimit(vipLevel);
     const isLimitReached = vehiclesCount >= maxVehicles;
@@ -39,6 +41,11 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
         } else {
             onAddVehicle();
         }
+    };
+
+    const handleUpgradeClick = () => {
+        setIsUpgrading(true);
+        onUpgradeVIP();
     };
 
     // --- NEW SCROLL LOGIC FOR NOTIFICATIONS ---
@@ -98,10 +105,15 @@ export const VehicleSection: React.FC<VehicleSectionProps> = ({
 
                     <div className="flex gap-3">
                         <button
-                            onClick={() => { setShowLimitOverlay(false); onUpgradeVIP(); }}
-                            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase rounded-lg shadow-lg flex items-center gap-2"
+                            onClick={handleUpgradeClick}
+                            disabled={isUpgrading}
+                            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2 min-w-[140px]"
                         >
-                            Upgrade Now <ArrowRight size={14} />
+                            {isUpgrading ? (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                <>Upgrade Now <ArrowRight size={14} /></>
+                            )}
                         </button>
                         <button
                             onClick={() => setShowLimitOverlay(false)}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { VIPStar, getVehicleLimit } from './VIPStar';
 import ExpiryCountdown from '@/components/ExpiryCountdown';
 import ShareButton from '@/components/sharebutton';
@@ -43,11 +43,24 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
     onMarkContacted,
     isContacted
 }) => {
+    const [isUpgrading, setIsUpgrading] = useState(false);
+    const [isBuyingTicket, setIsBuyingTicket] = useState(false);
+
     // Vehicle limit shown in stats
     const maxVehicles = getVehicleLimit(vipLevel);
 
     // FIX: Fallback check for the ID to prevent "NO-ID" errors
     const effectiveUserId = driverData?.uid || driverData?.id || "";
+
+    const handleUpgradeClick = () => {
+        setIsUpgrading(true);
+        onUpgradeVIP();
+    };
+
+    const handleTicketClick = () => {
+        setIsBuyingTicket(true);
+        onBuyTicket();
+    };
 
     return (
         <div className="bg-slate-900 border border-emerald-500/20 shadow-2xl rounded md:rounded-xl px-3 py-5 md:p-6 mb-8 overflow-hidden relative">
@@ -204,17 +217,23 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
 
                 <div className="grid grid-cols-2 md:grid-cols-3 justify-center sm:justify-end gap-2 md:gap-3 md:gap-4 w-full lg:w-auto">
                     <button
-                        onClick={onBuyTicket}
-                        className="mb-3 md:mb-0 px-3 md:px-6 py-4 md:py-3 col-span-2 sm:col-span-1 rounded-md md:rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.4)]"
+                        onClick={handleTicketClick}
+                        disabled={isBuyingTicket}
+                        className="mb-3 md:mb-0 px-3 md:px-6 py-4 md:py-3 col-span-2 sm:col-span-1 rounded-md md:rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.4)] flex items-center justify-center gap-2"
                     >
-                        🎫 Buy Ticket
+                        {isBuyingTicket ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : "🎫 Buy Ticket"}
                     </button>
 
                     <button
-                        onClick={onUpgradeVIP}
-                        className="px-3 md:px-6 py-3 rounded-md md:rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
+                        onClick={handleUpgradeClick}
+                        disabled={isUpgrading}
+                        className="px-3 md:px-6 py-3 rounded-md md:rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)] flex items-center justify-center gap-2"
                     >
-                        {vipLevel > 0 ? '⭐ Upgrade VIP' : '🌟 Become VIP'}
+                        {isUpgrading ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (vipLevel > 0 ? '⭐ Upgrade VIP' : '🌟 Become VIP')}
                     </button>
 
                     <button

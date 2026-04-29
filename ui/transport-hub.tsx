@@ -9,6 +9,7 @@ import RegistrationForm from '@/components/transportHub/RegistrationForm';
 import CompanyDashboard from '@/components/transportHub/CompanyDashboard';
 import LoadingRound from '@/components/re-useable-loading';
 import { logFeatureUsage } from "@/lib/analytics";
+import LocationGuard from "@/components/mobility/LocationGuard";
 
 import { Timestamp } from "firebase/firestore";
 
@@ -156,7 +157,8 @@ const TransportHubUi = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#040b18] text-white">
+        <LocationGuard>
+            <div className="min-h-screen bg-[#040b18] text-white">
             {/* Hero Section */}
             <div className="relative pt-5 md:pt-10 pb-8 px-4 md:px-6 overflow-hidden">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-gradient-to-b from-blue-600/10 to-transparent pointer-events-none" />
@@ -292,6 +294,7 @@ const TransportHubUi = () => {
                 />
             )}
         </div>
+        </LocationGuard>
     );
 };
 

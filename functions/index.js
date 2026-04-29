@@ -200,3 +200,50 @@ exports.deleteUserAndData = onCall(
         }
     }
 );
+
+/**
+ * ── AUTO-CLEAR OLD TRIPS ──
+ * Deletes trip documents older than 90 days every day at 1:00 AM.
+ */
+exports.autoClearOldTrips = onSchedule("0 1 * * *", async (event) => {
+    logger.log("=== STARTING AUTO-CLEAR OLD TRIPS ===");
+    const db = admin.firestore();
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const ninetyDaysAgoTimestamp = admin.firestore.Timestamp.fromDate(ninetyDaysAgo);
+
+    try {
+        // Clear trips
+        const tripSnapshot = await db.collection("trips")
+            .where("updatedAt", "<", ninetyDaysAgoTimestamp)
+            .limit(500)
+            .get();
+
+        if (!tripSnapshot.empty) {
+            const batch = db.batch();
+            tripSnapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            logger.log(`✅ Successfully cleared ${tripSnapshot.size} old trips.`);
+        }
+
+        // Clear direct offers
+        const offerSnapshot = await db.collection("directOffers")
+            .where("updatedAt", "<", ninetyDaysAgoTimestamp)
+            .limit(500)
+            .get();
+
+        if (!offerSnapshot.empty) {
+            const batch = db.batch();
+            offerSnapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            logger.log(`✅ Successfully cleared ${offerSnapshot.size} old direct offers.`);
+        }
+
+    } catch (error) {
+        logger.error("❌ Auto-clear old logs failed:", error);
+    }
+});

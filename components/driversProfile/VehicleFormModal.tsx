@@ -129,8 +129,18 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             return;
         }
 
+        const passengersCount = parseInt(formData.passengers);
+        const isKeke = formData.carType.toLowerCase() === 'keke';
+
+        if (passengersCount < 4 && !isKeke) {
+            toast.error("Cars with 3 seats or less are not allowed. Only Kekes can have 3 seats.");
+            setActiveTab('details');
+            return;
+        }
+
         const submissionData = {
             ...formData,
+            passengers: passengersCount, // Store as number for consistency
             plateNumber: formData.plateNumber.trim().toUpperCase(),
             isApproved: editingVehicle ? editingVehicle.isApproved : false,
             createdAt: editingVehicle ? editingVehicle.createdAt : new Date().toISOString()

@@ -177,10 +177,16 @@ export default function DriverSetupPanel({
   const lockedVehicle = vehicles.find((v) => v.id === lockedVehicleId);
   useEffect(() => {
     if (lockedVehicle) {
+      const eligible = isVehicleEligible(lockedVehicle.passengers, lockedVehicle.carType);
       setSelectedVehicle(lockedVehicle);
-      setStep("setup");
+      if (eligible) {
+        setStep("setup");
+      } else {
+        toast.error(`${lockedVehicle.carName} is not eligible for Load Booking (requires 4+ seats). Please pick another.`, { id: 'ineligible-vehicle' });
+        setStep("select");
+      }
     }
-  }, [lockedVehicleId]);
+  }, [lockedVehicleId, lockedVehicle]);
 
   const handleSelectVehicle = (vehicle: EligibleVehicle) => {
     if (!isVehicleEligible(vehicle.passengers, vehicle.carType)) return;
@@ -227,6 +233,14 @@ export default function DriverSetupPanel({
     if (!finalMeeting.trim()) { toast.error("Enter your meeting point"); return; }
     if (!fare || Number(fare) < 1) { toast.error("Enter a valid fare amount"); return; }
     if (!departureTime) { toast.error("Set your departure time"); return; }
+
+    const pSeats = getPassengerSeats(selectedVehicle.passengers, selectedVehicle.carType);
+    const eligible = isVehicleEligible(selectedVehicle.passengers, selectedVehicle.carType);
+
+    if (!eligible) {
+        toast.error(`This vehicle (${pSeats} seats) is not allowed for Load Booking. Only Kekes can have 3 seats.`);
+        return;
+    }
 
     setSubmitting(true);
     try {
@@ -444,9 +458,12 @@ export default function DriverSetupPanel({
                   {getPassengerSeats(selectedVehicle.passengers, selectedVehicle.carType)} Seats · {selectedVehicle.plateNumber} · {selectedVehicle.exteriorColor}
                 </p>
               </div>
-              <div className="bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
-                <FaLock className="text-amber-400" size={10} />
-              </div>
+              <button 
+                onClick={() => setStep("select")}
+                className="px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[9px] font-black uppercase tracking-tighter rounded-lg border border-white/10 transition-all"
+              >
+                Change
+              </button>
             </div>
           )}
 

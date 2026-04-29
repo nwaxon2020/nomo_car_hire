@@ -165,10 +165,11 @@ export default function DriverLoadCard({
 
             {/* Seats badge */}
             <div
-              className={`shrink-0 text-center px-2 py-1 rounded-xl border text-[10px] font-black ${getSeatsColor(
+              onClick={(e) => { e.stopPropagation(); if (!isFullyBooked && !isInactive) onSelect(booking); }}
+              className={`shrink-0 text-center px-2 py-1 rounded-xl border text-[10px] font-black transition-all active:scale-95 ${getSeatsColor(
                 booking.bookedCount,
                 booking.totalSeats
-              )}`}
+              )} ${!isFullyBooked && !isInactive ? "cursor-pointer hover:scale-105 shadow-lg" : "cursor-default opacity-80"}`}
             >
               <span className="text-lg font-black leading-none block">{availableSeats}</span>
               <span className="text-[7px] uppercase tracking-widest">seats left</span>
@@ -229,7 +230,10 @@ export default function DriverLoadCard({
           </div>
 
           {/* Seat mini-bar */}
-          <div className="flex gap-1 mb-3">
+          <div 
+            onClick={(e) => { e.stopPropagation(); if (!isFullyBooked && !isInactive) onSelect(booking); }}
+            className={`flex gap-1 mb-3 transition-opacity ${!isFullyBooked && !isInactive ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+          >
             {Array.from({ length: booking.totalSeats }).map((_, i) => (
               <div
                 key={i}

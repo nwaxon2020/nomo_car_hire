@@ -6,12 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
   doc, onSnapshot, updateDoc, serverTimestamp,
-  collection, query, where, getDocs, getDoc, Timestamp,
+  collection, query, where, getDocs, getDoc, Timestamp, limit
 } from "firebase/firestore";
 import {
   FaTruck, FaCar, FaShieldAlt, FaUsers, FaTools, FaClock,
 } from "react-icons/fa";
 import { logFeatureUsage } from "@/lib/analytics";
+import LocationGuard from "@/components/mobility/LocationGuard";
 
 import SafetyNoteCard from "@/components/loadBooking/SafetyNoteCard";
 import DriverSetupPanel from "@/components/loadBooking/DriverSetupPanel";
@@ -161,21 +162,33 @@ function MaintenanceScreen() {
 }
 
 const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: string }) => (
-    <div className="max-w-md mx-auto mt-10 p-8 bg-gray-900 border border-purple-500/20 rounded-[2.5rem] shadow-2xl text-center animate-in fade-in zoom-in duration-500">
-        <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-purple-500/20 shadow-inner">
-            <FaCar className="text-purple-500 text-3xl" />
+    <div className="max-w-md mx-auto mt-20 p-1 bg-gradient-to-br from-purple-500 via-blue-500 to-indigo-600 rounded-[2.6rem] shadow-[0_20px_50px_rgba(168,85,247,0.3)] animate-in fade-in zoom-in duration-700">
+        <div className="bg-[#0B0B12] rounded-[2.5rem] p-10 text-center">
+            <div className="relative w-24 h-24 mx-auto mb-8">
+                <div className="absolute inset-0 bg-purple-500 rounded-full animate-ping opacity-10" />
+                <div className="relative w-full h-full bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full flex items-center justify-center border border-purple-500/20 shadow-inner">
+                    <FaCar className="text-purple-400 text-4xl" />
+                </div>
+            </div>
+            
+            <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-3 leading-none">
+                Active Booking
+            </h2>
+            <div className="w-12 h-1 bg-gradient-to-r from-purple-500 to-blue-500 mx-auto mb-6 rounded-full" />
+            
+            <p className="text-gray-400 text-sm font-bold uppercase tracking-widest mb-10 leading-relaxed px-2">
+                You have an active <span className="text-purple-400">{type}</span> hire. Please complete it before booking a shared seat.
+            </p>
+            
+            <button
+                onClick={() => window.location.href = targetPath}
+                className="group relative w-full py-5 bg-white text-black font-black uppercase tracking-[0.2em] text-[10px] rounded-2xl transition-all shadow-2xl active:scale-95 flex items-center justify-center gap-3 overflow-hidden"
+            >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent -translate-x-full group-hover:animate-shimmer" />
+                <FaCar className="text-purple-600 group-hover:scale-110 transition-transform" size={14} />
+                Return to {type} Hire
+            </button>
         </div>
-        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Active Booking Found</h2>
-        <p className="text-gray-400 text-sm font-medium mb-8 leading-relaxed px-4">
-            You currently have an active {type} booking request. Please complete or cancel it before booking a shared seat.
-        </p>
-        <button
-            onClick={() => window.location.href = targetPath}
-            className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
-        >
-            <FaCar size={14} />
-            Return to Active Booking
-        </button>
     </div>
 );
 
@@ -214,82 +227,107 @@ export default function LoadBookingUi() {
 
   // Auth & data setup
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (firebaseUser) => {
-      if (!firebaseUser) return;
-      setUser(firebaseUser);
-
-      const userRef = doc(db, "users", firebaseUser.uid);
-      const unsubDoc = onSnapshot(userRef, async (snap) => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        setUserData(data);
-        setIsDriver(data.isDriver === true);
-        if (data.isDriver === true) {
-          // If there's a search query, force 'customer' view even for drivers
-          if (search) {
-            setViewMode("customer");
-          } else {
-            setViewMode(prev => prev === "customer" && !userData ? "driver" : prev);
+    let unsubDirect: (() => void) | undefined;
+    const unsubscribeAuth = auth.onAuthStateChanged((u) => {
+      setUser(u);
+      if (u) {
+        unsubDirect = checkActiveDirectBooking(u.uid);
+        const userRef = doc(db, "users", u.uid);
+        const unsubDoc = onSnapshot(userRef, async (snap) => {
+          if (!snap.exists()) return;
+          const data = snap.data();
+          setUserData(data);
+          setIsDriver(data.isDriver === true);
+          if (data.isDriver === true) {
+            if (search) {
+              setViewMode("customer");
+            } else {
+              setViewMode(prev => prev === "customer" && !userData ? "driver" : prev);
+            }
           }
-        }
 
-        /* ── Monthly trust reset ── */
-        const trust: TrustInfo = {
-          trustScore: data.trustScore ?? 100,
-          trustCancels: data.trustCancels ?? 0,
-          trustLastReset: data.trustLastReset,
-          trustExhaustedAt: data.trustExhaustedAt,
-          loadOnceAllowed: data.loadOnceAllowed,
-          loadOnceUsedDate: data.loadOnceUsedDate,
-          loadBlockedUntil: data.loadBlockedUntil,
-        };
+          /* ── Monthly trust reset ── */
+          const trust: TrustInfo = {
+            trustScore: data.trustScore ?? 100,
+            trustCancels: data.trustCancels ?? 0,
+            trustLastReset: data.trustLastReset,
+            trustExhaustedAt: data.trustExhaustedAt,
+            loadOnceAllowed: data.loadOnceAllowed,
+            loadOnceUsedDate: data.loadOnceUsedDate,
+            loadBlockedUntil: data.loadBlockedUntil,
+          };
 
-        if (isTrustResetNeeded(trust.trustLastReset)) {
-          // Reset trust in Firestore
-          await updateDoc(userRef, {
-            trustScore: 100,
-            trustCancels: 0,
-            trustLastReset: serverTimestamp(),
-            trustExhaustedAt: null,
-            loadOnceAllowed: false,
-            loadOnceUsedDate: null,
-            loadBlockedUntil: null,
-          });
-          setTrustInfo({ ...DEFAULT_TRUST });
-        } else {
-          setTrustInfo(trust);
-        }
+          if (isTrustResetNeeded(trust.trustLastReset)) {
+            await updateDoc(userRef, {
+              trustScore: 100,
+              trustCancels: 0,
+              trustLastReset: serverTimestamp(),
+              trustExhaustedAt: null,
+              loadOnceAllowed: false,
+              loadOnceUsedDate: null,
+              loadBlockedUntil: null,
+            });
+            setTrustInfo({ ...DEFAULT_TRUST });
+          } else {
+            setTrustInfo(trust);
+          }
 
-        /* ── Driver vehicle day-lock ── */
-        const today = getTodayString();
-        if (data.isDriver && data.bookingVehicleDate === today && data.bookingVehicleId) {
-          setLockedVehicleId(data.bookingVehicleId);
-        } else {
-          setLockedVehicleId(undefined);
-        }
+          /* ── Driver vehicle day-lock ── */
+          const today = getTodayString();
+          if (data.isDriver && data.bookingVehicleDate === today && data.bookingVehicleId) {
+            setLockedVehicleId(data.bookingVehicleId);
+          } else {
+            setLockedVehicleId(undefined);
+          }
+          setLoading(false);
+        });
+        return () => unsubDoc();
+      } else {
         setLoading(false);
-      });
-
-      // NEW: Regular Booking Listener
-      const recentThreshold = new Date(Date.now() - 30 * 60 * 1000);
-      const qReg = query(
-        collection(db, "directOffers"),
-        where("customerId", "==", firebaseUser.uid),
-        where("status", "in", ["pending", "accepted"]),
-        where("createdAt", ">=", Timestamp.fromDate(recentThreshold))
-      );
-      const unsubReg = onSnapshot(qReg, (regSnap) => {
-        setHasActiveRegularBooking(!regSnap.empty);
-      });
-
-      return () => {
-        unsubDoc();
-        unsubReg();
-      };
+      }
     });
 
-    return () => unsub();
+    return () => {
+      unsubscribeAuth();
+      if (unsubDirect) unsubDirect();
+    };
   }, []);
+
+  const checkActiveDirectBooking = (userId: string) => {
+    // 1. Check as Customer
+    const qCustomer = query(
+      collection(db, "directOffers"),
+      where("customerId", "==", userId),
+      where("status", "in", ["pending", "accepted", "started"]),
+      limit(1)
+    );
+
+    // 2. Check as Driver
+    const qDriver = query(
+      collection(db, "directOffers"),
+      where("driverId", "==", userId),
+      where("status", "in", ["accepted", "started"]),
+      limit(1)
+    );
+    
+    let customerActive = false;
+    let driverActive = false;
+
+    const unsub1 = onSnapshot(qCustomer, (snap) => {
+      customerActive = !snap.empty;
+      setHasActiveRegularBooking(customerActive || driverActive);
+    });
+
+    const unsub2 = onSnapshot(qDriver, (snap) => {
+      driverActive = !snap.empty;
+      setHasActiveRegularBooking(customerActive || driverActive);
+    });
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
+  };
 
   /* ── Load driver vehicles ── */
   useEffect(() => {
@@ -333,11 +371,9 @@ export default function LoadBookingUi() {
   /* ── Handle driver cancel (trust deduction already done inside DriverActiveSession) ── */
   const handleDriverCancelOccurred = useCallback(async () => {
     if (!user) return;
-    // Re-read the user document to refresh trust info in the UI
     const snap = await getDoc(doc(db, "users", user.uid));
     if (!snap.exists()) return;
     const data = snap.data();
-    // Update trust badge in the header
     setTrustInfo(prev => ({
       ...prev,
       trustScore: data.driverTrustScore ?? prev.trustScore,
@@ -357,7 +393,6 @@ export default function LoadBookingUi() {
     const newCancels = currentCancels + 1;
     const today = getTodayString();
 
-    // Every 3rd cancel → deduct 20%
     if (newCancels % 3 === 0) {
       const newScore = Math.max(0, currentScore - 20);
       const prev = currentScore;
@@ -369,12 +404,11 @@ export default function LoadBookingUi() {
 
       if (newScore === 0) {
         updates.trustExhaustedAt = today;
-        updates.loadOnceAllowed = true; // Give them one more chance
+        updates.loadOnceAllowed = true;
       }
 
       await updateDoc(userRef, updates);
 
-      // Show countdown animation
       setTrustCountdownPrev(prev);
       setTrustCountdownNew(newScore);
       setShowTrustCountdown(true);
@@ -382,9 +416,7 @@ export default function LoadBookingUi() {
       await updateDoc(userRef, { trustCancels: newCancels });
     }
 
-    // Handle "once-allowed" scenario
     if (data.loadOnceAllowed && !data.loadOnceUsedDate) {
-      // They just cancelled their one-chance booking → block until tomorrow
       await updateDoc(userRef, {
         loadBlockedUntil: getTomorrowString(),
         loadOnceUsedDate: today,
@@ -392,10 +424,7 @@ export default function LoadBookingUi() {
     }
   }, [user, isDriver]);
 
-  /* ── Maintenance Mode ── */
-  if (isMaintenance) {
-    return <MaintenanceScreen />;
-  }
+  if (isMaintenance) return <LocationGuard><MaintenanceScreen /></LocationGuard>;
 
   /* ── Loading screen ── */
   if (loading) {
@@ -409,14 +438,8 @@ export default function LoadBookingUi() {
     );
   }
 
-  const today = getTodayString();
-  const tomorrow = getTomorrowString();
-
-  /* ── Customer blocked ── */
-  if (!isDriver && isBlockedToday(trustInfo)) {
-    const unblockDate = trustInfo.loadBlockedUntil || tomorrow;
-    return <BlockedScreen trustScore={trustInfo.trustScore} unblockDate={unblockDate} />;
-  }
+  const trust = userData || DEFAULT_TRUST;
+  if (!isDriver && isBlockedToday(trust)) return <LocationGuard><BlockedScreen trustScore={trust.trustScore} unblockDate={trust.loadBlockedUntil} /></LocationGuard>;
 
   const driverInfo = {
     driverId: user.uid,
@@ -444,182 +467,173 @@ export default function LoadBookingUi() {
   };
 
   return (
-    <>
-      {/* Trust Countdown Overlay */}
-      <AnimatePresence>
-        {showTrustCountdown && (
-          <TrustScoreCountdown
-            previousScore={trustCountdownPrev}
-            newScore={trustCountdownNew}
-            onComplete={() => setShowTrustCountdown(false)}
-          />
-        )}
-      </AnimatePresence>
+    <LocationGuard>
+      {hasActiveRegularBooking ? (
+        <ActiveBookingBanner type="Direct" targetPath="/user/mobility/bookings" />
+      ) : (
+        <>
+          {/* Trust Countdown Overlay */}
+          <AnimatePresence>
+            {showTrustCountdown && (
+              <TrustScoreCountdown
+                previousScore={trustCountdownPrev}
+                newScore={trustCountdownNew}
+                onComplete={() => setShowTrustCountdown(false)}
+              />
+            )}
+          </AnimatePresence>
 
-      <div className="min-h-screen bg-[#0B0B12] pb-20">
-        {/* ── Page Header ── */}
-        <div className="bg-gradient-to-b from-gray-900 to-[#0B0B12] border-b border-white/5 px-4 pt-6 pb-4 sticky top-0 z-30">
-          <div className="flex flex-col w-full md:flex-row items-center justify-start gap-2 md:justify-between">
-            <div className="w-full md:w-auto flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-900/30">
-                {isDriver ? <FaTruck className="text-white" size={16} /> : <FaUsers className="text-white" size={16} />}
-              </div>
-              <div>
-                <h1 className="text-white font-black text-base uppercase tracking-tight leading-none">
-                  Load Booking
-                </h1>
-                <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
-                  {isDriver ? "Shared Transport Management" : "Find a Shared Ride"}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-start w-full md:w-auto items-center gap-2">
-              {/* Role badge */}
-              <span
-                className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${isDriver
-                  ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                  : "bg-purple-500/20 text-purple-400 border-purple-500/30"
-                  }`}
-              >
-                {isDriver ? "Driver" : "Passenger"}
-              </span>
-
-              {/* Trust badge for both roles */}
-              <TrustBadge score={trustInfo.trustScore} />
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-2xl mx-auto px-3 pt-5 space-y-5">
-          {/* Safety Note */}
-          <SafetyNoteCard role={viewMode} />
-
-          {/* DRIVER / CUSTOMER TOGGLE */}
-          {isDriver && (
-            <div className="flex bg-gray-900 border border-white/10 rounded-xl p-1 mb-4 max-w-sm">
-              <button
-                onClick={() => setViewMode("driver")}
-                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === "driver" ? "bg-amber-500 text-black shadow-md" : "text-gray-400 hover:text-white"
-                  }`}
-              >
-                Create Trip
-              </button>
-              <button
-                onClick={() => setViewMode("customer")}
-                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === "customer" ? "bg-purple-500 text-white shadow-md" : "text-gray-400 hover:text-white"
-                  }`}
-              >
-                Book a Seat
-              </button>
-            </div>
-          )}
-
-          {/* ── DRIVER VIEW ── */}
-          {viewMode === "driver" && (
-            <div>
-              {activeBooking ? (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-4 bg-amber-400 rounded-full" />
-                    <h2 className="text-white font-black text-sm uppercase tracking-tight">Active Session</h2>
+          <div className="min-h-screen bg-[#0B0B12] pb-20">
+            {/* ── Page Header ── */}
+            <div className="bg-gradient-to-b from-gray-900 to-[#0B0B12] border-b border-white/5 px-4 pt-6 pb-4 sticky top-0 z-30">
+              <div className="flex flex-col w-full md:flex-row items-center justify-start gap-2 md:justify-between">
+                <div className="w-full md:w-auto flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-900/30">
+                    {isDriver ? <FaTruck className="text-white" size={16} /> : <FaUsers className="text-white" size={16} />}
                   </div>
-                  <DriverActiveSession
-                    booking={activeBooking}
-                    driverId={user.uid}
-                    driverName={driverInfo.driverName}
-                    trustScore={trustInfo.trustScore}
-                    onEndSession={() => setActiveBooking(null)}
-                    onCancelOccurred={handleDriverCancelOccurred}
-                  />
-                </div>
-              ) : vehiclesLoading ? (
-                <div className="flex justify-center py-10">
-                  <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-4 bg-amber-400 rounded-full" />
-                    <h2 className="text-white font-black text-sm uppercase tracking-tight">Set Up Your Trip</h2>
+                  <div>
+                    <h1 className="text-white font-black text-base uppercase tracking-tight leading-none">
+                      Load Booking
+                    </h1>
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">
+                      {isDriver ? "Shared Transport Management" : "Find a Shared Ride"}
+                    </p>
                   </div>
-                  {/* Block driver if their trust is at 0 and they're blocked today */}
-                  {userData?.driverLoadBlockedUntil && userData.driverLoadBlockedUntil >= getTodayString() ? (
-                    <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-8 text-center">
-                      <div className="w-14 h-14 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
-                        <FaShieldAlt className="text-red-400" size={24} />
+                </div>
+
+                <div className="flex justify-start w-full md:w-auto items-center gap-2">
+                  <span
+                    className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${isDriver
+                      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                      : "bg-purple-500/20 text-purple-400 border-purple-500/30"
+                      }`}
+                  >
+                    {isDriver ? "Driver" : "Passenger"}
+                  </span>
+                  <TrustBadge score={isDriver ? (userData?.driverTrustScore ?? 100) : (trustInfo.trustScore)} />
+                </div>
+              </div>
+            </div>
+
+            <div className="max-w-2xl mx-auto px-3 pt-5 space-y-5">
+              <SafetyNoteCard role={viewMode} />
+
+              {isDriver && (
+                <div className="flex bg-gray-900 border border-white/10 rounded-xl p-1 mb-4 max-w-sm">
+                  <button
+                    onClick={() => setViewMode("driver")}
+                    className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === "driver" ? "bg-amber-500 text-black shadow-md" : "text-gray-400 hover:text-white"
+                      }`}
+                  >
+                    Create Trip
+                  </button>
+                  <button
+                    onClick={() => setViewMode("customer")}
+                    className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === "customer" ? "bg-purple-500 text-white shadow-md" : "text-gray-400 hover:text-white"
+                      }`}
+                  >
+                    Book a Seat
+                  </button>
+                </div>
+              )}
+
+              {viewMode === "driver" && (
+                <div>
+                  {activeBooking ? (
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-amber-400 rounded-full" />
+                        <h2 className="text-white font-black text-sm uppercase tracking-tight">Active Session</h2>
                       </div>
-                      <h3 className="text-white font-black text-base uppercase mb-2">Trip Setup Blocked</h3>
-                      <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-3">
-                        You cancelled a trip with booked passengers and your driver trust hit 0%.
-                      </p>
-                      <div className="bg-red-600/10 border border-red-500/20 rounded-xl p-3">
-                        <p className="text-red-400 text-[10px] font-black uppercase tracking-wider">
-                          Access restores: {userData.driverLoadBlockedUntil === getTomorrowString() ? "Tomorrow" : userData.driverLoadBlockedUntil}
-                        </p>
-                      </div>
-                      <p className="text-gray-700 text-[9px] font-bold uppercase tracking-widest mt-3">
-                        Driver trust score resets to 100% on the 1st of every month.
-                      </p>
+                      <DriverActiveSession
+                        booking={activeBooking}
+                        driverId={user.uid}
+                        driverName={driverInfo.driverName}
+                        trustScore={userData?.driverTrustScore ?? 100}
+                        onEndSession={() => setActiveBooking(null)}
+                        onCancelOccurred={handleDriverCancelOccurred}
+                      />
+                    </div>
+                  ) : vehiclesLoading ? (
+                    <div className="flex justify-center py-10">
+                      <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : (
-                    <DriverSetupPanel
-                      {...driverInfo}
-                      vehicles={driverVehicles}
-                      lockedVehicleId={lockedVehicleId}
-                      onSessionCreated={(id) => {
-                        // The onSnapshot listener will pick this up automatically
-                      }}
-                    />
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-amber-400 rounded-full" />
+                        <h2 className="text-white font-black text-sm uppercase tracking-tight">Set Up Your Trip</h2>
+                      </div>
+                      {userData?.driverLoadBlockedUntil && userData.driverLoadBlockedUntil >= getTodayString() ? (
+                        <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-8 text-center">
+                          <div className="w-14 h-14 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                            <FaShieldAlt className="text-red-400" size={24} />
+                          </div>
+                          <h3 className="text-white font-black text-base uppercase mb-2">Trip Setup Blocked</h3>
+                          <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-3">
+                            You cancelled a trip with booked passengers and your driver trust hit 0%.
+                          </p>
+                          <div className="bg-red-600/10 border border-red-500/20 rounded-xl p-3">
+                            <p className="text-red-400 text-[10px] font-black uppercase tracking-wider">
+                              Access restores: {userData.driverLoadBlockedUntil === getTomorrowString() ? "Tomorrow" : userData.driverLoadBlockedUntil}
+                            </p>
+                          </div>
+                          <p className="text-gray-700 text-[9px] font-bold uppercase tracking-widest mt-3">
+                            Driver trust score resets to 100% on the 1st of every month.
+                          </p>
+                        </div>
+                      ) : (
+                        <DriverSetupPanel
+                          {...driverInfo}
+                          vehicles={driverVehicles}
+                          lockedVehicleId={lockedVehicleId}
+                          onSessionCreated={(id) => { }}
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ── CUSTOMER VIEW ── */}
-          {viewMode === "customer" && (
-            <div>
-              {hasActiveRegularBooking ? (
-                <ActiveBookingBanner type="Private" targetPath="/user/mobility/bookings" />
-              ) : (
-                <>
-                  {/* Once-allowed notice */}
-                  {trustInfo.trustScore === 0 && trustInfo.loadOnceAllowed && !trustInfo.loadOnceUsedDate && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 mb-4 flex items-start gap-2.5"
-                    >
-                      <FaShieldAlt className="text-orange-400 shrink-0 mt-0.5" size={13} />
-                      <div>
-                        <p className="text-orange-400 font-black text-[10px] uppercase tracking-widest">
-                          Final Booking Chance
-                        </p>
-                        <p className="text-gray-400 text-[9px] font-medium mt-0.5">
-                          Your trust is at 0%. You have ONE more booking today. If you cancel, you'll be blocked until tomorrow.
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
+              {viewMode === "customer" && (
+                <div>
+                  <>
+                    {trustInfo.trustScore === 0 && trustInfo.loadOnceAllowed && !trustInfo.loadOnceUsedDate && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 mb-4 flex items-start gap-2.5"
+                      >
+                        <FaShieldAlt className="text-orange-400 shrink-0 mt-0.5" size={13} />
+                        <div>
+                          <p className="text-orange-400 font-black text-[10px] uppercase tracking-widest">
+                            Final Booking Chance
+                          </p>
+                          <p className="text-gray-400 text-[9px] font-medium mt-0.5">
+                            Your trust is at 0%. You have ONE more booking today. If you cancel, you'll be blocked until tomorrow.
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
 
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-4 bg-purple-400 rounded-full" />
-                    <h2 className="text-white font-black text-sm uppercase tracking-tight">Available Rides</h2>
-                  </div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-1.5 h-4 bg-purple-400 rounded-full" />
+                      <h2 className="text-white font-black text-sm uppercase tracking-tight">Available Rides</h2>
+                    </div>
 
-                  <Suspense fallback={<div className="h-40 bg-gray-800/40 animate-pulse rounded-xl" />}>
-                    <CustomerSearchPanel
-                      currentUser={customerInfo}
-                      onCancelOccurred={handleCancelOccurred}
-                    />
-                  </Suspense>
-                </>
+                    <Suspense fallback={<div className="h-40 bg-gray-800/40 animate-pulse rounded-xl" />}>
+                      <CustomerSearchPanel
+                        currentUser={customerInfo}
+                        onCancelOccurred={handleCancelOccurred}
+                      />
+                    </Suspense>
+                  </>
+                </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
-    </>
+          </div>
+        </>
+      )}
+    </LocationGuard>
   );
 }

@@ -48,6 +48,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [addingLovedOne, setAddingLovedOne] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const isStartingRef = useRef(false);
   const [sendingLinks, setSendingLinks] = useState<string[]>([]);
   const [showTracking, setShowTracking] = useState(false);
   const batteryToastShownRef = useRef(false);
@@ -144,38 +145,11 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
     let unsubscribe: (() => void) | undefined;
 
-    const loadUserData = async () => {
+    const loadUserData = () => {
       try {
         const userRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userRef);
-
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          const locationData = data.location || data.currentLocation || {};
-
-          const isCurrentlySharing = locationData.isSharing || data.isLocationActive || false;
-          setIsSharing(isCurrentlySharing);
-
-          if (isCurrentlySharing && locationData.lat) {
-            setCurrentLocation(locationData);
-            lastCoordsRef.current = { lat: locationData.lat, lng: locationData.lng };
-
-            if (locationData.timestamp) {
-              setLastUpdate(locationData.timestamp.toDate());
-            }
-            // Auto resume tracking if it was left ON
-            setTimeout(() => {
-              if (!watchIdRef.current) {
-                startLocationSharing();
-              }
-            }, 1000);
-          }
-
-          // Load loved ones (both app users and WhatsApp contacts)
-          await loadLovedOnesDetails(data.lovedOnes || [], data.whatsappLovedOnes || [], data.emergencyContact || []);
-        }
-
-        unsubscribe = onSnapshot(userRef, (docSnap) => {
+        
+        unsubscribe = onSnapshot(userRef, async (docSnap) => {
           if (!docSnap.exists()) return;
 
           const data = docSnap.data();
@@ -186,17 +160,25 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
           if (isCurrentlySharing && locationData.lat) {
             setCurrentLocation(locationData);
+            lastCoordsRef.current = { lat: locationData.lat, lng: locationData.lng };
 
             if (locationData.timestamp) {
               setLastUpdate(locationData.timestamp.toDate());
             }
+            
+            // Auto resume tracking if it was left ON and not already watching/starting
+            if (!watchIdRef.current && !isStartingRef.current) {
+              startLocationSharing(false); // Pass false to suppress toast
+            }
           } else {
             setCurrentLocation(null);
           }
+
+          // Load loved ones (both app users and WhatsApp contacts)
+          await loadLovedOnesDetails(data.lovedOnes || [], data.whatsappLovedOnes || [], data.emergencyContact || []);
         });
       } catch (error) {
         console.error('Error loading user data:', error);
-        toast.error('Failed to load location data');
       } finally {
         setLoading(false);
       }
@@ -356,20 +338,26 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     });
   };
 
-  const startLocationSharing = async () => {
-    if (watchIdRef.current) return;
+  const startLocationSharing = async (showToast = true) => {
+    if (watchIdRef.current || isStartingRef.current) return;
+    isStartingRef.current = true;
+    setLoading(true);
     if (!navigator.geolocation) {
       setGpsErrorType("notSupported");
       setGpsModalOpen(true);
+      isStartingRef.current = false;
+      setLoading(false);
       return;
     }
 
     if (!isOnline) {
       toast.error("No internet connection. Please check your network.");
+      isStartingRef.current = false;
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
+
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -402,7 +390,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           lastCoordsRef.current = { lat: latitude, lng: longitude };
           lastUpdateTimeRef.current = Date.now();
 
-          toast.success('📍 Live location sharing started!');
+          if (showToast) {
+            toast.success('📍 Live location sharing started!');
+          }
 
           // Optimized watchPosition with time + distance throttling
           const id = navigator.geolocation.watchPosition(
@@ -495,9 +485,10 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           watchIdRef.current = id;
         } catch (error) {
           console.error('Error starting sharing:', error);
-          toast.error('Failed to start location sharing');
+          if (showToast) toast.error('Failed to start location sharing');
         } finally {
           setLoading(false);
+          isStartingRef.current = false;
         }
       },
       (error) => {
@@ -515,11 +506,12 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
         setGpsModalOpen(true);
         setLoading(false);
+        isStartingRef.current = false;
       },
       {
         enableHighAccuracy: true,
         timeout: 60000,
-        maximumAge: 10000
+        maximumAge: 0
       }
     );
   };
@@ -569,8 +561,8 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
   const addLovedOne = async (whatsappNumber: string) => {
     const cleanedNumber = whatsappNumber.replace(/\D/g, '');
-    if (!(cleanedNumber.length === 10 || cleanedNumber.length === 11)) {
-      toast.error('Please enter a valid phone number');
+    if (cleanedNumber.length < 10 || cleanedNumber.length > 15) {
+      toast.error('Please enter a valid phone number (10-15 digits)');
       return;
     }
 
@@ -610,7 +602,8 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           whatsappNumber: formattedNumber,
           displayNumber: formatPhoneForDisplay(whatsappNumber),
           createdAt: Timestamp.now(),
-          isWhatsAppOnly: true
+          isWhatsAppOnly: true,
+          addedBy: userId
         });
       }
 
@@ -849,7 +842,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       <div className="p-3 space-y-3">
         {/* Main Simple Button */}
         <button
-          onClick={isSharing ? stopLocationSharing : startLocationSharing}
+          onClick={isSharing ? stopLocationSharing : () => startLocationSharing(true)}
           disabled={loading}
           className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all flex items-center justify-center gap-2 ${isSharing
             ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'
@@ -883,6 +876,9 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             </p>
             <p className="text-[9px] text-gray-600 font-medium leading-tight line-clamp-1">
               {currentLocation.address || 'Broadcasting coordinates...'}
+            </p>
+            <p className="text-[7px] text-gray-400 font-bold uppercase tracking-tighter mt-0.5 opacity-60">
+              {currentLocation.lat?.toFixed(4)}, {currentLocation.lng?.toFixed(4)}
             </p>
           </motion.div>
         )}

@@ -957,7 +957,7 @@ export default function DriverProfilePage() {
         averageRating={averageRating}
         ratingsCount={ratings.length}
         vehiclesCount={vehicles.length}
-        onUpgradeVIP={() => handleVIPPurchase(0)}
+        onUpgradeVIP={() => router.push("/user/purchase-vip/" + driverId)}
         onPlayGame={() => setGame(true)}
         onBuyTicket={() => router.push(`/user/ticket?userId=${driverId}`)}
         whatsappPreferred={whatsappPreferred}
@@ -994,7 +994,7 @@ export default function DriverProfilePage() {
         vipLevel={vipLevel}
         vehiclesCount={vehicles.length}
         onAddVehicle={() => setShowVehicleForm(true)}
-        onUpgradeVIP={() => handleVIPPurchase(0)}
+        onUpgradeVIP={() => router.push("/user/purchase-vip/" + driverId)}
         onEditVehicle={startEdit}
         onDeleteVehicle={confirmDeleteVehicle}
         onMarkAvailable={markVehicleAsAvailable}
@@ -1017,7 +1017,7 @@ export default function DriverProfilePage() {
       <PromotionalSection
         driverId={driverId}
         vipLevel={vipLevel}
-        onUpgradeVIP={() => handleVIPPurchase(0)}
+        onUpgradeVIP={() => router.push("/user/purchase-vip/" + driverId)}
       />
 
       <p className="mt-36 pb-10 text-gray-500 font-bold italic text-center text-[10px]">Powered by Nomop Ventures&reg;</p>

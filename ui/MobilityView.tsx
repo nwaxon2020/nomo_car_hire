@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "react-hot-toast";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
-  collection, query, where, getDocs, doc, limit, orderBy, onSnapshot, setDoc, Timestamp
+  collection, query, where, getDocs, doc, limit, orderBy, onSnapshot, setDoc, Timestamp, writeBatch
 } from "firebase/firestore";
 import {
-  FaCar, FaHandshake, FaUsers, FaGlobe, FaShieldAlt, FaPhoneAlt, FaChevronRight, FaClock, FaExclamationTriangle, FaChevronDown, FaChevronUp, FaLock, FaWhatsapp, FaMapMarkerAlt,
+  FaCar, FaHandshake, FaUsers, FaGlobe, FaShieldAlt, FaPhoneAlt, FaChevronRight, FaClock, FaExclamationTriangle, FaChevronDown, FaChevronUp, FaLock, FaWhatsapp, FaMapMarkerAlt, FaTrash
 } from "react-icons/fa";
 import CustomerLocationToggle from "@/components/map/CustomerLocationToggle";
 
@@ -21,6 +22,7 @@ interface TripHistory {
   status: string;
   timestamp: any;
   destination: string;
+  driverId: string;
 }
 
 interface ServiceCardProps {
@@ -101,6 +103,8 @@ export default function MobilityView() {
   const [activeEmergencyContact, setActiveEmergencyContact] = useState<any>(null);
   const searchParams = useSearchParams();
   const [shouldBlinkManage, setShouldBlinkManage] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     if (searchParams.get("action") === "manage") {
@@ -113,11 +117,12 @@ export default function MobilityView() {
   }, [searchParams]);
 
   useEffect(() => {
+    let unsubDoc: (() => void) | undefined;
+    
     const unsubscribeAuth = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
-        // Listen to user document for location sharing status
         const userDocRef = doc(db, "users", firebaseUser.uid);
-        const unsubDoc = onSnapshot(userDocRef, async (snap) => {
+        unsubDoc = onSnapshot(userDocRef, async (snap) => {
           if (snap.exists()) {
             const data = snap.data();
             setUser({ ...firebaseUser, ...data });
@@ -126,15 +131,10 @@ export default function MobilityView() {
               setUserLocation({ lat: data.location.lat, lng: data.location.lng });
             }
 
-            // Load active emergency contact from the data we just got
             const emergencyContacts = data.emergencyContact || [];
             let activeContact = null;
-
             if (emergencyContacts.length > 0) {
-              // First priority: Find explicitly marked active contact
               activeContact = emergencyContacts.find((contact: any) => contact.isActive);
-
-              // Fallback: Get the most recently added contact
               if (!activeContact) {
                 const sortedByDate = emergencyContacts.sort(
                   (a: any, b: any) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0)
@@ -142,7 +142,6 @@ export default function MobilityView() {
                 activeContact = sortedByDate[0];
               }
             }
-
             setActiveEmergencyContact(activeContact);
           } else {
             setUser(firebaseUser);
@@ -150,27 +149,20 @@ export default function MobilityView() {
           }
         });
 
-        // Get user's current location
-        // Get user's current location once for SOS if not sharing yet
-        if (navigator.geolocation && !isLocationSharing) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const { latitude, longitude } = position.coords;
-              setUserLocation({ lat: latitude, lng: longitude });
-            },
-            (error) => console.log("Location error:", error),
-            { enableHighAccuracy: true }
-          );
-        }
-
         fetchRecentActivity(firebaseUser.uid);
-        return () => unsubDoc();
       } else {
+        if (unsubDoc) {
+          unsubDoc();
+          unsubDoc = undefined;
+        }
         router.push("/login");
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubDoc) unsubDoc();
+    };
   }, []);
 
   const fetchRecentActivity = async (uid: string) => {
@@ -192,7 +184,8 @@ export default function MobilityView() {
           vehicleName: data.vehicleName || "Vehicle",
           status: data.status,
           destination: data.destination || "Various Locations",
-          timestamp: data.createdAt
+          timestamp: data.createdAt,
+          driverId: data.driverId || ""
         };
       });
 
@@ -229,7 +222,7 @@ export default function MobilityView() {
       });
 
       // 3. Create WhatsApp message
-      const userName = user.displayName || user.email?.split('@')[0] || 'A user';
+      const userName = user.fullName || user.displayName || user.email?.split('@')[0] || 'A user';
       const addressText = userLocation ? ` My current location is: ${user.location?.address || 'Detecting...'}` : '';
       const message = `🚨 *EMERGENCY SOS ALERT* 🚨\n\n` +
         `*${userName}* is in an emergency and is sharing their live location with you!\n\n` +
@@ -315,16 +308,23 @@ export default function MobilityView() {
           <motion.button
             onClick={toggleSafetyPanel}
             animate={shouldBlinkManage ? {
-              backgroundColor: ["#111827", "#2563eb", "#111827"],
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={shouldBlinkManage ? {
-              duration: 1,
+              boxShadow: ["0 0 0 0 rgba(255,255,255,0)", "0 0 0 12px rgba(255,255,255,0.15)", "0 0 0 0 rgba(255,255,255,0)"],
+              scale: [1, 1.03, 1],
+            } : !isLocationSharing ? {
+              borderColor: ["#ef4444", "#dc2626", "#ef4444"],
+              boxShadow: ["0 0 0 0 rgba(239,68,68,0)", "0 0 0 6px rgba(239,68,68,0.2)", "0 0 0 0 rgba(239,68,68,0)"],
+            } : {
+              borderColor: "transparent",
+              boxShadow: "0 0 0 0 rgba(0,0,0,0)"
+            }}
+            transition={{
+              duration: 2,
               repeat: Infinity,
               ease: "easeInOut"
-            } : {}}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-sm group"
+            }}
+            className={`flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl group border-2 ${!isLocationSharing ? 'border-red-500' : 'border-transparent'}`}
           >
+            {!isLocationSharing && <span className="text-red-400 mr-1 hidden md:inline">Please turn on location</span>}
             Manage
             {isSafetyExpanded ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
           </motion.button>
@@ -443,47 +443,7 @@ export default function MobilityView() {
 
         {/* 4 Premium Cards Grid */}
         <div className="relative">
-          {/* Location Guard Overlay */}
-          <AnimatePresence>
-            {!isLocationSharing && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="z-30 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center p-4 md:py-10 border-2 border-dashed border-gray-200"
-              >
-                <motion.div
-                  initial={{ scale: 0.95, y: 10 }}
-                  animate={{ scale: 1, y: 0 }}
-                  className="max-w-xs w-full bg-gray-900 p-6 rounded-xl shadow-xl text-center border border-white/5"
-                >
-                  <div className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaMapMarkerAlt className="text-xl animate-bounce" />
-                  </div>
-                  <h3 className="text-lg font-black text-white mb-1">Turn On Location</h3>
-                  <p className="text-[10px] text-gray-500 font-medium mb-6 uppercase tracking-wider">Enable location access to unlock all mobility services and stay protected.</p>
-
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => setIsSafetyExpanded(true)}
-                      className="w-full py-3 bg-blue-600 text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-900/40 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
-                    >
-                      Verify Now
-                      <FaChevronRight size={8} />
-                    </button>
-                    <button
-                      onClick={() => router.push('/')}
-                      className="w-full py-3 bg-white/5 text-gray-500 rounded-lg text-[10px] font-bold hover:bg-white/10 transition-all"
-                    >
-                      EXIT
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12 transition-all duration-500 ${!isLocationSharing ? 'opacity-10 scale-[0.99] grayscale blur-[2px]' : ''}`}>
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12 transition-all duration-500`}>
             <ServiceCard
               title="Load Booking"
               description="Shared Transit. Join other passengers going your way and split the fare."
@@ -538,13 +498,22 @@ export default function MobilityView() {
               </div>
               Latest Status
             </h3>
-            {user && (
-              <button
-                onClick={() => router.push(`/user/profile/${user.uid}`)}
-                className="text-[10px] font-black text-blue-600 hover:tracking-widest transition-all uppercase"
-              >
-                Full Log
-              </button>
+            {user && recentTrips.length > 0 && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                  title="Clear Logs"
+                >
+                  <FaTrash size={12} />
+                </button>
+                <button
+                  onClick={() => router.push(`/user/profile/${user.uid}`)}
+                  className="text-[10px] font-black text-blue-600 hover:tracking-widest transition-all uppercase"
+                >
+                  Full Log
+                </button>
+              </div>
             )}
           </div>
 
@@ -555,7 +524,9 @@ export default function MobilityView() {
                   <div key={i} className="h-24 bg-gray-100 animate-pulse rounded-xl" />
                 ))
               ) : recentTrips.length > 0 ? (
-                recentTrips.map((trip, index) => (
+                Array.from(new Map(recentTrips.map(trip => [trip.driverId, trip])).values())
+                .slice(0, 3)
+                .map((trip, index) => (
                   <motion.div
                     key={trip.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -606,6 +577,59 @@ export default function MobilityView() {
 
 
       </main>
+
+      {/* Confirmation Modal for Clear Logs */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="max-w-sm w-full bg-white rounded-[2.5rem] p-8 text-center shadow-2xl"
+            >
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FaTrash className="text-2xl" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Clear All Logs?</h3>
+              <p className="text-sm text-gray-500 font-medium mb-8">This will remove all mobility logs from this view. This action cannot be undone.</p>
+              
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={async () => {
+                    setClearing(true);
+                    try {
+                      const batch = writeBatch(db);
+                      recentTrips.forEach(trip => {
+                        const tripRef = doc(db, 'trips', trip.id);
+                        batch.update(tripRef, { deletedByCustomer: true });
+                      });
+                      await batch.commit();
+                      toast.success('Logs cleared');
+                    } catch (err) {
+                      console.error(err);
+                      toast.error('Failed to clear logs');
+                    } finally {
+                      setClearing(false);
+                      setShowClearConfirm(false);
+                    }
+                  }}
+                  disabled={clearing}
+                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-900/20 active:scale-95 disabled:opacity-50"
+                >
+                  {clearing ? 'Clearing...' : 'Yes, Clear Logs'}
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

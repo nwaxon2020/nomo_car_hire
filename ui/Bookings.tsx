@@ -7,13 +7,14 @@ import { motion } from "framer-motion";
 import {
     collection, query, where, getDocs, doc, updateDoc, arrayUnion,
     arrayRemove, Timestamp, getDoc, writeBatch, serverTimestamp, addDoc, onSnapshot,
-    orderBy, deleteDoc, limit, startAfter
+    orderBy, deleteDoc, limit, startAfter, collectionGroup
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { getAuth } from "firebase/auth";
 import {
     FaTimesCircle, FaCar, FaSearch, FaExclamationTriangle, FaTimes, FaInfoCircle, FaMapMarkerAlt
 } from 'react-icons/fa';
+import { FiCheckCircle } from 'react-icons/fi';
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from "react-hot-toast"
 import { triggerNotification } from "@/lib/notifications"
@@ -23,6 +24,7 @@ import { logFeatureUsage } from "@/lib/analytics";
 import PreChat from "@/components/PreChat"
 import FlagOverlay from "@/components/mobility/FlagOverlay"
 import BookingTrackingMap from "@/components/map/BookingTrackingMap";
+import LocationGuard from "@/components/mobility/LocationGuard";
 
 
 // Interfaces matching your Firebase data structure
@@ -216,6 +218,9 @@ export default function BookingUi() {
     const [ratingComment, setRatingComment] = useState("");
     const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [destinationLocation, setDestinationLocation] = useState<{ lat: number, lng: number } | null>(null);
+    const [showCancelReasonOverlay, setShowCancelReasonOverlay] = useState(false);
+    const [cancelReason, setCancelReason] = useState("");
+    const [tripJustFinished, setTripJustFinished] = useState(false);
     const destinationInputRef = useRef<HTMLInputElement>(null);
 
     // ✅ NEW: Attach Autocomplete to destination input for premium address formatting
@@ -275,13 +280,15 @@ export default function BookingUi() {
     // Initialize auth and load history from Firebase
     useEffect(() => {
         const auth = getAuth()
+        let unsubLoad: (() => void) | undefined;
+
         const unsubscribe = auth.onAuthStateChanged((user) => {
             if (user) {
                 setCurrentUser(user)
                 setCurrentUserId(user.uid)
                 loadUserHistory(user.uid)
                 loadNotificationData(user.uid)
-                checkActiveLoadBooking(user.uid)
+                unsubLoad = checkActiveLoadBooking(user.uid)
             } else {
                 setCurrentUser(null)
                 setCurrentUserId("")
@@ -289,6 +296,7 @@ export default function BookingUi() {
                 setHiredCars([])
                 setNotificationCount(0)
                 setIsDriver(false)
+                if (unsubLoad) unsubLoad();
             }
         })
 
@@ -319,30 +327,43 @@ export default function BookingUi() {
         logFeatureUsage("bookings");
     }, []);
 
-    const checkActiveLoadBooking = async (userId: string) => {
-        try {
-            const today = new Date().toISOString().split('T')[0];
-            const q = query(
-                collection(db, "loadBookings"),
-                where("status", "==", "active"),
-                where("date", "==", today)
-            );
-            
-            const snap = await getDocs(q);
-            let hasSeat = false;
-            
-            for (const docSnap of snap.docs) {
-                const seatsRef = collection(db, "loadBookings", docSnap.id, "seats");
-                const seatsSnap = await getDocs(query(seatsRef, where("customerId", "==", userId), where("status", "==", "booked")));
-                if (!seatsSnap.empty) {
-                    hasSeat = true;
-                    break;
-                }
-            }
-            setHasActiveLoadSeat(hasSeat);
-        } catch (err) {
-            console.error("Error checking load bookings:", err);
-        }
+    const checkActiveLoadBooking = (userId: string) => {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // 1. Check as Driver (Active Load Trip)
+        const qDriver = query(
+            collection(db, "loadBookings"),
+            where("driverId", "==", userId),
+            where("status", "in", ["active", "departed"]),
+            where("date", "==", today),
+            limit(1)
+        );
+
+        // 2. Check as Passenger (Booked Seat)
+        const qPassenger = query(
+            collectionGroup(db, "seats"),
+            where("customerId", "==", userId),
+            where("status", "==", "booked"),
+            limit(1)
+        );
+
+        let driverActive = false;
+        let passengerActive = false;
+
+        const unsub1 = onSnapshot(qDriver, (snap) => {
+            driverActive = !snap.empty;
+            setHasActiveLoadSeat(driverActive || passengerActive);
+        });
+
+        const unsub2 = onSnapshot(qPassenger, (snap) => {
+            passengerActive = !snap.empty;
+            setHasActiveLoadSeat(driverActive || passengerActive);
+        });
+
+        return () => {
+            unsub1();
+            unsub2();
+        };
     };
 
     // New function to load notification data
@@ -1746,10 +1767,10 @@ export default function BookingUi() {
 
             const tripData = {
                 driverId,
-                driverName: currentUser.displayName || 'Driver',
+                driverName: currentUser.fullName || currentUser.displayName || 'Driver',
                 vehicleId,
                 customerId: incomingOffer?.customerId || currentUser.uid,
-                customerName: incomingOffer?.customerName || (currentUser.displayName || 'Customer'),
+                customerName: incomingOffer?.customerName || currentUser.fullName || currentUser.displayName || 'Customer',
                 pickupLocation,
                 destination,
                 fare,
@@ -2086,12 +2107,24 @@ export default function BookingUi() {
         }
     };
 
-    const cancelOffer = async (offerId: string) => {
+    const cancelOffer = async (offerId: string, reason?: string) => {
         try {
             await updateDoc(doc(db, 'directOffers', offerId), {
                 status: 'cancelled',
+                cancelReason: reason || "User cancelled",
                 updatedAt: serverTimestamp()
             });
+
+            // If it's a driver cancelling, we also need to log it in a dedicated collection for customer real-time alerts
+            if (isDriver && reason) {
+                await addDoc(collection(db, "trip_cancellations"), {
+                    offerId,
+                    driverId: currentUserId,
+                    customerId: incomingOffer?.customerId,
+                    reason,
+                    createdAt: serverTimestamp()
+                });
+            }
 
             // Delayed database purge to ensure UI status propagates first before complete deletion
             setTimeout(async () => {
@@ -2215,6 +2248,7 @@ export default function BookingUi() {
                     setAcceptanceMap(true);
                 } else if (offer.status === 'completed') {
                     setPendingOffer(offer);
+                    setTripJustFinished(true);
                     setShowRatingCard(true);
                 } else if (offer.status === 'rejected') {
                     setDriverResponse("busy");
@@ -2289,7 +2323,8 @@ export default function BookingUi() {
                     setIncomingOffer(offer);
                     setAcceptanceMap(true);
                 } else if (offer.status === 'completed') {
-                    setIncomingOffer(null);
+                    setIncomingOffer(offer);
+                    setTripJustFinished(true);
                     setAcceptanceMap(false);
                 }
             });
@@ -2393,7 +2428,7 @@ export default function BookingUi() {
 
     // MAIN RETURN PAGE //////////////////////////////////////////////////////////////////////////////
     return (
-        <>
+        <LocationGuard>
             {/* ✅ NEW: Full-screen Acceptance Map Overlay */}
             {/* Map Acceptance Overlay */}
             {acceptanceMap && (pendingOffer || incomingOffer) && (
@@ -2530,7 +2565,7 @@ export default function BookingUi() {
                                         Start Trip
                                     </button>
                                     <button
-                                        onClick={() => setShowCancelWarning(true)}
+                                        onClick={() => setShowCancelReasonOverlay(true)}
                                         className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
                                     >
                                         Cancel Request
@@ -2659,6 +2694,107 @@ export default function BookingUi() {
                 onFinalize={finalizeBooking}
             />
 
+            {/* ✅ NEW: Driver Cancellation Reason Overlay */}
+            {showCancelReasonOverlay && (
+                <div className="fixed inset-0 z-[350] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="max-w-md w-full bg-white rounded-[2.5rem] p-8 text-center shadow-2xl"
+                    >
+                        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FaExclamationTriangle className="text-red-500 text-3xl" />
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900 mb-2 uppercase">Reason for Cancellation</h3>
+                        <p className="text-gray-500 text-sm mb-6 font-medium">Please let the customer know why you're cancelling.</p>
+                        
+                        <div className="space-y-3 mb-8">
+                            {["Heavy Traffic", "Vehicle Issue", "Personal Emergency", "Too Far Away"].map((reason) => (
+                                <button
+                                    key={reason}
+                                    onClick={() => setCancelReason(reason)}
+                                    className={`w-full py-4 px-6 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border-2 ${cancelReason === reason ? 'bg-red-50 border-red-500 text-red-600 shadow-inner' : 'bg-gray-50 border-gray-100 text-gray-500 hover:border-red-200'}`}
+                                >
+                                    {reason}
+                                </button>
+                            ))}
+                            <textarea 
+                                placeholder="Other reason..."
+                                value={cancelReason.startsWith("Other:") ? cancelReason.replace("Other:", "") : ""}
+                                onChange={(e) => setCancelReason(`Other:${e.target.value}`)}
+                                className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-xs font-medium outline-none focus:border-red-500/30 transition-all"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowCancelReasonOverlay(false);
+                                    setCancelReason("");
+                                }}
+                                className="flex-1 py-4 bg-gray-100 text-gray-500 font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-gray-200"
+                            >
+                                Back
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!cancelReason) return toast.error("Please select a reason");
+                                    if (incomingOffer) cancelOffer(incomingOffer.id, cancelReason);
+                                    setShowCancelReasonOverlay(false);
+                                }}
+                                className="flex-1 py-4 bg-red-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-red-700 shadow-xl shadow-red-500/20"
+                            >
+                                Confirm Cancel
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* ✅ NEW: Unified Trip Completed Overlay */}
+            {tripJustFinished && (
+                <div className="fixed inset-0 z-[500] bg-emerald-600 flex flex-col items-center justify-center p-8 text-white text-center">
+                    <motion.div
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="w-32 h-32 bg-white/20 rounded-full flex items-center justify-center mb-8"
+                    >
+                        <FiCheckCircle size={64} />
+                    </motion.div>
+                    <motion.h2 
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-4xl font-black uppercase tracking-tighter mb-4"
+                    >
+                        Trip Completed!
+                    </motion.h2>
+                    <motion.p 
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-emerald-100 font-medium mb-12 max-w-sm"
+                    >
+                        {viewMode === 'driver' ? "Great job! Your earnings have been logged and your vehicle is now available for new requests." : "We hope you had a safe and pleasant journey. Please rate your driver below."}
+                    </motion.p>
+                    <motion.button
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.4 }}
+                        onClick={() => {
+                            setTripJustFinished(false);
+                            if (viewMode === 'driver') {
+                                setIncomingOffer(null);
+                                setAcceptanceMap(false);
+                            }
+                        }}
+                        className="px-12 py-5 bg-white text-emerald-600 rounded-2xl font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                    >
+                        {viewMode === 'driver' ? "Return to Dashboard" : "Proceed to Rating"}
+                    </motion.button>
+                </div>
+            )}
+
             <div className="px-2 pt-4 md:px-4 md:pt-2 relative bg-[#F9FAF9]">
                 {/* ✅ NEW: View Mode Toggles */}
                 {isDriver && (
@@ -2688,12 +2824,13 @@ export default function BookingUi() {
 
                 {/* Main Content Area ////////////////////////////////////////////////////////////////////////////////////////////*/}
                 <div className="pt-0 pb-20 mx-auto bg-white shadow-md min-h-[40rem]">
-
-                    {viewMode === 'customer' ? (
+                    {hasActiveLoadSeat ? (
+                        <div className="py-20 px-4">
+                             <ActiveBookingBanner type="Shared Transit" targetPath="/user/mobility/load-booking" />
+                        </div>
+                    ) : viewMode === 'customer' ? (
                         <>
-                            {hasActiveLoadSeat ? (
-                                <ActiveBookingBanner type="Load" targetPath="/user/mobility/load-booking" />
-                            ) : activeTrip ? (
+                            {activeTrip ? (
                                 <ActiveTripBanner 
                                     activeTrip={activeTrip} 
                                     onOpenMap={() => setAcceptanceMap(true)} 
@@ -2910,6 +3047,6 @@ export default function BookingUi() {
                 )}
 
             </div>
-        </>
+        </LocationGuard>
     )
 }

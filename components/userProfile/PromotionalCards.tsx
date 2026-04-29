@@ -1,5 +1,4 @@
-"use client";
-
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import ShareButton from "@/components/sharebutton";
 
@@ -14,9 +13,12 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
     onUpgradeVIP,
     onBookKeke,
 }) => {
+    const [isNavigating, setIsNavigating] = useState<string | null>(null);
+
     const cards = [
         {
             icon: "🎁",
+            id: "share",
             title: "Share & Earn",
             image: "/customerSmiling.jpeg",
             description: "Invite friends, earn 2 points each! Score 20 points and unlock a FREE ride! You also stand a chance to become our ambassador.",
@@ -25,6 +27,7 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
         },
         {
             icon: "⭐",
+            id: "vip",
             title: "VIP Service",
             image: "/driverSmiling.webp",
             description: "Become a VIP member and enjoy premium comfort rides, earn points, and unlock free ride rewards.",
@@ -33,6 +36,7 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
         },
         {
             icon: "🛺",
+            id: "keke",
             title: "Keke Napep",
             image: "/keke.jpeg",
             description: "Find a Keke Napep near you! Book instantly and enjoy an easier, faster journey with drivers in your radius.",
@@ -43,6 +47,11 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
 
     // Reusable tailwind classes for consistency
     const buttonStyles = "w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/20";
+
+    const handleAction = (id: string, action: () => void) => {
+        setIsNavigating(id);
+        action();
+    };
 
     return (
         <motion.section
@@ -72,10 +81,6 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
                             <p className="text-gray-400 text-sm mb-4">{card.description}</p>
 
                             {card.action === "share" ? (
-                                /* PASSING CUSTOM BUTTON AS CHILDREN:
-                                   This allows ShareButton to handle the referral logic 
-                                   while using your specific card button styling.
-                                */
                                 <ShareButton
                                     userId={userId}
                                     title="Get a Free Ride on *NOMO CARS*!"
@@ -89,10 +94,13 @@ export const PromotionalCards: React.FC<PromotionalCardsProps> = ({
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    onClick={() => card.action === "vip" ? onUpgradeVIP() : onBookKeke()}
-                                    className={buttonStyles}
+                                    disabled={isNavigating !== null}
+                                    onClick={() => handleAction(card.id, card.action === "vip" ? onUpgradeVIP : onBookKeke)}
+                                    className={buttonStyles + " flex items-center justify-center gap-2"}
                                 >
-                                    {card.button}
+                                    {isNavigating === card.id ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : card.button}
                                 </motion.button>
                             )}
                         </div>
