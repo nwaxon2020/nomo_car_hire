@@ -1202,7 +1202,9 @@ export default function BookingUi() {
             } else {
                 const newContactedDriver = {
                     driverId: driverTargetId,
-                    driverName: selectedDriver.fullName || `${selectedDriver.firstName} ${selectedDriver.lastName}`.trim(),
+                    driverName: (selectedDriver.firstName || selectedDriver.lastName) 
+                        ? `${selectedDriver.firstName || ''} ${selectedDriver.lastName || ''}`.trim() 
+                        : (selectedDriver.fullName || "Driver"),
                     phoneNumber: selectedDriver.phoneNumber || "",
                     driverPhone: selectedDriver.phoneNumber || "",
                     profileImage: selectedDriver.profileImage || "",
@@ -1224,24 +1226,7 @@ export default function BookingUi() {
             // Refresh user history from Firestore (source of truth)
             loadUserHistory(currentUser.uid);
 
-            // Add user to driver's customersCarried (if not already there)
-            const driverDocId = selectedDriver.id || selectedDriver.uid;
-            const driverDocRef = doc(db, "users", driverDocId);
-            const customersCarried = selectedDriver.customersCarried || [];
-            if (!customersCarried.includes(currentUser.uid)) {
-                await updateDoc(driverDocRef, {
-                    customersCarried: arrayUnion(currentUser.uid),
-                    updatedAt: now
-                });
-            }
 
-            // Update selected driver's customersCarried in local state
-            if (!selectedDriver.customersCarried?.includes(currentUser.uid)) {
-                setSelectedDriver({
-                    ...selectedDriver,
-                    customersCarried: [...(selectedDriver.customersCarried || []), currentUser.uid]
-                });
-            }
 
             // Update cooldown state
             const key = `${selectedDriver.uid}_${selectedVehicle.id}`;

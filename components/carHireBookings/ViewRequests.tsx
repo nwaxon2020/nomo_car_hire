@@ -953,7 +953,9 @@ export default function ViewRequests({
         const driverDoc = await getDoc(doc(db, "users", userId));
         if (driverDoc.exists()) {
           const driverData = driverDoc.data();
-          driverName = `${driverData.firstName} ${driverData.lastName}` || "Unknown";
+          driverName = (driverData.firstName || driverData.lastName)
+            ? `${driverData.firstName || ''} ${driverData.lastName || ''}`.trim()
+            : (driverData.fullName || userName || "Unknown");
           driverPhone = driverData.phoneNumber || "";
         }
       } catch (error) {

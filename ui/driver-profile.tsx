@@ -434,7 +434,9 @@ export default function DriverProfilePage() {
         const now = Timestamp.now();
         const contactedEntry = {
           driverId: driverId,
-          driverName: driverData?.fullName || "Professional Driver",
+          driverName: (driverData?.firstName || driverData?.lastName)
+            ? `${driverData.firstName || ''} ${driverData.lastName || ''}`.trim()
+            : (driverData?.fullName || "Professional Driver"),
           profileImage: driverData?.profileImage || "",
           contactedAt: now,
           type: "profile_contact"
