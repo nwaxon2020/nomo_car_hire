@@ -32,12 +32,13 @@ export default function RegistrationForm({ onClose, onSuccess, isRenewal = false
         customerServiceEmail: "",
         customerServiceContact: "",
         garageImageUrl: "",
+        cacImageUrl: "",
         idImageUrl: "",
     });
 
     const [uploading, setUploading] = useState<{ [key: string]: boolean }>({});
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "garageImageUrl" | "idImageUrl") => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "garageImageUrl" | "cacImageUrl" | "idImageUrl") => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -187,7 +188,14 @@ export default function RegistrationForm({ onClose, onSuccess, isRenewal = false
                                 required 
                             />
                             <FileUploadField 
-                                label="CAC / Owner ID" 
+                                label="CAC Document" 
+                                value={formData.cacImageUrl} 
+                                uploading={uploading.cacImageUrl} 
+                                onChange={(e) => handleFileUpload(e, "cacImageUrl")} 
+                                required 
+                            />
+                            <FileUploadField 
+                                label="Owner ID" 
                                 value={formData.idImageUrl} 
                                 uploading={uploading.idImageUrl} 
                                 onChange={(e) => handleFileUpload(e, "idImageUrl")} 
