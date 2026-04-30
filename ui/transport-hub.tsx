@@ -167,6 +167,18 @@ const TransportHubUi = () => {
             return fromMatch && toMatch;
         });
 
+    // Color logic: Sequential assignment based on unique companies appearing in the current list
+    const companyColorMap: Record<string, any> = {};
+    let colorPointer = 0;
+
+    allListings.forEach(item => {
+        const companyName = item.company?.toLowerCase().trim();
+        if (companyName && !companyColorMap[companyName]) {
+            companyColorMap[companyName] = TRANSPORT_HUB_COLORS[colorPointer % TRANSPORT_HUB_COLORS.length];
+            colorPointer++;
+        }
+    });
+
     if (view === 'dashboard' && userCompany) {
         return <CompanyDashboard companyId={userCompany.id} onBack={() => setView('hub')} />;
     }
@@ -271,7 +283,11 @@ const TransportHubUi = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <AnimatePresence>
                                 {allListings.slice(0, visibleCount).map((item, idx) => (
-                                    <ListingCard key={item.id || idx} item={item} />
+                                    <ListingCard 
+                                        key={item.id || idx} 
+                                        item={item} 
+                                        colors={companyColorMap[item.company?.toLowerCase().trim()] || TRANSPORT_HUB_COLORS[0]}
+                                    />
                                 ))}
                             </AnimatePresence>
                         </div>
@@ -342,78 +358,8 @@ const handleTrackVisit = async (companyId: string) => {
     }
 };
 
-// Extend COMPANY_COLORS to include unique colors for registered companies
-const REGISTERED_COMPANY_COLORS = [
-    {
-        name: 'blue',
-        bg: 'from-blue-950 to-sky-950',
-        border: 'border-blue-500/40 hover:border-blue-400/60',
-        text: 'text-blue-300',
-        badge: 'bg-blue-500/20 text-blue-300',
-        icon: 'bg-blue-500/30 text-blue-300',
-        accent: 'text-blue-400',
-        shadow: 'shadow-blue-900/40'
-    },
-    {
-        name: 'green',
-        bg: 'from-green-950 to-lime-950',
-        border: 'border-green-500/40 hover:border-green-400/60',
-        text: 'text-green-300',
-        badge: 'bg-green-500/20 text-green-300',
-        icon: 'bg-green-500/30 text-green-300',
-        accent: 'text-green-400',
-        shadow: 'shadow-green-900/40'
-    },
-    {
-        name: 'indigo',
-        bg: 'from-indigo-950 to-violet-950',
-        border: 'border-indigo-500/40 hover:border-indigo-400/60',
-        text: 'text-indigo-300',
-        badge: 'bg-indigo-500/20 text-indigo-300',
-        icon: 'bg-indigo-500/30 text-indigo-300',
-        accent: 'text-indigo-400',
-        shadow: 'shadow-indigo-900/40'
-    },
-    {
-        name: 'teal',
-        bg: 'from-teal-950 to-cyan-950',
-        border: 'border-teal-500/40 hover:border-teal-400/60',
-        text: 'text-teal-300',
-        badge: 'bg-teal-500/20 text-teal-300',
-        icon: 'bg-teal-500/30 text-teal-300',
-        accent: 'text-teal-400',
-        shadow: 'shadow-teal-900/40'
-    },
-    {
-        name: 'orange',
-        bg: 'from-orange-950 to-amber-950',
-        border: 'border-orange-500/40 hover:border-orange-400/60',
-        text: 'text-orange-300',
-        badge: 'bg-orange-500/20 text-orange-300',
-        icon: 'bg-orange-500/30 text-orange-300',
-        accent: 'text-orange-400',
-        shadow: 'shadow-orange-900/40'
-    },
-];
-
-// Modify getCompanyColor to handle registered companies uniquely
-const getCompanyColor = (companyName: string, isRegistered: boolean) => {
-    let hash = 0;
-    for (let i = 0; i < companyName.length; i++) {
-        hash = ((hash << 5) - hash) + companyName.charCodeAt(i);
-        hash = hash & hash;
-    }
-
-    if (isRegistered) {
-        const colorIndex = Math.abs(hash) % REGISTERED_COMPANY_COLORS.length;
-        return REGISTERED_COMPANY_COLORS[colorIndex];
-    }
-
-    const colorIndex = Math.abs(hash) % COMPANY_COLORS.length;
-    return COMPANY_COLORS[colorIndex];
-};
-
-const COMPANY_COLORS = [
+// The 5 core colors requested by the user, assigned sequentially
+const TRANSPORT_HUB_COLORS = [
     {
         name: 'purple',
         bg: 'from-purple-950 to-indigo-950',
@@ -455,22 +401,19 @@ const COMPANY_COLORS = [
         shadow: 'shadow-yellow-900/40'
     },
     {
-        name: 'brown',
-        bg: 'from-amber-950 to-orange-950',
-        border: 'border-amber-600/40 hover:border-amber-500/60',
-        text: 'text-amber-300',
-        badge: 'bg-amber-600/20 text-amber-300',
-        icon: 'bg-amber-600/30 text-amber-300',
-        accent: 'text-amber-400',
-        shadow: 'shadow-amber-900/40'
-    },
+        name: 'blackish',
+        bg: 'from-slate-900 to-zinc-950',
+        border: 'border-slate-500/40 hover:border-slate-400/60',
+        text: 'text-slate-300',
+        badge: 'bg-slate-500/20 text-slate-300',
+        icon: 'bg-slate-500/30 text-slate-300',
+        accent: 'text-slate-400',
+        shadow: 'shadow-slate-900/40'
+    }
 ];
 
-const ListingCard = ({ item }: { item: TransportListing }) => {
-    const isRegistered = item.type === 'registered';
-    const colors = getCompanyColor(item.company, isRegistered);
+const ListingCard = ({ item, colors }: { item: TransportListing; colors: any }) => {
     const bookUrl = item.type === 'manual' ? item.bookNowUrl : item.website;
-
     const typeLabel = item.type === 'manual' ? 'Admin Created' : item.type === 'scraped' ? 'Scraped' : 'Verified';
 
     return (
@@ -519,10 +462,10 @@ const ListingCard = ({ item }: { item: TransportListing }) => {
             </div>
 
             {/* Promo & Button */}
-            <div className="flex justify-between items-end gap-4">
-                <div>
+            <div className="flex justify-between items-end gap-2">
+                <div className="flex-shrink-1">
                     {item.discount !== "0%" && item.discount !== "0" && (
-                        <p className="text-sm font-black text-white/80 bg-black/40 inline-block px-3 py-1.5 rounded-lg">
+                        <p className="text-[10px] font-black text-white/80 bg-black/40 inline-block px-2 py-1 rounded-lg border border-white/5">
                             🎉 Promo: {item.discount}% Off
                         </p>
                     )}
@@ -533,7 +476,7 @@ const ListingCard = ({ item }: { item: TransportListing }) => {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => item.type === 'registered' && handleTrackVisit(item.companyId)}
-                    className={`flex items-center gap-2 px-5 py-3 bg-gradient-to-r ${colors.bg} border ${colors.border} text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-95`}
+                    className={`flex items-center gap-2 px-4 py-3 bg-gradient-to-r ${colors.bg} border ${colors.border} text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-95 whitespace-nowrap`}
                 >
                     Book Now <ExternalLink size={14} />
                 </a>
