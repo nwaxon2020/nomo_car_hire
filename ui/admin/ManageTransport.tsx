@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
 import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
-import { FiCheck, FiX, FiFlag, FiTrash2, FiMessageSquare, FiEye, FiImage, FiLock } from "react-icons/fi";
+import { FiCheck, FiX, FiFlag, FiTrash2, FiMessageSquare, FiEye, FiImage, FiLock, FiPlus } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
 import LoadingRound from "@/components/re-useable-loading";
 import { triggerNotification } from "@/lib/notifications";
+import ManualTransportCardForm from "./ManualTransportCardForm";
 
 export default function ManageTransport() {
     const [companies, setCompanies] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function ManageTransport() {
     const [overlayImage, setOverlayImage] = useState<string | null>(null);
     const [passkey, setPasskey] = useState("");
     const [showPasskeyModal, setShowPasskeyModal] = useState<any>(null); // {id, action}
+    const [showCardForm, setShowCardForm] = useState(false);
 
     const user = auth.currentUser;
     const isCEO = user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY;
@@ -128,6 +130,12 @@ export default function ManageTransport() {
                     <h2 className="text-2xl font-black text-white">Transport Partners</h2>
                     <p className="text-slate-500 text-sm">Manage all registered transport companies</p>
                 </div>
+                <button
+                    onClick={() => setShowCardForm(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg flex gap-2"
+                >
+                    <FiPlus size={18} /> Create Transport Card
+                </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
@@ -137,23 +145,45 @@ export default function ManageTransport() {
                         <div className="flex gap-4">
                             <div
                                 onClick={() => setOverlayImage(company.garageImageUrl)}
-                                className="w-24 h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
                                 title="Garage Image"
                             >
                                 <img src={company.garageImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="Garage" />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
                                     <FiEye className="text-white" />
                                 </div>
+                                <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">Garage</div>
+                            </div>
+                            <div
+                                onClick={() => setOverlayImage(company.cacImageUrl)}
+                                className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                title="CAC Document"
+                            >
+                                {company.cacImageUrl ? (
+                                    <>
+                                        <img src={company.cacImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="CAC" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
+                                            <FiEye className="text-white" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-1">
+                                        <FiImage size={24} />
+                                        <span className="text-[8px] font-bold">NO CAC</span>
+                                    </div>
+                                )}
+                                <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">CAC DOC</div>
                             </div>
                             <div
                                 onClick={() => setOverlayImage(company.idImageUrl)}
-                                className="w-24 h-24 rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
-                                title="CAC/ID Image"
+                                className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                title="Owner ID"
                             >
-                                <img src={company.idImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="CAC/ID" />
+                                <img src={company.idImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="ID" />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
                                     <FiEye className="text-white" />
                                 </div>
+                                <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">Owner ID</div>
                             </div>
                         </div>
 
@@ -307,6 +337,15 @@ export default function ManageTransport() {
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* Manual Transport Card Form Modal */}
+            <ManualTransportCardForm
+                isOpen={showCardForm}
+                onClose={() => setShowCardForm(false)}
+                onSuccess={() => {
+                    // No need to refresh - the companies list will auto-update via onSnapshot
+                }}
+            />
         </div>
     );
 }

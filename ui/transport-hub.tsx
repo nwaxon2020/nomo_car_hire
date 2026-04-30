@@ -22,8 +22,10 @@ interface TransportListing {
     companyId: string; // Added companyId to listings
     time: string;
     discount: string;
-    type: 'scraped' | 'registered';
+    type: 'scraped' | 'registered' | 'manual';
     website?: string;
+    bookNowUrl?: string;
+    isCustomCompany?: boolean;
 }
 
 interface TransportCompany {
@@ -121,7 +123,7 @@ const TransportHubUi = () => {
                 return {
                     ...docData,
                     id: d.id,
-                    type: 'registered',
+                    type: docData.type || 'registered', // Use type from doc or default to 'registered'
                     company: docData.company || docData.companyName // Map companyName to company for UI consistency
                 } as TransportListing;
             });
@@ -137,14 +139,27 @@ const TransportHubUi = () => {
 
     const allListings = [...listings, ...scrapedListings]
         .sort((a, b) => {
-            if (a.type === 'registered' && b.type === 'scraped') return -1;
-            if (a.type === 'scraped' && b.type === 'registered') return 1;
-            return 0;
+            // Priority: manual > registered > scraped
+            const typePriority: Record<string, number> = { manual: 0, registered: 1, scraped: 2 };
+            return (typePriority[a.type] ?? 3) - (typePriority[b.type] ?? 3);
         })
-        .filter(item => {
+        .filter((item, index, arr) => {
             // Filter out registered listings from expired or unapproved companies
-            if (item.type === 'registered' && item.companyId && hiddenCompanies.has(item.companyId)) {
+            if ((item.type === 'registered' || item.type === 'manual') && item.companyId && hiddenCompanies.has(item.companyId)) {
                 return false;
+            }
+
+            // Deduplication: If this is a scraped card, check if there's a matching manual card
+            if (item.type === 'scraped') {
+                const hasMatchingManualCard = arr.some(card => 
+                    card.type === 'manual' &&
+                    card.from.toLowerCase() === item.from.toLowerCase() &&
+                    card.to.toLowerCase() === item.to.toLowerCase() &&
+                    card.company.toLowerCase() === item.company.toLowerCase()
+                );
+                if (hasMatchingManualCard) {
+                    return false; // Filter out this scraped card
+                }
             }
 
             const fromMatch = item.from.toLowerCase().includes(searchFrom.toLowerCase());
@@ -327,53 +342,200 @@ const handleTrackVisit = async (companyId: string) => {
     }
 };
 
+// Extend COMPANY_COLORS to include unique colors for registered companies
+const REGISTERED_COMPANY_COLORS = [
+    {
+        name: 'blue',
+        bg: 'from-blue-950 to-sky-950',
+        border: 'border-blue-500/40 hover:border-blue-400/60',
+        text: 'text-blue-300',
+        badge: 'bg-blue-500/20 text-blue-300',
+        icon: 'bg-blue-500/30 text-blue-300',
+        accent: 'text-blue-400',
+        shadow: 'shadow-blue-900/40'
+    },
+    {
+        name: 'green',
+        bg: 'from-green-950 to-lime-950',
+        border: 'border-green-500/40 hover:border-green-400/60',
+        text: 'text-green-300',
+        badge: 'bg-green-500/20 text-green-300',
+        icon: 'bg-green-500/30 text-green-300',
+        accent: 'text-green-400',
+        shadow: 'shadow-green-900/40'
+    },
+    {
+        name: 'indigo',
+        bg: 'from-indigo-950 to-violet-950',
+        border: 'border-indigo-500/40 hover:border-indigo-400/60',
+        text: 'text-indigo-300',
+        badge: 'bg-indigo-500/20 text-indigo-300',
+        icon: 'bg-indigo-500/30 text-indigo-300',
+        accent: 'text-indigo-400',
+        shadow: 'shadow-indigo-900/40'
+    },
+    {
+        name: 'teal',
+        bg: 'from-teal-950 to-cyan-950',
+        border: 'border-teal-500/40 hover:border-teal-400/60',
+        text: 'text-teal-300',
+        badge: 'bg-teal-500/20 text-teal-300',
+        icon: 'bg-teal-500/30 text-teal-300',
+        accent: 'text-teal-400',
+        shadow: 'shadow-teal-900/40'
+    },
+    {
+        name: 'orange',
+        bg: 'from-orange-950 to-amber-950',
+        border: 'border-orange-500/40 hover:border-orange-400/60',
+        text: 'text-orange-300',
+        badge: 'bg-orange-500/20 text-orange-300',
+        icon: 'bg-orange-500/30 text-orange-300',
+        accent: 'text-orange-400',
+        shadow: 'shadow-orange-900/40'
+    },
+];
+
+// Modify getCompanyColor to handle registered companies uniquely
+const getCompanyColor = (companyName: string, isRegistered: boolean) => {
+    let hash = 0;
+    for (let i = 0; i < companyName.length; i++) {
+        hash = ((hash << 5) - hash) + companyName.charCodeAt(i);
+        hash = hash & hash;
+    }
+
+    if (isRegistered) {
+        const colorIndex = Math.abs(hash) % REGISTERED_COMPANY_COLORS.length;
+        return REGISTERED_COMPANY_COLORS[colorIndex];
+    }
+
+    const colorIndex = Math.abs(hash) % COMPANY_COLORS.length;
+    return COMPANY_COLORS[colorIndex];
+};
+
+const COMPANY_COLORS = [
+    {
+        name: 'purple',
+        bg: 'from-purple-950 to-indigo-950',
+        border: 'border-purple-500/40 hover:border-purple-400/60',
+        text: 'text-purple-300',
+        badge: 'bg-purple-500/20 text-purple-300',
+        icon: 'bg-purple-500/30 text-purple-300',
+        accent: 'text-purple-400',
+        shadow: 'shadow-purple-900/40'
+    },
+    {
+        name: 'pink',
+        bg: 'from-pink-950 to-rose-950',
+        border: 'border-pink-500/40 hover:border-pink-400/60',
+        text: 'text-pink-300',
+        badge: 'bg-pink-500/20 text-pink-300',
+        icon: 'bg-pink-500/30 text-pink-300',
+        accent: 'text-pink-400',
+        shadow: 'shadow-pink-900/40'
+    },
+    {
+        name: 'emerald',
+        bg: 'from-emerald-950 to-teal-950',
+        border: 'border-emerald-500/40 hover:border-emerald-400/60',
+        text: 'text-emerald-300',
+        badge: 'bg-emerald-500/20 text-emerald-300',
+        icon: 'bg-emerald-500/30 text-emerald-300',
+        accent: 'text-emerald-400',
+        shadow: 'shadow-emerald-900/40'
+    },
+    {
+        name: 'yellow',
+        bg: 'from-yellow-950 to-amber-950',
+        border: 'border-yellow-500/40 hover:border-yellow-400/60',
+        text: 'text-yellow-300',
+        badge: 'bg-yellow-500/20 text-yellow-300',
+        icon: 'bg-yellow-500/30 text-yellow-300',
+        accent: 'text-yellow-400',
+        shadow: 'shadow-yellow-900/40'
+    },
+    {
+        name: 'brown',
+        bg: 'from-amber-950 to-orange-950',
+        border: 'border-amber-600/40 hover:border-amber-500/60',
+        text: 'text-amber-300',
+        badge: 'bg-amber-600/20 text-amber-300',
+        icon: 'bg-amber-600/30 text-amber-300',
+        accent: 'text-amber-400',
+        shadow: 'shadow-amber-900/40'
+    },
+];
+
 const ListingCard = ({ item }: { item: TransportListing }) => {
+    const isRegistered = item.type === 'registered';
+    const colors = getCompanyColor(item.company, isRegistered);
+    const bookUrl = item.type === 'manual' ? item.bookNowUrl : item.website;
+
+    const typeLabel = item.type === 'manual' ? 'Admin Created' : item.type === 'scraped' ? 'Scraped' : 'Verified';
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            whileHover={{ y: -5 }}
-            className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-6 relative overflow-hidden group"
+            whileHover={{ y: -4 }}
+            className={`bg-gradient-to-br ${colors.bg} rounded-2xl border ${colors.border} shadow-xl ${colors.shadow} p-6 relative overflow-hidden group transition-all duration-300 transform hover:-translate-y-1`}
         >
-            <div className="absolute top-0 right-0 p-4">
-                <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${item.type === 'scraped' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                    {item.type === 'scraped' ? 'Scraped' : 'Verified'}
+            {/* Badge */}
+            <div className="absolute top-4 right-4">
+                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${colors.badge}`}>
+                    {typeLabel}
                 </span>
             </div>
 
-            <div className="mb-6">
-                <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">
-                        {item.company?.charAt(0) || '?'}
+            {/* Header */}
+            <div className="flex justify-between items-start mb-6">
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className={`w-10 h-10 rounded-lg ${colors.icon} flex items-center justify-center font-black text-lg`}>
+                            {item.company?.charAt(0) || '?'}
+                        </div>
+                        <h3 className="font-black text-white text-lg drop-shadow-sm">{item.company}</h3>
                     </div>
-                    <h3 className="font-bold text-pink-300">{item.company}</h3>
-                </div>
-                <div className="flex items-center gap-3">
-                    <p className="text-lg font-black text-white">{item.from}</p>
-                    <ArrowRight size={16} className="text-slate-600" />
-                    <p className="text-lg font-black text-white">{item.to}</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-lg font-black text-white">{item.from}</p>
+                        <ArrowRight size={16} className="text-white/60" />
+                        <p className="text-lg font-black text-white">{item.to}</p>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex justify-between items-end border-t border-white/5 pt-4">
+            {/* Details Grid */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-black/30 p-3 rounded-lg border border-white/10">
+                    <p className="text-xs text-white/60 font-bold uppercase tracking-widest mb-1">Time</p>
+                    <p className="text-sm font-bold text-white flex items-center gap-1.5">
+                        <Clock size={14} className={colors.accent} /> {item.time}
+                    </p>
+                </div>
+                <div className="bg-black/30 p-3 rounded-lg border border-white/10">
+                    <p className="text-xs text-white/60 font-bold uppercase tracking-widest mb-1">Fare</p>
+                    <p className={`text-xl font-black ${colors.accent} drop-shadow-sm`}>₦{item.amount.toLocaleString()}</p>
+                </div>
+            </div>
+
+            {/* Promo & Button */}
+            <div className="flex justify-between items-end gap-4">
                 <div>
-                    <div className="flex items-center gap-2 text-slate-500 text-xs mb-1">
-                        <Clock size={12} /> {item.time}
-                    </div>
-                    <p className="text-2xl font-black text-white">₦{item.amount.toLocaleString()}</p>
-                    {item.discount !== "0%" && (
-                        <p className="text-xs text-amber-500 font-bold">Promo: {item.discount} Off</p>
+                    {item.discount !== "0%" && item.discount !== "0" && (
+                        <p className="text-sm font-black text-white/80 bg-black/40 inline-block px-3 py-1.5 rounded-lg">
+                            🎉 Promo: {item.discount}% Off
+                        </p>
                     )}
                 </div>
 
                 <a
-                    href={item.website || "#"}
+                    href={bookUrl || "#"}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => item.type === 'registered' && handleTrackVisit(item.companyId)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/20"
+                    className={`flex items-center gap-2 px-5 py-3 bg-gradient-to-r ${colors.bg} border ${colors.border} text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-95`}
                 >
-                    Book Now <ExternalLink size={12} />
+                    Book Now <ExternalLink size={14} />
                 </a>
             </div>
         </motion.div>
