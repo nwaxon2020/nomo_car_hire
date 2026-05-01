@@ -613,7 +613,7 @@ export default function ChatPageUi() {
 
                             <button
                               onClick={(e) => handleDeleteChat(chat.chatId, e)}
-                              className="opacity-0 group-hover:opacity-100 p-2 hover:text-red-500 transition-all self-center"
+                              className="md:opacity-0 opacity-100 md:group-hover:opacity-100 p-2 hover:text-red-500 transition-all self-center"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

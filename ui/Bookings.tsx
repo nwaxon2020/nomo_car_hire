@@ -1945,6 +1945,17 @@ export default function BookingUi() {
 
             await updateDoc(tripRef, updates);
 
+            // Also clear corresponding directOffers so driver's active session is cleared
+            try {
+                const offersQuery = query(collection(db, "directOffers"), where("tripId", "==", tripId));
+                const offersSnap = await getDocs(offersQuery);
+                offersSnap.forEach(async (docSnap) => {
+                    await updateDoc(docSnap.ref, { status: status, updatedAt: Timestamp.now() });
+                });
+            } catch (err) {
+                console.error("Error clearing directOffers:", err);
+            }
+
             // Clear active trip if completed or cancelled
             if (status === 'completed' || status === 'cancelled') {
                 setActiveTrip(null);
@@ -2399,7 +2410,6 @@ export default function BookingUi() {
     }, [currentUser]);
 
 
-
     if (loading) {
         return (
             <div className="p-5 bg-[#F9FAF9] min-h-screen flex items-center justify-center">
@@ -2409,6 +2419,23 @@ export default function BookingUi() {
                 </div>
             </div>
         )
+    }
+
+    const etaStringActive = (pendingOffer || incomingOffer) ? calculateETA(
+        (pendingOffer?.driverLocation || incomingOffer?.driverLocation),
+        ((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') 
+            ? (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation)
+            : (pendingOffer?.customerLocation || incomingOffer?.customerLocation))
+    ) : null;
+
+    let isMarkCompleteDisabled = false;
+    if ((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') && etaStringActive) {
+        if (etaStringActive !== "Arriving") {
+            const minsMatch = etaStringActive.match(/(\d+)/);
+            if (minsMatch && parseInt(minsMatch[1], 10) > 3) {
+                isMarkCompleteDisabled = true;
+            }
+        }
     }
 
     // MAIN RETURN PAGE //////////////////////////////////////////////////////////////////////////////
@@ -2463,12 +2490,7 @@ export default function BookingUi() {
                                 <div className="bg-white/95 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-500/20 shadow-2xl flex flex-col items-end">
                                     <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Estimated Arrival</span>
                                     <span className="text-xl font-black text-gray-900 leading-none">
-                                        {calculateETA(
-                                            (pendingOffer?.driverLocation || incomingOffer?.driverLocation),
-                                            ((pendingOffer?.status === 'started' || incomingOffer?.status === 'started') 
-                                                ? (pendingOffer?.destinationLocation || incomingOffer?.destinationLocation)
-                                                : (pendingOffer?.customerLocation || incomingOffer?.customerLocation))
-                                        ) || "-- mins"}
+                                        {etaStringActive || "-- mins"}
                                     </span>
                                 </div>
                             </div>
@@ -2520,45 +2542,74 @@ export default function BookingUi() {
                                     )}
                                 </>
                             )}
-
-                            {/* DRIVER VIEW CONTROLS - Shown only BEFORE trip starts */}
-                            {incomingOffer && incomingOffer.status !== 'started' && (
+                            {/* DRIVER VIEW CONTROLS */}
+                            {incomingOffer && (
                                 <>
-                                    <button
-                                        onClick={() => handlePhoneCall(incomingOffer.customerPhone || "123")}
-                                        className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all"
-                                    >
-                                        Call Customer
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            try {
-                                                const tripId = await startTrip(currentUser.uid, incomingOffer.vehicleId, incomingOffer.pickupLocation || "Current Location", incomingOffer.destination || "Not Set");
-                                                if (tripId) {
-                                                    await updateDoc(doc(db, "directOffers", incomingOffer.id), { 
-                                                        status: "started", 
-                                                        tripId: tripId,
-                                                        updatedAt: serverTimestamp() 
-                                                    });
-                                                }
-                                            } catch (err) {
-                                                console.error(err);
-                                            }
-                                        }}
-                                        className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-emerald-700 transition-all"
-                                    >
-                                        Start Trip
-                                    </button>
-                                    <button
-                                        onClick={() => setShowCancelReasonOverlay(true)}
-                                        className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
-                                    >
-                                        Cancel Request
-                                    </button>
+                                    {incomingOffer.status !== 'started' ? (
+                                        <>
+                                            <button
+                                                onClick={() => handlePhoneCall(incomingOffer.customerPhone || "123")}
+                                                className="flex-1 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all"
+                                            >
+                                                Call Customer
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const tripId = await startTrip(currentUser.uid, incomingOffer.vehicleId, incomingOffer.pickupLocation || "Current Location", incomingOffer.destination || "Not Set");
+                                                        if (tripId) {
+                                                            await updateDoc(doc(db, "directOffers", incomingOffer.id), { 
+                                                                status: "started", 
+                                                                tripId: tripId,
+                                                                updatedAt: serverTimestamp() 
+                                                            });
+                                                            setAcceptanceMap(true);
+                                                        }
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                    }
+                                                }}
+                                                className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-emerald-700 transition-all"
+                                            >
+                                                Start Trip
+                                            </button>
+                                            <button
+                                                onClick={() => setShowCancelReasonOverlay(true)}
+                                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm border border-red-500/20 shadow-xl hover:bg-red-700 transition-all"
+                                            >
+                                                Cancel Request
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (incomingOffer.tripId) {
+                                                            await updateTripStatus(incomingOffer.tripId, 'completed');
+                                                        } else {
+                                                            await updateDoc(doc(db, "directOffers", incomingOffer.id), { status: "completed" });
+                                                        }
+                                                        setAcceptanceMap(false);
+                                                        setIncomingOffer(null);
+                                                    } catch(err) { console.error(err); }
+                                                }}
+                                                disabled={isMarkCompleteDisabled}
+                                                title={isMarkCompleteDisabled ? "Can only mark as completed when ETA is 3 mins or less" : ""}
+                                                className={`flex-1 py-4 font-black uppercase tracking-widest text-[10px] shadow-xl transition-all flex items-center justify-center gap-2 rounded-2xl ${isMarkCompleteDisabled ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:scale-105'}`}
+                                            >
+                                                <FiCheckCircle size={14} /> Mark Completed
+                                            </button>
+                                            <button
+                                                onClick={() => setShowCancelReasonOverlay(true)}
+                                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <FaTimesCircle size={14} /> Cancel Trip
+                                            </button>
+                                        </>
+                                    )}
                                 </>
                             )}
-
-                            {/* NOTE: For Driver when started, we hide everything as requested */}
                         </div>
                     </div>
                 </div>
@@ -2821,6 +2872,7 @@ export default function BookingUi() {
                                     onOpenMap={() => setAcceptanceMap(true)} 
                                     currentUser={currentUser}
                                     updateTripStatus={updateTripStatus}
+                                    isMarkCompleteDisabled={isMarkCompleteDisabled}
                                 />
                             ) : (
                                 <>
@@ -3029,6 +3081,78 @@ export default function BookingUi() {
                             fullName: currentUser.displayName || "Anonymous Customer"
                         }}
                     />
+                )}
+
+                {/* ✅ NEW: Cancel Reason Overlay */}
+                {showCancelReasonOverlay && (
+                    <div className="fixed inset-0 z-[400] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl relative">
+                            <button onClick={() => setShowCancelReasonOverlay(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                                <FaTimes size={20} />
+                            </button>
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <FaTimesCircle className="text-red-500 text-3xl" />
+                            </div>
+                            <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Cancel Trip</h3>
+                            <p className="text-sm text-gray-500 mb-6 font-medium">Please select a reason for cancelling this trip.</p>
+                            
+                            <div className="space-y-3 mb-6">
+                                {["Customer rude", "Vehicle problems", "Others"].map((reason) => (
+                                    <button
+                                        key={reason}
+                                        onClick={() => setCancelReason(reason)}
+                                        className={`w-full py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all text-left ${cancelReason === reason || (reason === 'Others' && !['Customer rude', 'Vehicle problems', ''].includes(cancelReason)) ? "border-red-500 bg-red-50 text-red-700" : "border-gray-200 text-gray-700 hover:border-red-200 hover:bg-red-50/50"}`}
+                                    >
+                                        {reason}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {(!['Customer rude', 'Vehicle problems', ''].includes(cancelReason) || cancelReason === 'Others') && (
+                                <textarea
+                                    autoFocus
+                                    placeholder="Please specify..."
+                                    value={cancelReason === 'Others' ? '' : cancelReason}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 mb-6 min-h-[100px] resize-none"
+                                />
+                            )}
+
+                            <button
+                                onClick={async () => {
+                                    if (!cancelReason) {
+                                        toast.error("Please select a reason");
+                                        return;
+                                    }
+                                    
+                                    try {
+                                        if (incomingOffer?.tripId) {
+                                            await updateTripStatus(incomingOffer.tripId, 'cancelled');
+                                        } else if (incomingOffer) {
+                                            await updateDoc(doc(db, "directOffers", incomingOffer.id), { status: "cancelled", cancelReason: cancelReason });
+                                        } else if (pendingOffer?.tripId) {
+                                            await updateTripStatus(pendingOffer.tripId, 'cancelled');
+                                        } else if (pendingOffer) {
+                                            await updateDoc(doc(db, "directOffers", pendingOffer.id), { status: "cancelled", cancelReason: cancelReason });
+                                        }
+                                        
+                                        toast.success("Trip cancelled successfully");
+                                        setShowCancelReasonOverlay(false);
+                                        setAcceptanceMap(false);
+                                        setIncomingOffer(null);
+                                        setPendingOffer(null);
+                                    } catch (err) {
+                                        console.error(err);
+                                        toast.error("Failed to cancel trip");
+                                    }
+                                }}
+                                className="w-full py-4 bg-red-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-red-700 shadow-xl transition-all disabled:opacity-50"
+                                disabled={!cancelReason}
+                            >
+                                Confirm Cancellation
+                            </button>
+                        </div>
+                    </div>
                 )}
 
             </div>

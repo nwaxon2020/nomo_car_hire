@@ -12,6 +12,7 @@ interface ActiveTripBannerProps {
     onOpenMap: () => void;
     selectedDriver?: DriverWithVehicle | null;
     selectedVehicle?: VehicleLog | null;
+    isMarkCompleteDisabled?: boolean;
 }
 
 export default function ActiveTripBanner({ 
@@ -20,7 +21,8 @@ export default function ActiveTripBanner({
     updateTripStatus,
     onOpenMap,
     selectedDriver, 
-    selectedVehicle, 
+    selectedVehicle,
+    isMarkCompleteDisabled = false,
 }: ActiveTripBannerProps) {
     if (!activeTrip) return null;
 
@@ -79,7 +81,9 @@ export default function ActiveTripBanner({
                 <div className="flex flex-col sm:flex-row gap-2">
                     <button
                         onClick={() => updateTripStatus?.(activeTrip.id, 'completed')}
-                        className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-all"
+                        disabled={isMarkCompleteDisabled}
+                        title={isMarkCompleteDisabled ? "Can only mark as completed when ETA is 3 mins or less" : ""}
+                        className={`flex-1 py-3 font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${isMarkCompleteDisabled ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 text-white'}`}
                     >
                         <FaCheckCircle />
                         Mark Completed
