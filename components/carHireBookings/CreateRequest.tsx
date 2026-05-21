@@ -17,6 +17,7 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
     const [success, setSuccess] = useState(false);
     const [actualRequestCount, setActualRequestCount] = useState(userRequestCount);
     const [vipLevel, setVipLevel] = useState(0);
+    const [firestoreUserName, setFirestoreUserName] = useState<string>("");
 
     const [formData, setFormData] = useState({
         carType: "",
@@ -40,6 +41,12 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
                     if (userDoc.exists()) {
                         const data = userDoc.data();
                         setVipLevel(data.vipLevel || 0);
+                        // ✅ Priority: firstName+lastName > fullName > name > (fallback to Google displayName at submit)
+                        const composedName =
+                            (data.firstName && data.lastName)
+                                ? `${data.firstName} ${data.lastName}`.trim()
+                                : data.fullName || data.name || "";
+                        setFirestoreUserName(composedName);
                     }
 
                     const requestsRef = collection(db, "bookingRequests");
@@ -118,7 +125,7 @@ export default function CreateRequest({ userId, userCity, userRequestCount = 0 }
         try {
             const requestData = {
                 userId: auth.currentUser.uid,
-                userName: auth.currentUser.displayName || "User",
+                userName: firestoreUserName || auth.currentUser.displayName || "User",
                 userEmail: auth.currentUser.email,
                 userCity: userCity || "",
                 carType: formData.carType,

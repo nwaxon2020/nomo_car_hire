@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useJsApiLoader } from "@react-google-maps/api";
 import {
   FaSearch, FaMapMarkerAlt, FaFilter, FaSyncAlt,
-  FaCar, FaUsers, FaInfoCircle, FaChevronRight, FaTimes,
+  FaCar, FaUsers, FaInfoCircle, FaChevronRight, FaTimes, FaExclamationTriangle,
 } from "react-icons/fa";
 import {
-  collection, query, where, onSnapshot, getDocs, doc,
+  collection, collectionGroup, query, where, onSnapshot, getDocs, doc,
+  updateDoc, writeBatch, serverTimestamp,
 } from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebaseConfig";
@@ -167,51 +168,74 @@ export default function CustomerSearchPanel({
     return () => unsub();
   }, []);
 
-  // Check if user already has an active seat somewhere
+  // Check if user already has an active seat somewhere (using collectionGroup for offline resilience)
   const [activeBookingObj, setActiveBookingObj] = useState<LoadBooking | null>(null);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [driverLocationTimestamp, setDriverLocationTimestamp] = useState<number>(0);
 
+  // ✅ NEW: Inactivity tracking for load bookings
+  const [showLoadInactivityPrompt, setShowLoadInactivityPrompt] = useState(false);
+  const [loadInactivityDismissedAt, setLoadInactivityDismissedAt] = useState<number>(0);
+
+  // ✅ REFACTORED: Use collectionGroup real-time listener for active seat detection
+  // This ensures bookings survive network drops, reboots, and offline cache loads
   useEffect(() => {
-    if (!currentUser.uid || bookings.length === 0) {
+    if (!currentUser.uid) {
       setHasActiveBooking(false);
       setActiveBookingObj(null);
       return;
     }
 
-    const checkSeats = async () => {
-      let foundBooking: LoadBooking | null = null;
+    const seatsQuery = query(
+      collectionGroup(db, "seats"),
+      where("customerId", "==", currentUser.uid),
+      where("status", "==", "booked")
+    );
 
-      for (const booking of bookings) {
-        const seatsSnap = await getDocs(
-          collection(db, "loadBookings", booking.id, "seats")
-        );
-        const mySeat = seatsSnap.docs.find(
-          (d) => d.data().customerId === currentUser.uid && d.data().status === "booked"
-        );
-        if (mySeat) {
-          foundBooking = booking;
-          break;
-        }
-      }
+    let bookingUnsub: (() => void) | null = null;
 
-      if (foundBooking) {
-        setHasActiveBooking(true);
-        setActiveBookingDriverName(foundBooking.driverName);
-        setActiveBookingId(foundBooking.id);
-        setActiveBookingObj(foundBooking);
-      } else {
+    const unsub = onSnapshot(seatsQuery, (snap) => {
+      if (snap.empty) {
         setHasActiveBooking(false);
         setActiveBookingObj(null);
+        setActiveBookingDriverName("");
+        setActiveBookingId(null);
+        if (bookingUnsub) { bookingUnsub(); bookingUnsub = null; }
+        return;
       }
-    };
 
-    checkSeats();
-  }, [bookings, currentUser.uid]);
+      // Get the parent booking document reference from the first active seat
+      const seatDoc = snap.docs[0];
+      const bookingRef = seatDoc.ref.parent.parent;
+      if (!bookingRef) return;
+
+      // Listen to the parent booking document in real-time
+      if (bookingUnsub) bookingUnsub();
+      bookingUnsub = onSnapshot(bookingRef, (bookingSnap) => {
+        if (bookingSnap.exists()) {
+          const bookingData = { id: bookingSnap.id, ...bookingSnap.data() } as LoadBooking;
+          setHasActiveBooking(true);
+          setActiveBookingDriverName(bookingData.driverName);
+          setActiveBookingId(bookingData.id);
+          setActiveBookingObj(bookingData);
+        } else {
+          setHasActiveBooking(false);
+          setActiveBookingObj(null);
+        }
+      });
+    });
+
+    return () => {
+      unsub();
+      if (bookingUnsub) bookingUnsub();
+    };
+  }, [currentUser.uid]);
 
   // Sync driver location if trip is active
   useEffect(() => {
     if (!activeBookingObj || activeBookingObj.status !== 'departed') {
       setDriverLocation(null);
+      setDriverLocationTimestamp(0);
       return;
     }
 
@@ -220,12 +244,82 @@ export default function CustomerSearchPanel({
         const data = snap.data();
         if (data.location?.lat && data.location?.lng) {
           setDriverLocation({ lat: data.location.lat, lng: data.location.lng });
+          // Track the timestamp for inactivity detection
+          const ts = data.location?.timestamp || data.lastLocationUpdate;
+          if (ts) {
+            if (typeof ts.toMillis === 'function') setDriverLocationTimestamp(ts.toMillis());
+            else if (ts.seconds) setDriverLocationTimestamp(ts.seconds * 1000);
+            else if (typeof ts === 'number') setDriverLocationTimestamp(ts);
+          }
         }
       }
     });
 
     return () => unsub();
-  }, [activeBookingObj]);
+  }, [activeBookingObj?.id, activeBookingObj?.status]);
+
+  // ✅ NEW: Cancel load booking due to inactivity
+  const cancelLoadBookingDueToInactivity = async (bookingId: string) => {
+    try {
+      const batch = writeBatch(db);
+      // Cancel the booking
+      batch.update(doc(db, "loadBookings", bookingId), {
+        status: "cancelled",
+        cancelReason: "Auto-cancelled: Driver inactive",
+        updatedAt: serverTimestamp(),
+      });
+      // Release all seats
+      const seatsSnap = await getDocs(collection(db, "loadBookings", bookingId, "seats"));
+      seatsSnap.forEach((seatDoc) => {
+        if (seatDoc.data().status === "booked") {
+          batch.update(seatDoc.ref, { status: "available", customerId: "", customerName: "", updatedAt: serverTimestamp() });
+        }
+      });
+      await batch.commit();
+      setHasActiveBooking(false);
+      setActiveBookingObj(null);
+      onCancelOccurred();
+    } catch (err) {
+      console.error("[LoadBooking] Error cancelling due to inactivity:", err);
+    }
+  };
+
+  // ✅ NEW: Inactivity Check for Load Bookings (30-min prompt, 3-hr auto-cancel)
+  useEffect(() => {
+    if (!activeBookingObj || activeBookingObj.status !== 'departed') {
+      setShowLoadInactivityPrompt(false);
+      return;
+    }
+
+    const THIRTY_MIN = 30 * 60 * 1000;
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+    const SUPPRESS_AFTER_DISMISS = 15 * 60 * 1000;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (driverLocationTimestamp === 0) return;
+
+      const elapsed = now - driverLocationTimestamp;
+
+      // 3-hour auto-cancel
+      if (elapsed >= THREE_HOURS) {
+        console.warn("[LoadBooking Inactivity] 3hr auto-cancel for", activeBookingObj.id);
+        cancelLoadBookingDueToInactivity(activeBookingObj.id);
+        setShowLoadInactivityPrompt(false);
+        return;
+      }
+
+      // 30-minute interactive prompt
+      if (elapsed >= THIRTY_MIN) {
+        if (loadInactivityDismissedAt && (now - loadInactivityDismissedAt) < SUPPRESS_AFTER_DISMISS) return;
+        setShowLoadInactivityPrompt(true);
+      } else {
+        setShowLoadInactivityPrompt(false);
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [activeBookingObj?.id, activeBookingObj?.status, driverLocationTimestamp, loadInactivityDismissedAt]);
 
   // Broadcast active seat state globally so the sidebar can intercept navigation
   useEffect(() => {
@@ -747,6 +841,60 @@ export default function CustomerSearchPanel({
               fullName: currentUser.displayName,
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Inactivity Warning Prompt for Load Bookings */}
+      <AnimatePresence>
+        {showLoadInactivityPrompt && activeBookingObj && activeBookingObj.status === 'departed' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[500] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="max-w-md w-full bg-white rounded-[2.5rem] p-8 text-center shadow-2xl overflow-hidden relative"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500" />
+              
+              <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <FaExclamationTriangle className="text-amber-500 text-3xl" />
+              </div>
+
+              <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter mb-2">Driver Inactive</h3>
+              <p className="text-gray-500 text-sm font-medium mb-4">
+                Your driver <span className="text-gray-900 font-bold">{activeBookingObj.driverName}</span> has not sent a location update for over 30 minutes.
+              </p>
+              <p className="text-gray-400 text-xs mb-8">
+                If the driver remains inactive for 3 hours, the trip will be automatically cancelled.
+              </p>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    cancelLoadBookingDueToInactivity(activeBookingObj.id);
+                    setShowLoadInactivityPrompt(false);
+                  }}
+                  className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl shadow-red-500/20 active:scale-95"
+                >
+                  Cancel Trip
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLoadInactivityPrompt(false);
+                    setLoadInactivityDismissedAt(Date.now());
+                  }}
+                  className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all"
+                >
+                  Keep Trip — Driver is still on the way
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>

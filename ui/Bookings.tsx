@@ -225,6 +225,11 @@ export default function BookingUi() {
     const [globalSosNumber, setGlobalSosNumber] = useState<string>("+2348123456789");
     const destinationInputRef = useRef<HTMLInputElement>(null);
 
+    // ✅ NEW: Inactivity tracking for direct bookings
+    const [showInactivityPrompt, setShowInactivityPrompt] = useState(false);
+    const [inactivityDismissedAt, setInactivityDismissedAt] = useState<number>(0);
+    const [driverLocationTimestamp, setDriverLocationTimestamp] = useState<number>(0);
+
     // ✅ NEW: Attach Autocomplete to destination input for premium address formatting
     useEffect(() => {
         if (!isGoogleLoaded || !showDestinationOverlay || !destinationInputRef.current) return;
@@ -774,12 +779,33 @@ export default function BookingUi() {
                         const driverDoc = await getDoc(doc(db, "users", driverId))
                         if (driverDoc.exists()) {
                             const dData = driverDoc.data()
+                            const resolvedFirstName = (dData.firstName || "").trim();
+                            const resolvedLastName = (dData.lastName || "").trim();
+                            let finalFirstName = resolvedFirstName;
+                            let finalLastName = resolvedLastName;
+                            let finalFullName = "";
+
+                            if (resolvedFirstName || resolvedLastName) {
+                                finalFullName = `${resolvedFirstName} ${resolvedLastName}`.trim();
+                            } else if (dData.fullName && typeof dData.fullName === 'string' && dData.fullName.trim() !== '') {
+                                finalFullName = dData.fullName.trim();
+                                finalFirstName = finalFullName.split(" ")[0] || "";
+                                finalLastName = finalFullName.split(" ").slice(1).join(" ") || "";
+                            } else if (dData.displayName && typeof dData.displayName === 'string' && dData.displayName.trim() !== '') {
+                                finalFullName = dData.displayName.trim();
+                                finalFirstName = finalFullName.split(" ")[0] || "";
+                                finalLastName = finalFullName.split(" ").slice(1).join(" ") || "";
+                            } else {
+                                finalFullName = "Driver";
+                                finalFirstName = "Driver";
+                            }
+
                             const fetchedDriver: any = {
                                 id: driverDoc.id,
                                 uid: dData.uid || driverDoc.id,
-                                firstName: dData.firstName || "",
-                                lastName: dData.lastName || "",
-                                fullName: dData.fullName || `${dData.firstName} ${dData.lastName}`,
+                                firstName: finalFirstName,
+                                lastName: finalLastName,
+                                fullName: finalFullName,
                                 phoneNumber: dData.phoneNumber || dData.phone || "",
                                 profileImage: dData.profileImage || dData.photoURL || "",
                                 vehicleLog: dData.vehicleLog || [],
@@ -892,12 +918,33 @@ export default function BookingUi() {
                 const data = docSnap.data();
                 if (data.uid === currentUserId) return; // Skip self
 
+                const resolvedFirstName = (data.firstName || "").trim();
+                const resolvedLastName = (data.lastName || "").trim();
+                let finalFirstName = resolvedFirstName;
+                let finalLastName = resolvedLastName;
+                let finalFullName = "";
+
+                if (resolvedFirstName || resolvedLastName) {
+                    finalFullName = `${resolvedFirstName} ${resolvedLastName}`.trim();
+                } else if (data.fullName && typeof data.fullName === 'string' && data.fullName.trim() !== '') {
+                    finalFullName = data.fullName.trim();
+                    finalFirstName = finalFullName.split(" ")[0] || "";
+                    finalLastName = finalFullName.split(" ").slice(1).join(" ") || "";
+                } else if (data.displayName && typeof data.displayName === 'string' && data.displayName.trim() !== '') {
+                    finalFullName = data.displayName.trim();
+                    finalFirstName = finalFullName.split(" ")[0] || "";
+                    finalLastName = finalFullName.split(" ").slice(1).join(" ") || "";
+                } else {
+                    finalFullName = "Driver";
+                    finalFirstName = "Driver";
+                }
+
                 const driver: Driver = {
                     id: docSnap.id,
                     uid: data.uid || docSnap.id,
-                    firstName: data.firstName || "",
-                    lastName: data.lastName || "",
-                    fullName: data.fullName || `${data.firstName} ${data.lastName}`.trim(),
+                    firstName: finalFirstName,
+                    lastName: finalLastName,
+                    fullName: finalFullName,
                     phoneNumber: data.phoneNumber || data.phone || data.driverPhone || "",
                     email: data.email || "",
                     city: data.city || "",
@@ -2087,9 +2134,24 @@ export default function BookingUi() {
         const { driver, vehicle } = tempBookingData;
 
         try {
+            const resolvedCustomerName = (() => {
+                if (currentUser.fullName && typeof currentUser.fullName === 'string' && currentUser.fullName.trim() !== '') {
+                    return currentUser.fullName.trim();
+                }
+                const fName = (currentUser.firstName || '').trim();
+                const lName = (currentUser.lastName || '').trim();
+                if (fName || lName) {
+                    return `${fName} ${lName}`.trim();
+                }
+                if (currentUser.displayName && typeof currentUser.displayName === 'string' && currentUser.displayName.trim() !== '') {
+                    return currentUser.displayName.trim();
+                }
+                return 'Customer';
+            })();
+
             const offerData: any = {
                 customerId: currentUser.uid,
-                customerName: currentUser.fullName || (currentUser.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : (currentUser.displayName || 'Customer')),
+                customerName: resolvedCustomerName,
                 driverId: driver.uid,
                 driverName: driver.fullName || `${driver.firstName} ${driver.lastName}`,
                 vehicleId: vehicle.id,
@@ -2118,7 +2180,7 @@ export default function BookingUi() {
             await triggerNotification(
                 driver.uid,
                 "New Booking Request!",
-                `${currentUser.displayName || "A customer"} is requesting a ride to ${destinationInput}!`,
+                `${resolvedCustomerName} is requesting a ride to ${destinationInput}!`,
                 "booking",
                 "/user/mobility/bookings"
             );
@@ -2274,7 +2336,7 @@ export default function BookingUi() {
                     setAcceptanceMap(true);
                 } else if (offer.status === 'completed') {
                     setPendingOffer(offer);
-                    setTripJustFinished(true);
+                    setTripJustFinished(false);
                     setShowRatingCard(true);
                 } else if (offer.status === 'rejected') {
                     setDriverResponse("busy");
@@ -2338,7 +2400,7 @@ export default function BookingUi() {
                 if (offer.status === 'pending') {
                     setIncomingOffer(offer);
                     setDriverResponse("none");
-                } else if (offer.status === 'cancelled') {
+                } else if (offer.status === 'cancelled' && !offer.driverAcknowledged) {
                     setDriverResponse("cancelled");
                     setTimeout(() => {
                         setIncomingOffer(null);
@@ -2369,7 +2431,7 @@ export default function BookingUi() {
                     setIncomingOffer(data);
                     if (data.status === 'accepted' || data.status === 'started') setAcceptanceMap(true);
                 } else {
-                    const cancelledDoc = snapshot.docs.find(d => d.data().status === 'cancelled');
+                    const cancelledDoc = snapshot.docs.find(d => d.data().status === 'cancelled' && !d.data().driverAcknowledged);
                     if (cancelledDoc) {
                         setIncomingOffer({ ...cancelledDoc.data(), id: cancelledDoc.id } as DirectOffer);
                         setDriverResponse("cancelled");
@@ -2394,6 +2456,67 @@ export default function BookingUi() {
         }
         return () => clearTimeout(timer);
     }, [countdown, pendingOffer]);
+
+    // ✅ NEW: Inactivity Check for Direct Bookings (30-min prompt, 3-hr auto-cancel)
+    // First, listen to the driver's user profile to get their location timestamp
+    useEffect(() => {
+        if (!pendingOffer || pendingOffer.status !== 'started') {
+            setDriverLocationTimestamp(0);
+            return;
+        }
+
+        const unsub = onSnapshot(doc(db, "users", pendingOffer.driverId), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                const ts = data.location?.timestamp || data.lastLocationUpdate;
+                if (ts) {
+                    if (typeof ts.toMillis === 'function') setDriverLocationTimestamp(ts.toMillis());
+                    else if (ts.seconds) setDriverLocationTimestamp(ts.seconds * 1000);
+                    else if (typeof ts === 'number') setDriverLocationTimestamp(ts);
+                }
+            }
+        });
+
+        return () => unsub();
+    }, [pendingOffer?.id, pendingOffer?.status, pendingOffer?.driverId]);
+
+    // Then, periodically check for inactivity
+    useEffect(() => {
+        if (!pendingOffer || pendingOffer.status !== 'started') {
+            setShowInactivityPrompt(false);
+            return;
+        }
+
+        const THIRTY_MIN = 30 * 60 * 1000;
+        const THREE_HOURS = 3 * 60 * 60 * 1000;
+        const SUPPRESS_AFTER_DISMISS = 15 * 60 * 1000; // 15 min cooldown after "Keep Trip"
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            if (driverLocationTimestamp === 0) return; // No timestamp available yet
+
+            const elapsed = now - driverLocationTimestamp;
+
+            // 3-hour auto-cancel
+            if (elapsed >= THREE_HOURS) {
+                console.warn("[Inactivity] 3hr auto-cancel triggered for offer", pendingOffer.id);
+                cancelOffer(pendingOffer.id, "Auto-cancelled: Driver inactive for 3+ hours");
+                setShowInactivityPrompt(false);
+                return;
+            }
+
+            // 30-minute interactive prompt
+            if (elapsed >= THIRTY_MIN) {
+                // Don't re-show if dismissed within the last 15 min
+                if (inactivityDismissedAt && (now - inactivityDismissedAt) < SUPPRESS_AFTER_DISMISS) return;
+                setShowInactivityPrompt(true);
+            } else {
+                setShowInactivityPrompt(false);
+            }
+        }, 15000); // Check every 15 seconds
+
+        return () => clearInterval(interval);
+    }, [pendingOffer?.id, pendingOffer?.status, driverLocationTimestamp, inactivityDismissedAt]);
 
     // Check for active trips on component mount
     useEffect(() => {
@@ -2558,7 +2681,7 @@ export default function BookingUi() {
                                             {/* EMERGENCY SOS CONTROLS */}
                                             <button
                                                 onClick={() => {
-                                                    const phone = globalSosNumber || "+2348123456789";
+                                                    const phone = activeEmergencyContact?.phoneNumber || globalSosNumber || "+2348123456789";
                                                     handlePhoneCall(phone.startsWith('+') ? phone : '+' + phone);
                                                 }}
                                                 className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
@@ -2567,8 +2690,12 @@ export default function BookingUi() {
                                             </button>
                                             <button
                                                 onClick={() => {
-                                                    const phone = (globalSosNumber || "2348123456789").replace(/\D/g, '');
-                                                    const msg = `🚨 *EMERGENCY SOS ALERT* 🚨\n\nI am on a trip and need assistance. Trip ID: ${pendingOffer.id || "Unknown"}\n\n_Sent via Nomo Safety System_`;
+                                                    const rawPhone = activeEmergencyContact?.phoneNumber || globalSosNumber || "2348123456789";
+                                                    const phone = rawPhone.replace(/\D/g, '');
+                                                    const lat = customerLocation?.lat || pendingOffer?.customerLocation?.lat;
+                                                    const lng = customerLocation?.lng || pendingOffer?.customerLocation?.lng;
+                                                    const locationLink = (lat && lng) ? `https://maps.google.com/?q=${lat},${lng}` : '';
+                                                    const msg = `🚨 *EMERGENCY SOS ALERT* 🚨\n\nI am on a trip and need assistance immediately! Here is my current location:\n${locationLink ? `📍 Location: ${locationLink}` : "📍 Location: (GPS location pending)"}\n\n_Sent via Nomo Safety System_`;
                                                     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
                                                 }}
                                                 className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
@@ -2652,6 +2779,52 @@ export default function BookingUi() {
                 </div>
             )}
 
+            {/* ✅ NEW: Inactivity Warning Prompt for Direct Bookings */}
+            {showInactivityPrompt && pendingOffer && pendingOffer.status === 'started' && (
+                <div className="fixed inset-0 z-[400] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="max-w-md w-full bg-white rounded-[2.5rem] p-8 text-center shadow-2xl overflow-hidden relative"
+                    >
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500" />
+                        
+                        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                            <FaExclamationTriangle className="text-amber-500 text-3xl" />
+                        </div>
+
+                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter mb-2">Driver Inactive</h3>
+                        <p className="text-gray-500 text-sm font-medium mb-4">
+                            Your driver <span className="text-gray-900 font-bold">{pendingOffer.driverName}</span> has not sent a location update for over 30 minutes.
+                        </p>
+                        <p className="text-gray-400 text-xs mb-8">
+                            If the driver remains inactive for 3 hours, the trip will be automatically cancelled.
+                        </p>
+
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => {
+                                    cancelOffer(pendingOffer.id, "Customer cancelled: Driver inactive");
+                                    setShowInactivityPrompt(false);
+                                }}
+                                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl shadow-red-500/20 active:scale-95"
+                            >
+                                Cancel Trip
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowInactivityPrompt(false);
+                                    setInactivityDismissedAt(Date.now());
+                                }}
+                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all"
+                            >
+                                Keep Trip — Driver is still on the way
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
             {/* ✅ NEW: Trip Rating Card Overlay */}
             {showRatingCard && pendingOffer && (
                 <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2699,17 +2872,17 @@ export default function BookingUi() {
                                 {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
                             </button>
                             <button
-                                onClick={async () => {
-                                    // Just close and clear
-                                    if (pendingOffer.id) await deleteDoc(doc(db, "directOffers", pendingOffer.id));
-                                    setShowRatingCard(false);
-                                    setPendingOffer(null);
-                                    setAcceptanceMap(false);
-                                }}
-                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-500 font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all"
-                            >
-                                Close Without Rating
-                            </button>
+                                                                onClick={async () => {
+                                                                    // Just close and clear
+                                                                    if (pendingOffer.id) await deleteDoc(doc(db, "directOffers", pendingOffer.id));
+                                                                    setShowRatingCard(false);
+                                                                    setPendingOffer(null);
+                                                                    setAcceptanceMap(false);
+                                                                }}
+                                                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-500 font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all"
+                                                            >
+                                                                Cancel
+                                                            </button>
                         </div>
                     </motion.div>
                 </div>
@@ -2975,7 +3148,15 @@ export default function BookingUi() {
                                         <div className="py-5">
                                             <div className="max-w-md mx-auto bg-red-50 border border-red-100 rounded-3xl p-6 md:p-8 text-center relative overflow-hidden shadow-lg">
                                                 <button
-                                                    onClick={() => setIncomingOffer(null)}
+                                                    onClick={async () => {
+                                                        if (incomingOffer?.id) {
+                                                            try {
+                                                                await updateDoc(doc(db, "directOffers", incomingOffer.id), { driverAcknowledged: true });
+                                                            } catch (e) { console.error("Failed to acknowledge cancellation:", e); }
+                                                        }
+                                                        setIncomingOffer(null);
+                                                        setDriverResponse("none");
+                                                    }}
                                                     className="absolute top-4 right-4 p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-all"
                                                 >
                                                     <FaTimes />

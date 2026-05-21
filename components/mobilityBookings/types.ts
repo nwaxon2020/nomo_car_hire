@@ -197,6 +197,8 @@ export interface DirectOffer {
         lng: number;
     };
     tripId?: string;
+    cancelReason?: string;
+    driverAcknowledged?: boolean;
 }
 
 export interface BookingRequest {

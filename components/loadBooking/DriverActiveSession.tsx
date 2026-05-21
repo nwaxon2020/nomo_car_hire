@@ -57,6 +57,9 @@ export default function DriverActiveSession({
   const [showCancelWarning, setShowCancelWarning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
+  // Inactivity tracking state
+  const [driverLastLocationTimestamp, setDriverLastLocationTimestamp] = useState<number>(0);
+
   const { isLoaded: mapLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: MAP_LIBRARIES,
@@ -89,6 +92,110 @@ export default function DriverActiveSession({
       unsubGlobalSos();
     };
   }, [booking.id]);
+
+  // ✅ NEW: Sync driver's own location timestamp for inactivity tracking
+  useEffect(() => {
+    if (!driverId || !tripStarted) {
+      setDriverLastLocationTimestamp(0);
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, "users", driverId), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const ts = data.location?.timestamp || data.lastLocationUpdate;
+        if (ts) {
+          if (typeof ts.toMillis === 'function') setDriverLastLocationTimestamp(ts.toMillis());
+          else if (ts.seconds) setDriverLastLocationTimestamp(ts.seconds * 1000);
+          else if (typeof ts === 'number') setDriverLastLocationTimestamp(ts);
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [driverId, tripStarted]);
+
+  // ✅ NEW: Auto-cancel session due to driver inactivity (3 hours)
+  const handleAutoCancelInactivity = async () => {
+    try {
+      const today = getTodayString();
+
+      // 1. Mark the booking as cancelled due to inactivity
+      await updateDoc(doc(db, "loadBookings", booking.id), {
+        status: "cancelled",
+        cancelReason: "Auto-cancelled: Driver inactive for 3+ hours",
+        cancelledAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // 1b. Also update all booked seats so passengers are released globally
+      const batch = writeBatch(db);
+      seats.forEach(seat => {
+        if (seat.status === "booked") {
+          const seatRef = doc(db, "loadBookings", booking.id, "seats", String(seat.seatNumber));
+          batch.update(seatRef, {
+            status: "available",
+            customerId: null,
+            customerName: null,
+            customerImage: null,
+            trustScore: null,
+            bookedAt: null,
+          });
+        }
+      });
+      await batch.commit();
+
+      // 2. Apply trust penalty if there were booked passengers
+      const activeBookedSeats = seats.filter((s) => s.status === "booked").length;
+      if (activeBookedSeats > 0) {
+        const driverRef = doc(db, "users", driverId);
+        const snap = await getDoc(driverRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          const currentScore = data.driverTrustScore ?? 100;
+          const newScore = Math.max(0, currentScore - 25);
+
+          const updates: any = {
+            driverTrustScore: newScore,
+            driverTrustCancels: (data.driverTrustCancels ?? 0) + 1,
+          };
+
+          if (newScore === 0) {
+            updates.driverTrustExhaustedAt = today;
+            updates.driverLoadBlockedUntil = getTomorrowString();
+          }
+
+          await updateDoc(driverRef, updates);
+        }
+        onCancelOccurred?.();
+        toast.error("Session auto-cancelled due to 3 hours of inactivity. Trust score reduced by 25%.");
+      } else {
+        toast.error("Session auto-cancelled due to 3 hours of inactivity.");
+      }
+
+      onEndSession();
+    } catch (error) {
+      console.error("Auto cancel error:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!tripStarted || driverLastLocationTimestamp === 0) return;
+
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - driverLastLocationTimestamp;
+
+      if (elapsed >= THREE_HOURS) {
+        console.warn("[Driver Inactivity] 3hr auto-cancel triggered for booking:", booking.id);
+        handleAutoCancelInactivity();
+      }
+    }, 15000); // Check every 15 seconds
+
+    return () => clearInterval(interval);
+  }, [tripStarted, driverLastLocationTimestamp, booking.id, seats]);
 
   // Handle cancel session
   const handleCancelSession = async () => {
