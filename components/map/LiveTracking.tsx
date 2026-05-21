@@ -63,10 +63,23 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
 
     // ─── Network monitoring ────────────────────────────────────────────────────
     useEffect(() => {
-        const handleOnline = () => {
+        const handleOnline = async () => {
             setIsOnline(true);
             toast.success('Network restored');
             setStatus('Reconnecting...');
+            // Retry: reload data after network comes back
+            if (driverId) {
+                try {
+                  const driverDoc = await getDoc(doc(db, 'users', driverId));
+                  if (driverDoc.exists() && driverDoc.data().location) {
+                    const loc = driverDoc.data().location;
+                    setLocationData({ lat: loc.lat, lng: loc.lng, address: loc.address });
+                    setStatus('Tracking...');
+                  }
+                } catch (err) {
+                  console.error('Error reloading driver location after network restore:', err);
+                }
+            }
         };
         const handleOffline = () => {
             setIsOnline(false);
@@ -79,7 +92,7 @@ export default function LiveTracking({ driverId }: { driverId: string }) {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, []);
+    }, [driverId]);
 
     // ─── Smooth animation for car movement ────────────────────────────────────
     const animateCarMovement = (newPos: { lat: number; lng: number }) => {

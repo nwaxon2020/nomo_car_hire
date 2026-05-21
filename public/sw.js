@@ -42,16 +42,20 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (!event.request.url.startsWith('http')) return;
 
-  // Skip Firestore / Firebase API calls — always live
+  // Allow Firebase realtime queries but NOT auth/token endpoints (for offline resilience)
   const url = new URL(event.request.url);
+  const isAuthOrToken = url.pathname.includes('token') || url.pathname.includes('auth') || url.pathname.includes('securtoken');
+  
   if (
-    url.hostname.includes('firestore.googleapis.com') ||
-    url.hostname.includes('firebase.googleapis.com') ||
+    (url.hostname.includes('firestore.googleapis.com') && isAuthOrToken) ||
+    (url.hostname.includes('firebase.googleapis.com') && isAuthOrToken) ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
     url.hostname.includes('securetoken.googleapis.com')
   ) {
-    return;
+    return; // Skip auth calls - always live
   }
+  
+  // Allow Firestore data calls through to service worker for caching
 
   event.respondWith(
     fetch(event.request)

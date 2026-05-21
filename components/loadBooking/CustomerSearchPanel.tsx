@@ -194,36 +194,52 @@ export default function CustomerSearchPanel({
 
     let bookingUnsub: (() => void) | null = null;
 
-    const unsub = onSnapshot(seatsQuery, (snap) => {
-      if (snap.empty) {
-        setHasActiveBooking(false);
-        setActiveBookingObj(null);
-        setActiveBookingDriverName("");
-        setActiveBookingId(null);
-        if (bookingUnsub) { bookingUnsub(); bookingUnsub = null; }
-        return;
-      }
+    const unsub = onSnapshot(
+      seatsQuery,
+      (snap: any) => {
+        try {
+          if (snap.empty) {
+            setHasActiveBooking(false);
+            setActiveBookingObj(null);
+            setActiveBookingDriverName("");
+            setActiveBookingId(null);
+            if (bookingUnsub) { bookingUnsub(); bookingUnsub = null; }
+            return;
+          }
 
-      // Get the parent booking document reference from the first active seat
-      const seatDoc = snap.docs[0];
-      const bookingRef = seatDoc.ref.parent.parent;
-      if (!bookingRef) return;
+          // Get the parent booking document reference from the first active seat
+          const seatDoc = snap.docs[0];
+          const bookingRef = seatDoc.ref.parent.parent;
+          if (!bookingRef) return;
 
-      // Listen to the parent booking document in real-time
-      if (bookingUnsub) bookingUnsub();
-      bookingUnsub = onSnapshot(bookingRef, (bookingSnap) => {
-        if (bookingSnap.exists()) {
-          const bookingData = { id: bookingSnap.id, ...bookingSnap.data() } as LoadBooking;
-          setHasActiveBooking(true);
-          setActiveBookingDriverName(bookingData.driverName);
-          setActiveBookingId(bookingData.id);
-          setActiveBookingObj(bookingData);
-        } else {
-          setHasActiveBooking(false);
-          setActiveBookingObj(null);
+          // Listen to the parent booking document in real-time
+          if (bookingUnsub) bookingUnsub();
+          bookingUnsub = onSnapshot(
+            bookingRef,
+            (bookingSnap: any) => {
+              if (bookingSnap.exists()) {
+                const bookingData = { id: bookingSnap.id, ...bookingSnap.data() } as LoadBooking;
+                setHasActiveBooking(true);
+                setActiveBookingDriverName(bookingData.driverName);
+                setActiveBookingId(bookingData.id);
+                setActiveBookingObj(bookingData);
+              } else {
+                setHasActiveBooking(false);
+                setActiveBookingObj(null);
+              }
+            },
+            (error: any) => {
+              console.error("[LoadBooking] Error listening to booking doc:", error);
+            }
+          );
+        } catch (err) {
+          console.error("[LoadBooking] Error in active booking listener:", err);
         }
-      });
-    });
+      },
+      (error: any) => {
+        console.error("[LoadBooking] Error listening to active seats:", error);
+      }
+    );
 
     return () => {
       unsub();
@@ -296,10 +312,15 @@ export default function CustomerSearchPanel({
     const SUPPRESS_AFTER_DISMISS = 15 * 60 * 1000;
 
     const interval = setInterval(() => {
-      const now = Date.now();
-      if (driverLocationTimestamp === 0) return;
+      try {
+        const now = Date.now();
+        
+        // Use driver location timestamp as inactivity marker (survives app restart via Firestore)
+        let inactivityStartTime = driverLocationTimestamp;
+        
+        if (!inactivityStartTime || inactivityStartTime === 0) return;
 
-      const elapsed = now - driverLocationTimestamp;
+        const elapsed = now - inactivityStartTime;
 
       // 3-hour auto-cancel
       if (elapsed >= THREE_HOURS) {
@@ -314,6 +335,10 @@ export default function CustomerSearchPanel({
         if (loadInactivityDismissedAt && (now - loadInactivityDismissedAt) < SUPPRESS_AFTER_DISMISS) return;
         setShowLoadInactivityPrompt(true);
       } else {
+        setShowLoadInactivityPrompt(false);
+      }
+      } catch (err) {
+        console.error("Error in inactivity check:", err);
         setShowLoadInactivityPrompt(false);
       }
     }, 15000);
@@ -349,33 +374,40 @@ export default function CustomerSearchPanel({
 
   // Filter bookings by user's location + destination search
   useEffect(() => {
-    if (bookings.length === 0) {
-      setFiltered([]);
-      return;
-    }
+      try {
+        if (bookings.length === 0) {
+          setFiltered([]);
+          return;
+        }
 
-    const userCity = (currentUser.city || "").toLowerCase();
-    const userState = (currentUser.state || "").toLowerCase();
-    const locAddr = (manualLocation || "").toLowerCase();
+        const userCity = (currentUser?.city || "").toLowerCase();
+        const userState = (currentUser?.state || "").toLowerCase();
+        const locAddr = (manualLocation || "").toLowerCase();
 
-    let result = bookings.filter((b) => b.driverId !== currentUser.uid);
+        let result = bookings.filter((b) => {
+          return b && b.driverId && b.driverId !== currentUser?.uid;
+        });
 
-    // Filter logic
-    result = result.filter((b) => {
-      // ALWAYS include their active booking so they can manage it
-      if (b.id === activeBookingId) return true;
+        // Filter logic
+        result = result.filter((b) => {
+          if (!b || !b.id) return false;
+          // ALWAYS include their active booking so they can manage it
+          if (b.id === activeBookingId) return true;
 
-      const bCity = (b.driverCity || "").toLowerCase();
-      const bState = (b.driverState || "").toLowerCase();
-
-      // 1. Locality match
+          const bCity = (b.driverCity || "").toLowerCase();
+          const bState = (b.driverState || "").toLowerCase();
       let stringLocalityMatch = false;
 
       if (locAddr.trim()) {
         // Strict match against the driver's set meeting point only
-        const normInput = normalizeForSearch(locAddr);
-        const normPoint = normalizeForSearch(b.meetingPoint || "");
-        stringLocalityMatch = normPoint.includes(normInput);
+        try {
+          const normInput = normalizeForSearch(locAddr);
+          const normPoint = normalizeForSearch(b.meetingPoint || "");
+          stringLocalityMatch = !!(normPoint && normPoint.includes(normInput));
+        } catch (err) {
+          console.warn("Error normalizing search:", err);
+          stringLocalityMatch = false;
+        }
       } else {
         // Fallback to profile location if search is empty
         stringLocalityMatch = (!!userCity && (bCity.includes(userCity) || userCity.includes(bCity))) || (!!userState && (bState.includes(userState) || userState.includes(bState)));
@@ -440,8 +472,12 @@ export default function CustomerSearchPanel({
     });
 
     setFiltered(result);
-    setVisibleCount(20); // Reset count on filter change
-  }, [bookings, destination, currentUser, activeBookingId, manualLocation]);
+      setVisibleCount(20);
+      } catch (err) {
+        console.error("Error in booking filter effect:", err);
+        setFiltered([]);
+      }
+    }, [bookings, activeBookingId, currentUser, manualLocation]);
 
   const handleClearDestination = () => {
     setDestination("");
