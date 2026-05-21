@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
-import { FiCheck, FiX, FiFlag, FiTrash2, FiMessageSquare, FiEye, FiImage, FiLock, FiPlus } from "react-icons/fi";
+import { FiCheck, FiX, FiFlag, FiTrash2, FiMessageSquare, FiEye, FiImage, FiLock, FiPlus, FiAlertTriangle } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
 import LoadingRound from "@/components/re-useable-loading";
@@ -21,6 +21,8 @@ export default function ManageTransport() {
     const [activeTab, setActiveTab] = useState<'partners' | 'manual'>('partners');
     const [manualListings, setManualListings] = useState<any[]>([]);
     const [loadingManual, setLoadingManual] = useState(false);
+    const [showDeleteTripId, setShowDeleteTripId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const user = auth.currentUser;
     const isCEO = user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY;
@@ -138,12 +140,20 @@ export default function ManageTransport() {
     };
 
     const handleDeleteManual = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this trip?")) return;
+        setShowDeleteTripId(id);
+    };
+
+    const confirmDeleteManual = async () => {
+        if (!showDeleteTripId) return;
+        setIsDeleting(true);
         try {
-            await deleteDoc(doc(db, "transportListings", id));
-            toast.success("Trip Deleted");
+            await deleteDoc(doc(db, "transportListings", showDeleteTripId));
+            toast.success("Trip listings removed from platform");
+            setShowDeleteTripId(null);
         } catch (err) {
             toast.error("Failed to delete trip");
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -336,7 +346,7 @@ export default function ManageTransport() {
                                 <div key={trip.id} className="bg-slate-900 border border-white/10 rounded-2xl p-6 relative group hover:border-blue-500/30 transition-all shadow-xl">
                                     <button
                                         onClick={() => handleDeleteManual(trip.id)}
-                                        className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                                        className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-500 rounded-lg md:opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
                                     >
                                         <FiTrash2 size={14} />
                                     </button>
@@ -452,6 +462,56 @@ export default function ManageTransport() {
                     // No need to refresh - the companies list will auto-update via onSnapshot
                 }}
             />
+
+            {/* Delete Trip Confirmation Overlay */}
+            <AnimatePresence>
+                {showDeleteTripId && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+                        onClick={() => !isDeleting && setShowDeleteTripId(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-[#0d1b2e] border border-red-500/30 rounded-2xl p-8 w-full max-w-sm shadow-2xl shadow-red-900/20 text-center"
+                        >
+                            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                                <FiAlertTriangle className="text-red-500" size={28} />
+                            </div>
+                            <h3 className="text-xl font-black uppercase tracking-tight text-white mb-2">Delete Trip?</h3>
+                            <p className="text-slate-400 text-sm font-medium mb-8 leading-relaxed">
+                                This will permanently remove the trip listing from the platform. This action <span className="text-red-400 font-bold">cannot be undone</span>.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowDeleteTripId(null)}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl font-black uppercase tracking-widest text-xs transition-all disabled:opacity-40"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDeleteManual}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-60"
+                                >
+                                    {isDeleting ? (
+                                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                        <><FiTrash2 size={13} /> Delete</>
+                                    )}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
