@@ -102,7 +102,10 @@ service cloud.firestore {
         (hasPermission('/admin/manage-driver') && 
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verified'])) ||
 
-        // 8. CEO has full autonomy
+        // 8. Cross-user trip history syncing (when trips are marked completed)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tripHistory'])) ||
+
+        // 9. CEO has full autonomy
         isCEO()
       );
       allow delete: if isCEO();
@@ -196,7 +199,8 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow update: if request.auth != null && (
         isAnyAdmin() || 
-        resource.data.driverId == request.auth.uid
+        resource.data.driverId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentTripId'])
       );
       allow delete: if isCEO() || (request.auth != null && resource.data.driverId == request.auth.uid);
     }
