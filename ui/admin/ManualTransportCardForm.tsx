@@ -110,7 +110,7 @@ export default function ManualTransportCardForm({ isOpen, onClose, onSuccess }: 
 
             await addDoc(collection(db, "transportListings"), cardData);
             toast.success("Transport card created successfully!");
-            
+
             // Reset form
             setStep('company');
             setFormData({
@@ -124,7 +124,7 @@ export default function ManualTransportCardForm({ isOpen, onClose, onSuccess }: 
             setSelectedCompany("");
             setCustomCompanyName("");
             setIsCustomCompany(false);
-            
+
             onSuccess?.();
             onClose();
         } catch (err) {
@@ -143,14 +143,14 @@ export default function ManualTransportCardForm({ isOpen, onClose, onSuccess }: 
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     onClick={onClose}
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4"
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-1"
                 >
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.9, opacity: 0 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+                        className="bg-slate-900 border border-white/10 p-4 md:p-8 rounded md:rounded-xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between mb-6">

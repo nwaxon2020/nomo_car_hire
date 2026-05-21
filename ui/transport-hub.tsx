@@ -137,29 +137,16 @@ const TransportHubUi = () => {
         };
     }, []);
 
-    const allListings = [...listings, ...scrapedListings]
+    const allListings = listings
         .sort((a, b) => {
-            // Priority: manual > registered > scraped
-            const typePriority: Record<string, number> = { manual: 0, registered: 1, scraped: 2 };
-            return (typePriority[a.type] ?? 3) - (typePriority[b.type] ?? 3);
+            // Priority: manual > registered
+            const typePriority: Record<string, number> = { manual: 0, registered: 1 };
+            return (typePriority[a.type] ?? 2) - (typePriority[b.type] ?? 2);
         })
-        .filter((item, index, arr) => {
+        .filter((item) => {
             // Filter out registered listings from expired or unapproved companies
             if ((item.type === 'registered' || item.type === 'manual') && item.companyId && hiddenCompanies.has(item.companyId)) {
                 return false;
-            }
-
-            // Deduplication: If this is a scraped card, check if there's a matching manual card
-            if (item.type === 'scraped') {
-                const hasMatchingManualCard = arr.some(card => 
-                    card.type === 'manual' &&
-                    card.from.toLowerCase() === item.from.toLowerCase() &&
-                    card.to.toLowerCase() === item.to.toLowerCase() &&
-                    card.company.toLowerCase() === item.company.toLowerCase()
-                );
-                if (hasMatchingManualCard) {
-                    return false; // Filter out this scraped card
-                }
             }
 
             const fromMatch = item.from.toLowerCase().includes(searchFrom.toLowerCase());
@@ -414,7 +401,7 @@ const TRANSPORT_HUB_COLORS = [
 
 const ListingCard = ({ item, colors }: { item: TransportListing; colors: any }) => {
     const bookUrl = item.type === 'manual' ? item.bookNowUrl : item.website;
-    const typeLabel = item.type === 'manual' ? 'Admin Created' : item.type === 'scraped' ? 'Scraped' : 'Verified';
+    const typeLabel = 'Verified';
 
     return (
         <motion.div

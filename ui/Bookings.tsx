@@ -221,6 +221,8 @@ export default function BookingUi() {
     const [showCancelReasonOverlay, setShowCancelReasonOverlay] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
     const [tripJustFinished, setTripJustFinished] = useState(false);
+    const [activeEmergencyContact, setActiveEmergencyContact] = useState<any>(null);
+    const [globalSosNumber, setGlobalSosNumber] = useState<string>("+2348123456789");
     const destinationInputRef = useRef<HTMLInputElement>(null);
 
     // ✅ NEW: Attach Autocomplete to destination input for premium address formatting
@@ -524,12 +526,40 @@ export default function BookingUi() {
                     }).slice(0, 5);
                     setContactedDrivers(sorted);
                 }
+
+                // Sync active emergency contact
+                const emergencyContacts = data.emergencyContact || [];
+                if (emergencyContacts.length > 0) {
+                    const activeContact = emergencyContacts.find((c: any) => c.isActive);
+                    if (activeContact) {
+                        setActiveEmergencyContact(activeContact);
+                    } else {
+                        // Fallback to most recent
+                        const sortedByDate = emergencyContacts.sort(
+                            (a: any, b: any) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0)
+                        );
+                        setActiveEmergencyContact(sortedByDate[0]);
+                    }
+                } else {
+                    setActiveEmergencyContact(null);
+                }
             }
         }, (error) => {
             console.error("[Bookings] Error listening to user profile:", error);
         });
 
-        return () => unsubscribe();
+        // ✅ NEW: Fetch Global SOS Number
+        const globalSosRef = doc(db, "site_configs", "mobility");
+        const unsubGlobalSos = onSnapshot(globalSosRef, (snap) => {
+            if (snap.exists() && snap.data().emergencySosPhone) {
+                setGlobalSosNumber(snap.data().emergencySosPhone);
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            unsubGlobalSos();
+        };
     }, [currentUserId]);
 
     // Dedicated listener for Customer's active booking request
@@ -2527,13 +2557,20 @@ export default function BookingUi() {
                                         <>
                                             {/* EMERGENCY SOS CONTROLS */}
                                             <button
-                                                onClick={() => handlePhoneCall("+2348123456789")} // Admin/Emergency Placeholder
+                                                onClick={() => {
+                                                    const phone = globalSosNumber || "+2348123456789";
+                                                    handlePhoneCall(phone.startsWith('+') ? phone : '+' + phone);
+                                                }}
                                                 className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
                                             >
                                                 <FaExclamationTriangle size={14} /> SOS Call
                                             </button>
                                             <button
-                                                onClick={() => window.open(`https://wa.me/2348123456789?text=${encodeURIComponent("EMERGENCY HELP: I am on a trip and need assistance. Trip ID: " + (pendingOffer.id || "Unknown"))}`, '_blank')}
+                                                onClick={() => {
+                                                    const phone = (globalSosNumber || "2348123456789").replace(/\D/g, '');
+                                                    const msg = `🚨 *EMERGENCY SOS ALERT* 🚨\n\nI am on a trip and need assistance. Trip ID: ${pendingOffer.id || "Unknown"}\n\n_Sent via Nomo Safety System_`;
+                                                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                                                }}
                                                 className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
                                             >
                                                 <FaCar size={14} /> SOS WhatsApp

@@ -101,6 +101,7 @@ export default function MobilityView() {
   const [isLocationSharing, setIsLocationSharing] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeEmergencyContact, setActiveEmergencyContact] = useState<any>(null);
+  const [globalSosNumber, setGlobalSosNumber] = useState<string>("+2348123456789");
   const searchParams = useSearchParams();
   const [shouldBlinkManage, setShouldBlinkManage] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -159,9 +160,18 @@ export default function MobilityView() {
       }
     });
 
+    // ✅ NEW: Fetch Global SOS Number
+    const globalSosRef = doc(db, "site_configs", "mobility");
+    const unsubGlobalSos = onSnapshot(globalSosRef, (snap) => {
+      if (snap.exists() && snap.data().emergencySosPhone) {
+        setGlobalSosNumber(snap.data().emergencySosPhone);
+      }
+    });
+
     return () => {
       unsubscribeAuth();
       if (unsubDoc) unsubDoc();
+      unsubGlobalSos();
     };
   }, []);
 
@@ -361,17 +371,16 @@ export default function MobilityView() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {/* Call Button */}
                             <a
-                              href={activeEmergencyContact ? `tel:${activeEmergencyContact.phoneNumber.startsWith('+') ? activeEmergencyContact.phoneNumber : '+' + activeEmergencyContact.phoneNumber}` : "#"}
-                              className={`flex items-center justify-between p-3 rounded-xl border transition-all group ${activeEmergencyContact ? 'bg-white/5 hover:bg-white/10 border-white/10' : 'bg-gray-100/50 border-gray-200 grayscale opacity-50 cursor-not-allowed'}`}
-                              onClick={(e) => !activeEmergencyContact && e.preventDefault()}
+                              href={`tel:${globalSosNumber || "+2348123456789"}`}
+                              className="flex items-center justify-between p-3 rounded-xl border transition-all group bg-white/5 hover:bg-white/10 border-white/10"
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${activeEmergencyContact ? 'bg-green-500/20 text-green-500 border-green-500/20' : 'bg-gray-200 text-gray-400 border-gray-200'}`}>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center border bg-green-500/20 text-green-500 border-green-500/20">
                                   <FaPhoneAlt size={12} />
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="text-[9px] font-black text-gray-400 tracking-wider uppercase">Emergency Call</span>
-                                  <span className={`text-[11px] font-black tracking-wider ${activeEmergencyContact ? 'text-green-500' : 'text-gray-400'}`}>{activeEmergencyContact?.displayPhoneNumber || 'Add Contact'}</span>
+                                  <span className="text-[11px] font-black tracking-wider text-green-500">{globalSosNumber}</span>
                                 </div>
                               </div>
                               <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest group-hover:text-white">Call</span>
@@ -379,37 +388,18 @@ export default function MobilityView() {
 
                             {/* WhatsApp Button */}
                             <a
-                              href={activeEmergencyContact && isLocationSharing ? `https://wa.me/${activeEmergencyContact.phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`🚨 EMERGENCY ALERT: I need security assistance immediately!\n\n📍 My Live Location: https://maps.google.com/?q=${user?.location?.lat || userLocation?.lat},${user?.location?.lng || userLocation?.lng}`)}` : "#"}
-                              target={(activeEmergencyContact && isLocationSharing) ? "_blank" : undefined}
+                              href={`https://wa.me/${(globalSosNumber || "2348123456789").replace(/\D/g, '')}?text=${encodeURIComponent(`🚨 EMERGENCY SOS ALERT 🚨\n\nI need assistance immediately!\n\n${isLocationSharing ? `📍 My Live Location: https://maps.google.com/?q=${user?.location?.lat || userLocation?.lat},${user?.location?.lng || userLocation?.lng}` : ""}\n\n_Sent via Nomo Safety System_`)}`}
+                              target="_blank"
                               rel="noopener noreferrer"
-                              className={`flex items-center justify-between p-3 rounded-xl border transition-all group relative ${activeEmergencyContact && isLocationSharing
-                                ? 'bg-green-600/10 hover:bg-green-600/20 border-green-500/30'
-                                : 'bg-gray-100/50 border-gray-200 grayscale blur-[2px] cursor-not-allowed opacity-50'
-                                }`}
-                              onClick={(e) => (!activeEmergencyContact || !isLocationSharing) && e.preventDefault()}
+                              className="flex items-center justify-between p-3 rounded-xl border transition-all group bg-green-600/10 hover:bg-green-600/20 border-green-500/30"
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${activeEmergencyContact && isLocationSharing ? 'bg-green-500/20 text-green-400 border-green-500/20' : 'bg-gray-200 text-gray-400 border-gray-200'}`}>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center border bg-green-500/20 text-green-400 border-green-500/20">
                                   <FaWhatsapp size={14} />
                                 </div>
-                                <span className={`text-[11px] font-black tracking-wider ${activeEmergencyContact && isLocationSharing ? 'text-green-400' : 'text-gray-400'}`}>WhatsApp SOS</span>
+                                <span className="text-[11px] font-black tracking-wider text-green-400">WhatsApp SOS</span>
                               </div>
-                              <FaChevronRight size={10} className={`transition-transform ${activeEmergencyContact && isLocationSharing ? 'text-gray-500 group-hover:translate-x-1' : 'text-gray-300'}`} />
-
-                              {!isLocationSharing && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-transparent z-10">
-                                  <span className="bg-gray-900/80 text-white px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-[0.05em] backdrop-blur-sm">
-                                    Enable Location
-                                  </span>
-                                </div>
-                              )}
-                              {!activeEmergencyContact && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-transparent z-10">
-                                  <span className="bg-gray-900/80 text-white px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-[0.05em] backdrop-blur-sm">
-                                    Add Contact
-                                  </span>
-                                </div>
-                              )}
+                              <FaChevronRight size={10} className="text-gray-500 transition-transform group-hover:translate-x-1" />
                             </a>
                           </div>
 

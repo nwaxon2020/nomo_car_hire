@@ -10,6 +10,7 @@ import AboutSettings from '@/components/admin/adminSettings/AboutSettings';
 import SiteSettings from '@/components/admin/adminSettings/SiteSettings';
 import PolicySettings from '@/components/admin/adminSettings/PolicySettings';
 import FaqSettings from '@/components/admin/adminSettings/FaqSettings';
+import MobilitySettings from '@/components/admin/adminSettings/MobilitySettings';
 
 export default function AdminSettingsPageUi() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export default function AdminSettingsPageUi() {
 
   const settingCards = [
     { id: 'site', title: 'Site Settings', desc: 'Main SEO, Logos, and Contact Details', icon: <FiGlobe />, color: 'text-emerald-400' },
+    { id: 'mobility', title: 'Mobility Manage Settings', desc: 'Global SOS and Safety configurations', icon: <FiNavigation />, color: 'text-red-500' },
     { id: 'about', title: 'About Component', desc: 'Manage company history and team info', icon: <FiInfo />, color: 'text-blue-400' },
     { id: 'policy', title: 'Policy Component', desc: 'Terms of Service and Privacy Policy', icon: <FiShield />, color: 'text-purple-400' },
     { id: 'faq', title: 'FAQ Component', desc: 'Manage help center questions', icon: <FiHelpCircle />, color: 'text-orange-400' },
@@ -102,6 +104,7 @@ export default function AdminSettingsPageUi() {
             <div className="p-2 md:p-8">
               {activeTab === 'about' && <AboutSettings />}
               {activeTab === 'site' && <SiteSettings />}
+              {activeTab === 'mobility' && <MobilitySettings />}
               {activeTab === 'policy' && <PolicySettings />}
               {activeTab === 'faq' && <FaqSettings />}
             </div>

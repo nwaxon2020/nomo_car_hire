@@ -51,6 +51,7 @@ export default function DriverActiveSession({
   const [tripStarted, setTripStarted] = useState(booking.status === "departed");
   const [arriving, setArriving] = useState(false);
   const [tripIds, setTripIds] = useState<string[]>([]);
+  const [globalSosNumber, setGlobalSosNumber] = useState<string>("+2348123456789");
 
   // Cancel flow state
   const [showCancelWarning, setShowCancelWarning] = useState(false);
@@ -74,7 +75,19 @@ export default function DriverActiveSession({
       setSeats(data);
       setLoading(false);
     });
-    return () => unsub();
+
+    // ✅ NEW: Fetch Global SOS Number
+    const globalSosRef = doc(db, "site_configs", "mobility");
+    const unsubGlobalSos = onSnapshot(globalSosRef, (snap) => {
+      if (snap.exists() && snap.data().emergencySosPhone) {
+        setGlobalSosNumber(snap.data().emergencySosPhone);
+      }
+    });
+
+    return () => {
+      unsub();
+      unsubGlobalSos();
+    };
   }, [booking.id]);
 
   // Handle cancel session
@@ -618,16 +631,31 @@ export default function DriverActiveSession({
       </div>
 
       {/* Cancel Session Button — only before trip starts */}
-      {!tripStarted && (
-        <div className="pt-1">
-          <button
-            onClick={() => setShowCancelWarning(true)}
-            className="w-full py-2.5 bg-red-600/10 border border-red-500/30 text-red-400 hover:bg-red-600/20 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-colors"
+        <div className="pt-2 grid grid-cols-2 gap-2">
+          <a
+            href={`tel:${globalSosNumber}`}
+            className="flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-900/20 active:scale-95 transition-all"
           >
-            <FaStop size={8} /> Cancel Session
-          </button>
+            SOS Call
+          </a>
+          <a
+            href={`https://wa.me/${globalSosNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`🚨 DRIVER EMERGENCY 🚨\n\nI need assistance in Load Session ${booking.id}!`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-900/20 active:scale-95 transition-all"
+          >
+            SOS WhatsApp
+          </a>
+
+          {!tripStarted && (
+            <button
+              onClick={() => setShowCancelWarning(true)}
+              className="col-span-2 py-2.5 bg-gray-800 border border-gray-700 text-gray-400 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-colors"
+            >
+              <FaStop size={8} /> Cancel Session
+            </button>
+          )}
         </div>
-      )}
 
       {/* Flag Overlay */}
       <AnimatePresence>

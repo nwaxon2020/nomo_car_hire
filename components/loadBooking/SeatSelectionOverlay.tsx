@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FaCar, FaMapMarkerAlt, FaMoneyBillWave, FaClock,
   FaUsers, FaTimes, FaFlag, FaCheckCircle, FaChair,
-  FaShieldAlt, FaInfoCircle,
+  FaShieldAlt, FaInfoCircle, FaPhoneAlt, FaWhatsapp,
 } from "react-icons/fa";
 import {
   collection, onSnapshot, doc, updateDoc, getDoc,
@@ -56,6 +56,7 @@ export default function SeatSelectionOverlay({
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null); // My current seat
   const [actionLoading, setActionLoading] = useState(false);
   const [flagBooking, setFlagBooking] = useState(false);
+  const [globalSosNumber, setGlobalSosNumber] = useState<string>("+2348123456789");
 
   const layout = getSeatLayout(booking.totalSeats, booking.vehicleType);
 
@@ -73,7 +74,19 @@ export default function SeatSelectionOverlay({
 
       setLoading(false);
     });
-    return () => unsub();
+
+    // ✅ NEW: Fetch Global SOS Number
+    const globalSosRef = doc(db, "site_configs", "mobility");
+    const unsubGlobalSos = onSnapshot(globalSosRef, (snap) => {
+      if (snap.exists() && snap.data().emergencySosPhone) {
+        setGlobalSosNumber(snap.data().emergencySosPhone);
+      }
+    });
+
+    return () => {
+      unsub();
+      unsubGlobalSos();
+    };
   }, [booking.id, currentUser.uid]);
 
   const getSeat = (num: number) => seats.find((s) => s.seatNumber === num);
@@ -464,12 +477,30 @@ export default function SeatSelectionOverlay({
             </button>
           )}
 
+          {/* Global SOS Controls */}
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+            <a
+              href={`tel:${globalSosNumber}`}
+              className="flex items-center justify-center gap-2 py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-900/20 active:scale-95 transition-all"
+            >
+              <FaPhoneAlt size={10} /> SOS Call
+            </a>
+            <a
+              href={`https://wa.me/${globalSosNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`🚨 EMERGENCY ALERT 🚨\n\nI need assistance in Load Booking ${booking.id}!`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-900/20 active:scale-95 transition-all"
+            >
+              <FaWhatsapp size={12} /> SOS Chat
+            </a>
+          </div>
+
           {/* Flag driver button */}
           <button
             onClick={() => setFlagBooking(true)}
-            className="w-full py-2.5 bg-gray-800/50 border border-gray-700 text-gray-400 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-800 hover:text-red-400 transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-gray-800/10 border border-gray-800 text-gray-500 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-gray-800 hover:text-red-400 transition-all flex items-center justify-center gap-2"
           >
-            <FaFlag size={9} /> Flag Driver
+            <FaFlag size={9} /> Flag Driver / Feedback
           </button>
         </div>
       </motion.div>

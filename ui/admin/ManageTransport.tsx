@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
 import { FiCheck, FiX, FiFlag, FiTrash2, FiMessageSquare, FiEye, FiImage, FiLock, FiPlus } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
@@ -18,6 +18,9 @@ export default function ManageTransport() {
     const [passkey, setPasskey] = useState("");
     const [showPasskeyModal, setShowPasskeyModal] = useState<any>(null); // {id, action}
     const [showCardForm, setShowCardForm] = useState(false);
+    const [activeTab, setActiveTab] = useState<'partners' | 'manual'>('partners');
+    const [manualListings, setManualListings] = useState<any[]>([]);
+    const [loadingManual, setLoadingManual] = useState(false);
 
     const user = auth.currentUser;
     const isCEO = user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY;
@@ -31,6 +34,19 @@ export default function ManageTransport() {
         });
         return () => unsub();
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'manual') {
+            setLoadingManual(true);
+            const q = query(collection(db, "transportListings"), where("type", "==", "manual"));
+            const unsub = onSnapshot(q, (snap) => {
+                const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setManualListings(data);
+                setLoadingManual(false);
+            });
+            return () => unsub();
+        }
+    }, [activeTab]);
 
     const handleApprove = async (id: string) => {
         try {
@@ -121,153 +137,243 @@ export default function ManageTransport() {
         }
     };
 
+    const handleDeleteManual = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this trip?")) return;
+        try {
+            await deleteDoc(doc(db, "transportListings", id));
+            toast.success("Trip Deleted");
+        } catch (err) {
+            toast.error("Failed to delete trip");
+        }
+    };
+
     if (loading) return <div className="h-60 flex items-center justify-center"><LoadingRound /></div>;
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-end">
+        <div className="py-4 px-2 md:p-8 space-y-8 bg-[#040b18] min-h-screen text-white">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                    <h2 className="text-2xl font-black text-white">Transport Partners</h2>
-                    <p className="text-slate-500 text-sm">Manage all registered transport companies</p>
+                    <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tight">Manage Transport</h1>
+                    <p className="text-slate-500 text-sm font-medium mt-1">Review registrations and manage manual listings.</p>
                 </div>
-                <button
-                    onClick={() => setShowCardForm(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg flex gap-2"
-                >
-                    <FiPlus size={18} /> Create Transport Card
-                </button>
+
+                <div className="flex bg-white/5 border border-white/10 rounded md:rounded-2xl p-1.5 shadow-2xl">
+                    <button
+                        onClick={() => setActiveTab('partners')}
+                        className={`px-6 py-2.5 rounded md:rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'partners' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Partner Companies
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('manual')}
+                        className={`px-6 py-2.5 rounded md:rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'manual' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Created Trips
+                    </button>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-                {companies.map((company) => (
-                    <div key={company.id} className="bg-slate-900 border border-white/10 rounded-2xl p-3 md:p-6 flex flex-col md:flex-row gap-6">
-                        {/* Company Visuals */}
-                        <div className="flex gap-4">
-                            <div
-                                onClick={() => setOverlayImage(company.garageImageUrl)}
-                                className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
-                                title="Garage Image"
-                            >
-                                <img src={company.garageImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="Garage" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
-                                    <FiEye className="text-white" />
-                                </div>
-                                <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">Garage</div>
-                            </div>
-                            <div
-                                onClick={() => setOverlayImage(company.cacImageUrl)}
-                                className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
-                                title="CAC Document"
-                            >
-                                {company.cacImageUrl ? (
-                                    <>
-                                        <img src={company.cacImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="CAC" />
+            {activeTab === 'partners' ? (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <h2 className="text-2xl font-black text-white px-1">Transport Partners</h2>
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 px-1">Manage all registered transport companies</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {companies.map((company) => (
+                            <div key={company.id} className="bg-slate-900 border border-white/10 rounded-2xl p-3 md:p-6 flex flex-col md:flex-row gap-6">
+                                {/* Company Visuals */}
+                                <div className="flex gap-4">
+                                    <div
+                                        onClick={() => setOverlayImage(company.garageImageUrl)}
+                                        className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                        title="Garage Image"
+                                    >
+                                        <img src={company.garageImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="Garage" />
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
                                             <FiEye className="text-white" />
                                         </div>
-                                    </>
-                                ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-1">
-                                        <FiImage size={24} />
-                                        <span className="text-[8px] font-bold">NO CAC</span>
+                                        <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">Garage</div>
                                     </div>
-                                )}
-                                <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">CAC DOC</div>
-                            </div>
-                            <div
-                                onClick={() => setOverlayImage(company.idImageUrl)}
-                                className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
-                                title="Owner ID"
-                            >
-                                <img src={company.idImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="ID" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
-                                    <FiEye className="text-white" />
-                                </div>
-                                <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">Owner ID</div>
-                            </div>
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-bold text-white">{company.companyName}</h3>
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${company.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' :
-                                    company.status === 'flagged' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'
-                                    }`}>
-                                    {company.status}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-                                <div>
-                                    <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">Company ID</p>
-                                    <p className="text-slate-300 font-mono truncate">{company.id}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">CEO</p>
-                                    <p className="text-slate-300">{company.ceoName}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">Contact</p>
-                                    <p className="text-slate-300">{company.phone}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">Fleet Size</p>
-                                    <p className="text-slate-300">{Number(company.cars) + Number(company.buses) + Number(company.luxurious)} Vehicles</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex flex-wrap md:flex-nowrap gap-6 md:gap-2 justify-center items-center">
-                            {company.status !== 'approved' ? (
-                                <button
-                                    onClick={() => handleApprove(company.id)}
-                                    className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all"
-                                    title="Approve"
-                                >
-                                    <FiCheck size={20} />
-                                </button>
-                            ) : (
-                                isCEO && (
-                                    <button
-                                        onClick={() => setShowPasskeyModal({ id: company.id, action: 'unapprove' })}
-                                        className="p-3 bg-slate-800 text-slate-400 rounded-xl hover:bg-slate-700 transition-all"
-                                        title="Unapprove"
+                                    <div
+                                        onClick={() => setOverlayImage(company.cacImageUrl)}
+                                        className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                        title="CAC Document"
                                     >
-                                        <FiX size={20} />
+                                        {company.cacImageUrl ? (
+                                            <>
+                                                <img src={company.cacImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="CAC" />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
+                                                    <FiEye className="text-white" />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-1">
+                                                <FiImage size={24} />
+                                                <span className="text-[8px] font-bold">NO CAC</span>
+                                            </div>
+                                        )}
+                                        <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">CAC DOC</div>
+                                    </div>
+                                    <div
+                                        onClick={() => setOverlayImage(company.idImageUrl)}
+                                        className="w-20 h-20 md:w-24 md:h-24 rounded-md md:rounded-xl bg-slate-800 border border-white/5 overflow-hidden cursor-zoom-in relative group"
+                                        title="Owner ID"
+                                    >
+                                        <img src={company.idImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="ID" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
+                                            <FiEye className="text-white" />
+                                        </div>
+                                        <div className="absolute bottom-1 left-0 right-0 text-[8px] font-black text-center text-white bg-black/60 uppercase">Owner ID</div>
+                                    </div>
+                                </div>
+
+                                {/* Info */}
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center gap-3">
+                                        <h3 className="text-lg font-bold text-white">{company.companyName}</h3>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${company.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' :
+                                            company.status === 'flagged' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'
+                                            }`}>
+                                            {company.status}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                                        <div>
+                                            <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">Company ID</p>
+                                            <p className="text-slate-300 font-mono truncate">{company.id}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">CEO</p>
+                                            <p className="text-slate-300">{company.ceoName}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">Contact</p>
+                                            <p className="text-slate-300">{company.phone}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 uppercase font-black tracking-widest text-[10px]">Fleet Size</p>
+                                            <p className="text-slate-300">{Number(company.cars) + Number(company.buses) + Number(company.luxurious)} Vehicles</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex flex-wrap md:flex-nowrap gap-6 md:gap-2 justify-center items-center">
+                                    {company.status !== 'approved' ? (
+                                        <button
+                                            onClick={() => handleApprove(company.id)}
+                                            className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all"
+                                            title="Approve"
+                                        >
+                                            <FiCheck size={20} />
+                                        </button>
+                                    ) : (
+                                        isCEO && (
+                                            <button
+                                                onClick={() => setShowPasskeyModal({ id: company.id, action: 'unapprove' })}
+                                                className="p-3 bg-slate-800 text-slate-400 rounded-xl hover:bg-slate-700 transition-all"
+                                                title="Unapprove"
+                                            >
+                                                <FiX size={20} />
+                                            </button>
+                                        )
+                                    )}
+
+                                    <button
+                                        onClick={() => handleFlag(company.id)}
+                                        className="p-3 bg-amber-500/10 text-amber-500 rounded-xl hover:bg-amber-500 hover:text-white transition-all"
+                                        title="Flag"
+                                    >
+                                        <FiFlag size={20} />
                                     </button>
-                                )
-                            )}
 
-                            <button
-                                onClick={() => handleFlag(company.id)}
-                                className="p-3 bg-amber-500/10 text-amber-500 rounded-xl hover:bg-amber-500 hover:text-white transition-all"
-                                title="Flag"
-                            >
-                                <FiFlag size={20} />
-                            </button>
+                                    <button
+                                        onClick={() => handleNotify(company.ownerId, company.companyName)}
+                                        className="p-3 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all"
+                                        title="Send Message"
+                                    >
+                                        <FiMessageSquare size={20} />
+                                    </button>
 
-                            <button
-                                onClick={() => handleNotify(company.ownerId, company.companyName)}
-                                className="p-3 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all"
-                                title="Send Message"
-                            >
-                                <FiMessageSquare size={20} />
-                            </button>
-
-                            {isCEO && (
-                                <button
-                                    onClick={() => handleDelete(company.id)}
-                                    className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                                    title="Delete Forever"
-                                >
-                                    <FiTrash2 size={20} />
-                                </button>
-                            )}
-                        </div>
+                                    {isCEO && (
+                                        <button
+                                            onClick={() => handleDelete(company.id)}
+                                            className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                                            title="Delete Forever"
+                                        >
+                                            <FiTrash2 size={20} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center bg-blue-600/10 border border-blue-500/20 md:p-6 p-2 md:rounded-xl">
+                        <div>
+                            <h2 className="md:text-xl font-black uppercase tracking-tight">Manual Listings</h2>
+                            <p className="text-blue-400/60 text-[10px] md:text-xs font-bold uppercase tracking-widest mt-1">Total Created: {manualListings.length}</p>
+                        </div>
+                        <button
+                            onClick={() => setShowCardForm(true)}
+                            className="text-xs md:text-base px-3 py-2 md:px-6 md:py-3 bg-blue-600 hover:bg-blue-500 text-white rounded md:rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-start md:items-center gap-0.5 md:gap-2 shadow-lg shadow-blue-600/20 active:scale-95"
+                        >
+                            <FiPlus size={16} /> Create New Trip
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {loadingManual ? (
+                            <div className="md:col-span-3 py-20 flex justify-center"><LoadingRound /></div>
+                        ) : manualListings.length > 0 ? (
+                            manualListings.map((trip) => (
+                                <div key={trip.id} className="bg-slate-900 border border-white/10 rounded-2xl p-6 relative group hover:border-blue-500/30 transition-all shadow-xl">
+                                    <button
+                                        onClick={() => handleDeleteManual(trip.id)}
+                                        className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                                    >
+                                        <FiTrash2 size={14} />
+                                    </button>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 bg-blue-600/20 text-blue-400 rounded-lg flex items-center justify-center font-black">
+                                            {trip.company?.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-white leading-none tracking-tight">{trip.company}</h3>
+                                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">Manual Entry</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <span className="text-lg font-bold text-white">{trip.from}</span>
+                                        <div className="w-4 h-[1px] bg-white/20" />
+                                        <span className="text-lg font-bold text-white">{trip.to}</span>
+                                    </div>
+                                    <div className="flex justify-between items-end border-t border-white/5 pt-4">
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Fare Amount</p>
+                                            <p className="text-xl font-black text-blue-400">₦{trip.amount?.toLocaleString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Time</p>
+                                            <p className="text-xs font-bold text-white uppercase">{trip.time}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="md:col-span-3 py-20 text-center bg-white/5 border border-dashed border-white/10 rounded-3xl">
+                                <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">No manual trips found</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Image Overlay */}
             <AnimatePresence>
