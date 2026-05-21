@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { FaLocationArrow, FaExternalLinkAlt, FaWifi } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
