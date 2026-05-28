@@ -52,7 +52,9 @@ service cloud.firestore {
         'trustScore', 'trustCancels', 'trustLastReset', 'trustExhaustedAt', 
         'driverTrustScore', 'driverTrustCancels', 'driverTrustExhaustedAt', 'driverLoadBlockedUntil',
         'loadOnceAllowed', 'loadOnceUsedDate', 'loadBlockedUntil',
-        'contactedDrivers', 'hiredCars', 'lastBookedCarId', 'carSwitchCount', 'tripHistory'
+        'contactedDrivers', 'hiredCars', 'lastBookedCarId', 'carSwitchCount', 'tripHistory',
+        'dateOfBirth', 'age', 'idNumber', 'idPhotoURL', 'country', 'address',
+        'comments', 'ticketTransactions', 'justJoined', 'driverJoinedDate', 'ticket', 'ticketStatus'
       ];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
     }
