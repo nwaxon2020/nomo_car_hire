@@ -1,7 +1,8 @@
 "use client";
 
 import { UserCredential } from "firebase/auth";
-import { db } from "@/lib/firebaseConfig";
+import { db, functions } from "@/lib/firebaseConfig";
+import { httpsCallable } from "firebase/functions";
 import {
   doc,
   getDoc,
@@ -131,61 +132,10 @@ export const awardReferralPoints = async (
   newUserId: string
 ) => {
   try {
-    const referrerRef = doc(db, "users", referrerFullId);
-    const referrerSnap = await getDoc(referrerRef);
-
-    if (!referrerSnap.exists()) return;
-
-    const referrerData = referrerSnap.data();
-    const isDriver = referrerData.isDriver || false;
-    const currentPoints =
-      (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
-
-    await updateDoc(referrerRef, {
-      referrals: arrayUnion({
-        userId: newUserId,
-        date: new Date().toISOString(),
-        points: POINTS_PER_REFERRAL,
-        status: "completed",
-      }),
-      referralPoints: increment(POINTS_PER_REFERRAL),
-      referralCount: increment(1),
-    });
-
-    if (currentPoints >= 20 && currentPoints % 20 === 0) {
-      if (isDriver) {
-        await updateDoc(referrerRef, {
-          notifications: arrayUnion({
-            id: Date.now().toString(),
-            type: "vip_earned",
-            title: "🌟 VIP Star Activated!",
-            message: "Your referrals earned you a VIP Star!",
-            timestamp: new Date().toISOString(),
-            read: false,
-            actionUrl: `/user/driver-profile/${referrerFullId}`,
-          }),
-          hasUnreadNotifications: true,
-        });
-      } else {
-        const newFreeRideCount = (referrerData.freeRides || 0) + 1;
-        await updateDoc(referrerRef, {
-          freeRides: newFreeRideCount,
-          lastFreeRideEarned: new Date(),
-          notifications: arrayUnion({
-            id: Date.now().toString(),
-            type: "free_ride_earned",
-            title: "🎉 Free ₦5,000 Ride Earned!",
-            message: `You earned a free ride! You now have ${newFreeRideCount} free ride(s).`,
-            timestamp: new Date().toISOString(),
-            read: false,
-            actionUrl: "/user/mobility/bookings",
-          }),
-          hasUnreadNotifications: true,
-        });
-      }
-    }
+    const awardReferralPointsFn = httpsCallable(functions, "awardReferralPoints");
+    await awardReferralPointsFn({ referrerFullId, newUserId });
   } catch (error) {
-    console.error("❌ Error awarding points:", error);
+    console.error("Error awarding referral points via Cloud Function:", error);
   }
 };
 

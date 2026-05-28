@@ -316,8 +316,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
       <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
       <div className="flex min-h-screen md:h-screen bg-gray-100 md:overflow-hidden">
 
-        {/* Mobile Toggle Button Container */}
-        <div className="md:hidden absolute top-6 right-4 z-[60] flex items-center gap-2">
+        {/* Mobile Toggle Button Container — hidden on driver-register fullscreen page */}
+        <div className={`md:hidden absolute top-6 right-4 z-[60] flex items-center gap-2 ${pathname === "/user/driver-register" ? "hidden" : ""}`}>
           {!sidebarOpen && totalUnreadMobile > 0 && (
             <div className="h-6 min-w-[24px] px-1.5 bg-red-600 text-white text-[11px] font-black rounded-full flex items-center justify-center shadow-lg animate-bounce border border-white/20">
               {totalUnreadMobile}
@@ -462,8 +462,8 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
 
         <FcmTokenHandler />
 
-        {/* MAIN CONTENT AREA */}
-        <main className="flex-1 min-h-screen md:h-screen md:overflow-y-auto bg-[#F8F9FA] relative">
+        {/* MAIN CONTENT AREA — hidden when driver-register overlay is active */}
+        <main className={`flex-1 min-h-screen md:h-screen md:overflow-y-auto bg-[#F8F9FA] relative ${pathname === "/user/driver-register" ? "hidden" : ""}`}>
           {isDisabled && pathname.startsWith("/user") ? (
             <div className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6 text-center">
               <div className="max-w-md w-full animate-in zoom-in-95 duration-500">
@@ -503,6 +503,13 @@ export default function SidebarPageUi({ children }: { children: React.ReactNode 
             </div>
           )}
         </main>
+
+        {/* DRIVER REGISTER FULLSCREEN OVERLAY — covers sidebar */}
+        {pathname === "/user/driver-register" && (
+          <div className="fixed inset-0 z-[200] overflow-y-auto">
+            {children}
+          </div>
+        )}
       </div>
 
       <style jsx global>{`

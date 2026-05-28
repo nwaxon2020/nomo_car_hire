@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getMessaging } from "firebase/messaging"; // Added Messaging
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -47,6 +48,7 @@ if (typeof window !== "undefined") {
 export const db = firestoreDb;
 
 export const storage = getStorage(app);
+export const functions = getFunctions(app);
 
 // Initialize Messaging (only on client side)
 export const messaging = typeof window !== "undefined" ? getMessaging(app) : null;

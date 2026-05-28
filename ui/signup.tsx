@@ -73,7 +73,7 @@ export default function SignUpUi() {
     e.preventDefault();
     setMessage("");
     if (!profileImage) return setMessage("⚠️ Profile image is required.");
-    if (!fullName.trim()) return setMessage("⚠️ Full name is required.");
+    if (!isDriver && !fullName.trim()) return setMessage("⚠️ Full name is required.");
     if (password !== confirmPassword) return setMessage("⚠️ Passwords do not match.");
     if (!validatePassword(password)) return setMessage("⚠️ Password must be at least 8 chars + number.");
 
@@ -87,11 +87,13 @@ export default function SignUpUi() {
       const photoURL = await getDownloadURL(storageRef);
 
       // FETCH DYNAMIC NOTE FIRST
-      const welcomeNote = await getDynamicWelcomeNoteHelper(fullName);
+      // For drivers, use email prefix as temp name (replaced by firstName+lastName in Step 2)
+      const displayName = isDriver ? email.split("@")[0] : fullName;
+      const welcomeNote = await getDynamicWelcomeNoteHelper(displayName);
 
       const baseData = {
         uid: userCred.user.uid,
-        fullName,
+        fullName: displayName,
         email,
         profileImage: photoURL,
       };
@@ -104,7 +106,7 @@ export default function SignUpUi() {
       setMessage("✅ Account created! Check your email.");
       setLoading(false);
 
-      const redirectUrl = signupType === "driver" ? "/login?redirect=/user/register-as-driver" : "/login";
+      const redirectUrl = signupType === "driver" ? "/login?redirect=/user/driver-register&flow=driver" : "/login";
       setTimeout(() => router.push(redirectUrl), 2500);
     } catch (err: any) {
       setMessage(mapFirebaseError(err.message));
@@ -152,7 +154,7 @@ export default function SignUpUi() {
       if (authResult.success) {
         setMessage(`✅ ${authResult.userExists ? "Welcome back!" : "Account created successfully!"}`);
         setGoogleLoading(false);
-        const redirectUrl = signupType === "driver" ? "/user/register-as-driver" : "/";
+        const redirectUrl = signupType === "driver" ? "/user/driver-register?flow=driver" : "/";
         setTimeout(() => router.push(redirectUrl), 1500);
       } else {
         setMessage(`❌ ${authResult.message}`);
@@ -286,7 +288,9 @@ export default function SignUpUi() {
               {profileImage ? <img src={URL.createObjectURL(profileImage)} alt="Preview" className="w-full h-full object-cover" /> : <img src="/profile.png" alt="profile" />}
               <input type="file" accept="image/*" onChange={(e) => setProfileImage(e.target.files ? e.target.files[0] : null)} className="hidden" />
             </label>
-            <input type="text" className={`w-full px-4 py-3 border rounded-xl mt-2 ${isDriver ? "bg-white/10 border-white/20 text-white placeholder-gray-400" : "bg-white border-gray-200 text-gray-800"}`} placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            {!isDriver && (
+              <input type="text" className="w-full px-4 py-3 border rounded-xl mt-2 bg-white border-gray-200 text-gray-800" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            )}
           </div>
 
           <input type="email" className={`w-full px-4 py-3 border rounded-xl ${isDriver ? "bg-white/10 border-white/20 text-white placeholder-gray-400" : "bg-white border-gray-200 text-gray-800"}`} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />

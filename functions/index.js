@@ -202,6 +202,87 @@ exports.deleteUserAndData = onCall(
 );
 
 /**
+ * ── AWARD REFERRAL POINTS ──
+ * Safely awards points to a referrer, bypassing client-side rules.
+ */
+exports.awardReferralPoints = onCall(async (request) => {
+    // We only require the user to be authenticated
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required");
+
+    const { referrerFullId, newUserId } = request.data;
+    if (!referrerFullId || !newUserId) {
+        throw new HttpsError("invalid-argument", "Missing referrerFullId or newUserId");
+    }
+
+    const db = admin.firestore();
+    const POINTS_PER_REFERRAL = 5;
+
+    try {
+        const referrerRef = db.collection("users").doc(referrerFullId);
+        
+        await db.runTransaction(async (transaction) => {
+            const referrerSnap = await transaction.get(referrerRef);
+            if (!referrerSnap.exists) return;
+
+            const referrerData = referrerSnap.data();
+            const isDriver = referrerData.isDriver || false;
+            const currentPoints = (referrerData.referralPoints || 0) + POINTS_PER_REFERRAL;
+
+            // Basic referral update
+            transaction.update(referrerRef, {
+                referrals: admin.firestore.FieldValue.arrayUnion({
+                    userId: newUserId,
+                    date: new Date().toISOString(),
+                    points: POINTS_PER_REFERRAL,
+                    status: "completed",
+                }),
+                referralPoints: admin.firestore.FieldValue.increment(POINTS_PER_REFERRAL),
+                referralCount: admin.firestore.FieldValue.increment(1),
+            });
+
+            // Reward thresholds
+            if (currentPoints >= 20 && currentPoints % 20 === 0) {
+                if (isDriver) {
+                    transaction.update(referrerRef, {
+                        notifications: admin.firestore.FieldValue.arrayUnion({
+                            id: Date.now().toString(),
+                            type: "vip_earned",
+                            title: "🌟 VIP Star Activated!",
+                            message: "Your referrals earned you a VIP Star!",
+                            timestamp: new Date().toISOString(),
+                            read: false,
+                            actionUrl: `/user/driver-profile/${referrerFullId}`,
+                        }),
+                        hasUnreadNotifications: true,
+                    });
+                } else {
+                    const newFreeRideCount = (referrerData.freeRides || 0) + 1;
+                    transaction.update(referrerRef, {
+                        freeRides: newFreeRideCount,
+                        lastFreeRideEarned: admin.firestore.FieldValue.serverTimestamp(),
+                        notifications: admin.firestore.FieldValue.arrayUnion({
+                            id: Date.now().toString(),
+                            type: "free_ride_earned",
+                            title: "🎉 Free ₦5,000 Ride Earned!",
+                            message: `You earned a free ride! You now have ${newFreeRideCount} free ride(s).`,
+                            timestamp: new Date().toISOString(),
+                            read: false,
+                            actionUrl: "/user/mobility/car-hire",
+                        }),
+                        hasUnreadNotifications: true,
+                    });
+                }
+            }
+        });
+        
+        return { success: true };
+    } catch (error) {
+        logger.error("❌ Failed to award referral points:", error);
+        throw new HttpsError("internal", "Failed to award referral points");
+    }
+});
+
+/**
  * ── AUTO-CLEAR OLD TRIPS ──
  * Deletes trip documents older than 90 days every day at 1:00 AM.
  */
