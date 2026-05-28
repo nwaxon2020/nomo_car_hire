@@ -24,7 +24,6 @@ import Link from "next/link";
 import LoadingRound from "@/components/re-useable-loading";
 import {
   handleGoogleAuthUnified,
-  ensureNotificationFields,
 } from "@/lib/authHelpers";
 
 export default function LoginUi() {
@@ -51,9 +50,11 @@ export default function LoginUi() {
   const POINTS_PER_REFERRAL = 2;
   const POINTS_REQUIRED_PER_FREE_RIDE = 20;
 
+  const redirectPath = searchParams.get("redirect");
+
   const exchangeTokenAndRedirect = async (userCredential: UserCredential) => {
     try {
-      window.location.href = "/";
+      window.location.href = redirectPath || "/";
     } catch (err) {
       console.error("Redirect error:", err);
       setError("Login successful, but redirect failed.");

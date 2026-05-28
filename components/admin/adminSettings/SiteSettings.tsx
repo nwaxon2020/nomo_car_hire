@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebaseConfig';
+import { db, storage } from '@/lib/firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { 
   FiSave, FiGlobe, FiPhone, FiTarget, FiEye, 
   FiPlus, FiTrash2, FiFacebook, FiInstagram, FiTwitter, FiLinkedin, FiYoutube, FiMessageSquare, FiRotateCcw, FiAlertCircle
 } from 'react-icons/fi';
-import { FaTiktok } from 'react-icons/fa';
+import { FaTiktok, FaImage, FaUpload } from 'react-icons/fa';
 import HomePageEditor from './HomePageEditor';
 import { toast } from "react-hot-toast";
 
@@ -30,6 +31,9 @@ interface SiteConfig {
   };
   faqSubtitle?: string;
   socials: SocialLink[];
+  signupDescription?: string;
+  passengerCardImage?: string;
+  driverCardImage?: string;
 }
 
 const PLATFORMS = [
@@ -47,6 +51,9 @@ export default function SiteSettings() {
   const [isDirty, setIsDirty] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState(PLATFORMS[0].name);
   
+  const [passengerFile, setPassengerFile] = useState<File | null>(null);
+  const [driverFile, setDriverFile] = useState<File | null>(null);
+
   // Stores current edits
   const [config, setConfig] = useState<SiteConfig>({
     siteNameMain: "Nomo",
@@ -55,7 +62,10 @@ export default function SiteSettings() {
     goalStatement: "",
     ceoContact: { phone: "", email: "" },
     generalContact: { phone: "", email: "", address: "" },
-    socials: []
+    socials: [],
+    signupDescription: "",
+    passengerCardImage: "",
+    driverCardImage: ""
   });
 
   // Stores the last saved version from Firebase for the "Undo" feature
@@ -77,14 +87,16 @@ export default function SiteSettings() {
   // Whenever config changes, check if it's different from original to trigger red glow
   useEffect(() => {
     if (originalConfig) {
-      const hasChanged = JSON.stringify(config) !== JSON.stringify(originalConfig);
+      const hasChanged = JSON.stringify(config) !== JSON.stringify(originalConfig) || passengerFile !== null || driverFile !== null;
       setIsDirty(hasChanged);
     }
-  }, [config, originalConfig]);
+  }, [config, originalConfig, passengerFile, driverFile]);
 
   const handleUndo = () => {
     if (originalConfig) {
       setConfig(originalConfig);
+      setPassengerFile(null);
+      setDriverFile(null);
       toast.success("Changes discarded");
     }
   };
@@ -113,13 +125,33 @@ export default function SiteSettings() {
 
   const handleSave = async () => {
     setLoading(true);
+    const toastId = toast.loading("Saving configuration...");
     try {
-      await setDoc(doc(db, "site_configs", "general"), config);
-      setOriginalConfig(config); // Update the backup to the new saved version
-      setIsDirty(false); // Remove red glow
-      toast.success("System Updated Successfully!");
+      let finalConfig = { ...config };
+
+      if (passengerFile) {
+        const pRef = ref(storage, `cms/signup/passenger_${Date.now()}`);
+        await uploadBytes(pRef, passengerFile);
+        finalConfig.passengerCardImage = await getDownloadURL(pRef);
+      }
+      
+      if (driverFile) {
+        const dRef = ref(storage, `cms/signup/driver_${Date.now()}`);
+        await uploadBytes(dRef, driverFile);
+        finalConfig.driverCardImage = await getDownloadURL(dRef);
+      }
+
+      await setDoc(doc(db, "site_configs", "general"), finalConfig);
+      
+      setConfig(finalConfig);
+      setOriginalConfig(finalConfig);
+      setPassengerFile(null);
+      setDriverFile(null);
+      setIsDirty(false); 
+      toast.success("System Updated Successfully!", { id: toastId });
     } catch (e) { 
-      toast.error("Error saving configuration");
+      console.error(e);
+      toast.error("Error saving configuration", { id: toastId });
     }
     setLoading(false);
   };
@@ -166,6 +198,57 @@ export default function SiteSettings() {
                 <Input label="Sub Name" value={config.siteNameSub} onChange={(v) => setConfig({...config, siteNameSub: v})} />
               </div>
               <Input label="Logo URL" value={config.logoUrl} onChange={(v) => setConfig({...config, logoUrl: v})} />
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="flex items-center gap-2 font-black uppercase italic text-[#0B2A4A]"><FiEye className="text-purple-600" /> Signup Page Config</h3>
+              <Input label="Signup Description" value={config.signupDescription || ""} onChange={(v) => setConfig({...config, signupDescription: v})} />
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Passenger Card Image Uploader */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Passenger Card Image</label>
+                  <div className="relative group aspect-video rounded-xl overflow-hidden border-2 border-dashed border-slate-200 bg-white flex items-center justify-center mb-3">
+                    {(config.passengerCardImage || passengerFile) ? (
+                      <img src={passengerFile ? URL.createObjectURL(passengerFile) : config.passengerCardImage} className="w-full h-full object-cover" alt="Preview" />
+                    ) : (
+                      <FaImage className="text-slate-200 text-3xl" />
+                    )}
+                    <label className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                      <FaUpload className="text-white text-xl" />
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(e) => setPassengerFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
+                  <Input label="Or Image URL" value={config.passengerCardImage || ""} onChange={(v) => setConfig({...config, passengerCardImage: v})} />
+                </div>
+
+                {/* Driver Card Image Uploader */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Driver Card Image</label>
+                  <div className="relative group aspect-video rounded-xl overflow-hidden border-2 border-dashed border-slate-200 bg-white flex items-center justify-center mb-3">
+                    {(config.driverCardImage || driverFile) ? (
+                      <img src={driverFile ? URL.createObjectURL(driverFile) : config.driverCardImage} className="w-full h-full object-cover" alt="Preview" />
+                    ) : (
+                      <FaImage className="text-slate-200 text-3xl" />
+                    )}
+                    <label className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                      <FaUpload className="text-white text-xl" />
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(e) => setDriverFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
+                  <Input label="Or Image URL" value={config.driverCardImage || ""} onChange={(v) => setConfig({...config, driverCardImage: v})} />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4">
