@@ -154,7 +154,11 @@ export default function SignUpUi() {
       if (authResult.success) {
         setMessage(`✅ ${authResult.userExists ? "Welcome back!" : "Account created successfully!"}`);
         setGoogleLoading(false);
+<<<<<<< HEAD
         const redirectUrl = signupType === "driver" ? "/user/driver-register?flow=driver" : "/";
+=======
+        const redirectUrl = signupType === "driver" ? "/user/driver-register" : "/";
+>>>>>>> fa3400eb666bb6ac553443b240ffbdd24dc7d43b
         setTimeout(() => router.push(redirectUrl), 1500);
       } else {
         setMessage(`❌ ${authResult.message}`);
@@ -172,7 +176,7 @@ export default function SignUpUi() {
         {/* Background Image & Overlay */}
         <div
           className="absolute inset-0 bg-gray-900 bg-cover bg-center opacity-40"
-          style={{ backgroundImage: `url('${heroBg || "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070"}')` }}
+          style={{ backgroundImage: `url('${heroBg || "/home_bg.jpg" || "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070"}')` }}
         />
         <div className="absolute inset-0 bg-black/80" />
 
@@ -234,7 +238,7 @@ export default function SignUpUi() {
   const isDriver = signupType === "driver";
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 relative ${isDriver ? "bg-gray-900" : "bg-gray-50"}`}>
+    <div className={`min-h-screen flex items-center justify-center p-4 md:p-8 relative ${isDriver ? "bg-gray-900" : "bg-gray-50"}`}>
       {/* Driver BG effect */}
       {isDriver && (
         <>
@@ -259,12 +263,12 @@ export default function SignUpUi() {
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center text-black font-black text-[10px] md:text-xs">1</div>
+                <div className="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center text-black font-semibold md:font-black text-[10px] md:text-xs">1</div>
                 <span className="text-amber-400 font-black text-[11px] md:text-xs uppercase tracking-widest">Create Account</span>
               </div>
               <div className="flex-1 h-px bg-white/20"></div>
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-gray-400 font-black text-[10px] md:text-xs">2</div>
+                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-gray-400 font-semibold md:font-black text-[10px] md:text-xs">2</div>
                 <span className="text-gray-500 font-black text-[11px] md:text-xs uppercase tracking-widest">Driver Info</span>
               </div>
             </div>
