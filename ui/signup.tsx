@@ -183,7 +183,7 @@ export default function SignUpUi() {
             </p>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-6 justify-center">
+          <div className="flex flex-col md:flex-row gap-10 justify-center">
             {/* Passenger Card */}
             <div
               onClick={() => router.push(`/signup?type=passenger${referralShortId ? '&ref=' + referralShortId : ''}`)}
@@ -191,7 +191,7 @@ export default function SignUpUi() {
             >
               <div className="w-full h-32 mb-6 rounded-2xl overflow-hidden shadow-lg group-hover:scale-105 transition-transform">
                 <img
-                  src={siteConfig?.passengerCardImage || "https://images.unsplash.com/photo-1520625345758-a53ec41b3121?q=80&w=600"}
+                  src={siteConfig?.passengerCardImage || "https://static-content.regulaforensics.com/Customer_stories/UBER/UBER-560x417.webp"}
                   alt="Passenger"
                   className="w-full h-full object-cover"
                 />
@@ -236,7 +236,10 @@ export default function SignUpUi() {
       {/* Driver BG effect */}
       {isDriver && (
         <>
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070')] bg-cover bg-center opacity-20" />
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-20"
+            style={{ backgroundImage: `url('${siteConfig?.driverCardImage || "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070"}')` }}
+          />
           <div className="absolute inset-0 bg-black/70" />
         </>
       )}
