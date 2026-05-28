@@ -257,12 +257,12 @@ export default function SignUpUi() {
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center text-black font-black text-[10px] md:text-xs">1</div>
+                <div className="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center text-black font-semibold md:font-black text-[10px] md:text-xs">1</div>
                 <span className="text-amber-400 font-black text-[11px] md:text-xs uppercase tracking-widest">Create Account</span>
               </div>
               <div className="flex-1 h-px bg-white/20"></div>
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-gray-400 font-black text-[10px] md:text-xs">2</div>
+                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-gray-400 font-semibold md:font-black text-[10px] md:text-xs">2</div>
                 <span className="text-gray-500 font-black text-[11px] md:text-xs uppercase tracking-widest">Driver Info</span>
               </div>
             </div>
