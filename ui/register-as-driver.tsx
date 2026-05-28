@@ -10,10 +10,10 @@ import LoadingRound from "@/components/re-useable-loading";
 import { FaTimes, FaCamera, FaMapMarkerAlt, FaUser } from "react-icons/fa";
 
 const NIGERIAN_STATES = [
-  "Lagos", "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", 
-  "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Federal Capital Territory", 
-  "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", 
-  "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", 
+  "Lagos", "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
+  "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Federal Capital Territory",
+  "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara",
+  "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto",
   "Taraba", "Yobe", "Zamfara"
 ]
 
@@ -27,7 +27,7 @@ export default function DriverRegisterPageUi() {
   const [whatsappPreferred, setWhatsappPreferred] = useState(false);
   const [idNumber, setIdNumber] = useState("");
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
-  
+
   const [country, setCountry] = useState("Nigeria");
   const [state, setState] = useState("Lagos");
   const [city, setCity] = useState("");
@@ -98,7 +98,7 @@ export default function DriverRegisterPageUi() {
 
       // 2. Prepare Ticket & Trial Logic
       const now = new Date();
-      
+
       const initialTicket = {
         amount: 0,
         purchasedDate: now.toISOString(),
@@ -108,23 +108,23 @@ export default function DriverRegisterPageUi() {
 
       // 3. Update Document with New Fields
       await updateDoc(doc(db, "users", userId), {
-        firstName, 
-        lastName, 
-        dateOfBirth, 
-        age, 
+        firstName,
+        lastName,
+        dateOfBirth,
+        age,
         phoneNumber,
-        whatsappPreferred, 
-        idNumber, 
+        whatsappPreferred,
+        idNumber,
         idPhotoURL, // Maintained as requested
-        country, 
-        state, 
-        city, 
+        country,
+        state,
+        city,
         address,
-        isDriver: true, 
+        isDriver: true,
         verified: false,
-        vehicleLog: [], 
-        comments: [], 
-        customersCarried: [], 
+        vehicleLog: [],
+        comments: [],
+        customersCarried: [],
         fullName: deleteField(), // Remove fullName since drivers use firstName + lastName
 
         // --- NEW DRIVER FREE TICKET LOGIC ---
@@ -132,10 +132,10 @@ export default function DriverRegisterPageUi() {
           isNew: true,
           registeredAt: serverTimestamp(),
         },
-        justJoined: true, 
-        driverJoinedDate: serverTimestamp(), 
-        ticket: [initialTicket], 
-        ticketStatus: "trial", 
+        justJoined: true,
+        driverJoinedDate: serverTimestamp(),
+        ticket: [initialTicket],
+        ticketStatus: "trial",
       });
 
       setMessage("✅ Registration successful! Enjoy 2 months free.");
@@ -157,9 +157,9 @@ export default function DriverRegisterPageUi() {
   return (
     <div className="mx-2 min-h-screen bg-gray-100 pt-4 pb-8 sm:px-6 md:px-8 flex items-center justify-center">
       <div className="max-w-2xl w-full bg-white rounded shadow-xl overflow-hidden relative">
-        
+
         {/* Close Button */}
-        <button 
+        <button
           onClick={() => router.back()}
           className="absolute top-6 right-2 md:right-6 text-gray-400 hover:text-gray-600 transition-colors z-10"
         >
@@ -170,7 +170,7 @@ export default function DriverRegisterPageUi() {
           <div className="md:text-center mb-10">
             <h1 className="text-3xl font-bold text-amber-500 ">Become a Driver</h1>
             <p className="text-gray-500 text-sm italic">Complete the form below to register your account</p>
-            
+
             {/* Added a small badge to show the offer */}
             <div className="inline-block mt-4 px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full uppercase tracking-tighter">
               🎁 New Driver Bonus: 60 Days Free
@@ -178,7 +178,7 @@ export default function DriverRegisterPageUi() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
-            
+
             {/* 1. Basic Info Section */}
             <section className="space-y-4">
               <div className="flex items-center gap-2 text-purple-600 font-bold uppercase text-xs tracking-wider">
@@ -241,7 +241,7 @@ export default function DriverRegisterPageUi() {
                     ) : (
                       <div className="text-center p-2">
                         <FaCamera className="mx-auto text-gray-400 group-hover:text-purple-500 mb-1" />
-                        <span className="text-[10px] text-gray-400 uppercase font-bold">Upload Photo</span>
+                        <span className="text-[10px] text-gray-400 uppercase font-bold">Upload ID Photo</span>
                       </div>
                     )}
                   </div>
@@ -249,7 +249,7 @@ export default function DriverRegisterPageUi() {
                 </label>
                 <div className="flex-1 w-full">
                   <input
-                    type="text" placeholder="Enter Valid ID Number" required
+                    type="text" placeholder="Enter Valid ID Number (Same As ID Photo)" required
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                     value={idNumber} onChange={(e) => setIdNumber(e.target.value)}
                   />
