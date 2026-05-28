@@ -270,7 +270,7 @@ export default function SignUpUi() {
           </div>
         )}
 
-        <h1 className={`text-3xl font-extrabold text-center mb-6 ${isDriver ? "text-white" : "text-gray-800"}`}>
+        <h1 className={`text-xl md:text-3xl font-extrabold text-center mb-6 ${isDriver ? "text-white" : "text-gray-800"}`}>
           {isDriver ? "Create Driver Account" : "Create Account"}
         </h1>
 
