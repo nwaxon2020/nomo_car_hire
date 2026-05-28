@@ -230,7 +230,7 @@ export default function DriverRegisterPageUi() {
 
             {/* 2. Verification Section */}
             <section className="space-y-4">
-              <div className="flex items-center gap-2 text-purple-600 font-bold uppercase text-xs tracking-wider">
+              <div className="flex justify-center md:justify-start items-center gap-2 text-purple-600 font-bold uppercase text-xs tracking-wider">
                 <FaCamera /> Identity Verification
               </div>
               <div className="flex flex-col sm:flex-row gap-6 items-center">
@@ -250,7 +250,7 @@ export default function DriverRegisterPageUi() {
                 <div className="flex-1 w-full">
                   <input
                     type="text" placeholder="Enter Valid ID Number (Same As ID Photo)" required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none placeholder:text-xs"
                     value={idNumber} onChange={(e) => setIdNumber(e.target.value)}
                   />
                   <p className="text-[11px] text-gray-400 mt-2 px-1 italic">We accept National ID, Driver's License, or International Passport.</p>
