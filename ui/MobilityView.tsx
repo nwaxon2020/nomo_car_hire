@@ -371,7 +371,7 @@ export default function MobilityView() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {/* Call Button */}
                             <a
-                              href={`tel:${globalSosNumber || "+2348123456789"}`}
+                              href={`tel:${activeEmergencyContact?.phoneNumber || globalSosNumber || "+2348123456789"}`}
                               className="flex items-center justify-between p-3 rounded-xl border transition-all group bg-white/5 hover:bg-white/10 border-white/10"
                             >
                               <div className="flex items-center gap-3">
@@ -380,27 +380,65 @@ export default function MobilityView() {
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="text-[9px] font-black text-gray-400 tracking-wider uppercase">Emergency Call</span>
-                                  <span className="text-[11px] font-black tracking-wider text-green-500">{globalSosNumber}</span>
+                                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                                    <span className="text-[11px] font-black tracking-wider text-green-500">
+                                      {activeEmergencyContact?.displayPhoneNumber || activeEmergencyContact?.phoneNumber || globalSosNumber}
+                                    </span>
+                                    {activeEmergencyContact && (
+                                      <span className="text-[9px] font-bold text-gray-400 tracking-tight">
+                                        ({activeEmergencyContact.name})
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest group-hover:text-white">Call</span>
                             </a>
 
                             {/* WhatsApp Button */}
-                            <a
-                              href={`https://wa.me/${(globalSosNumber || "2348123456789").replace(/\D/g, '')}?text=${encodeURIComponent(`🚨 EMERGENCY SOS ALERT 🚨\n\nI need assistance immediately!\n\n${isLocationSharing ? `📍 My Live Location: https://maps.google.com/?q=${user?.location?.lat || userLocation?.lat},${user?.location?.lng || userLocation?.lng}` : ""}\n\n_Sent via Nomo Safety System_`)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-between p-3 rounded-xl border transition-all group bg-green-600/10 hover:bg-green-600/20 border-green-500/30"
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (!isLocationSharing) {
+                                  toast('📍 Turn on your location sharing first to send your live location via WhatsApp SOS', {
+                                    icon: '⚠️',
+                                    duration: 4000,
+                                    style: { background: '#1e293b', color: '#fbbf24', fontSize: '12px', fontWeight: 700 }
+                                  });
+                                  return;
+                                }
+                                const phone = (activeEmergencyContact?.phoneNumber || globalSosNumber || "2348123456789").replace(/\D/g, '');
+                                const lat = user?.location?.lat || userLocation?.lat;
+                                const lng = user?.location?.lng || userLocation?.lng;
+                                const address = user?.location?.address || 'Detecting...';
+                                const userName = user?.fullName || user?.displayName || user?.email?.split('@')[0] || 'A user';
+                                const message = `🚨 *EMERGENCY SOS ALERT* 🚨\n\n*${userName}* needs immediate assistance!\n\n📍 *Current Location:*\nhttps://maps.google.com/?q=${lat},${lng}\n\n📍 *Address:* ${address}\n\n_Sent via Nomo Safety System_`;
+                                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+                              }}
+                              className={`flex items-center justify-between p-3 rounded-xl border transition-all group w-full ${
+                                isLocationSharing
+                                  ? 'bg-green-600/10 hover:bg-green-600/20 border-green-500/30 cursor-pointer'
+                                  : 'bg-white/5 border-white/10 cursor-pointer opacity-60'
+                              }`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center border bg-green-500/20 text-green-400 border-green-500/20">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+                                  isLocationSharing ? 'bg-green-500/20 text-green-400 border-green-500/20' : 'bg-gray-500/20 text-gray-400 border-gray-500/20'
+                                }`}>
                                   <FaWhatsapp size={14} />
                                 </div>
-                                <span className="text-[11px] font-black tracking-wider text-green-400">WhatsApp SOS</span>
+                                <div className="flex flex-col text-left">
+                                  <span className={`text-[11px] font-black tracking-wider ${isLocationSharing ? 'text-green-400' : 'text-gray-500'}`}>WhatsApp SOS</span>
+                                  {activeEmergencyContact && (
+                                    <span className="text-[8px] font-bold text-green-500/60 tracking-tight">{activeEmergencyContact.name}</span>
+                                  )}
+                                  {!isLocationSharing && (
+                                    <span className="text-[7px] font-bold text-yellow-500/80 tracking-tight mt-0.5">⚠ Location required</span>
+                                  )}
+                                </div>
                               </div>
-                              <FaChevronRight size={10} className="text-gray-500 transition-transform group-hover:translate-x-1" />
-                            </a>
+                              <FaChevronRight size={10} className={`transition-transform group-hover:translate-x-1 ${isLocationSharing ? 'text-gray-500' : 'text-gray-600'}`} />
+                            </button>
                           </div>
 
                           {!activeEmergencyContact && (

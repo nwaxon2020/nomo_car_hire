@@ -17,7 +17,7 @@ import {
 import { db } from '@/lib/firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import {
-  FaMapMarkerAlt, FaUserFriends, FaShareAlt, FaEye, FaEyeSlash, FaPlus, FaTimes, FaUser, FaMap, FaCheckCircle, FaShieldAlt, FaWhatsapp, FaPhone, FaInfoCircle, FaExternalLinkAlt, FaChevronDown, FaChevronUp, FaLock
+  FaMapMarkerAlt, FaUserFriends, FaShareAlt, FaEye, FaEyeSlash, FaPlus, FaTimes, FaUser, FaMap, FaCheckCircle, FaShieldAlt, FaWhatsapp, FaPhone, FaInfoCircle, FaExternalLinkAlt, FaChevronDown, FaChevronUp, FaLock, FaTrashAlt, FaAddressBook
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -45,13 +45,18 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const [watchId, setWatchId] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const [newLovedOneNumber, setNewLovedOneNumber] = useState('');
+  const [newLovedOneName, setNewLovedOneName] = useState('');
   const [addingLovedOne, setAddingLovedOne] = useState(false);
+  const isAddingRef = useRef(false);
+  const [showAddContactForm, setShowAddContactForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const isStartingRef = useRef(false);
   const [sendingLinks, setSendingLinks] = useState<string[]>([]);
   const [showTracking, setShowTracking] = useState(false);
   const batteryToastShownRef = useRef(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; contact: LovedOne | null }>({ show: false, contact: null });
+  const [deleting, setDeleting] = useState(false);
 
   // GPS Permission Modal State
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
@@ -89,7 +94,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         const updateBatteryStatus = () => {
           const isLow = battery.level < 0.15 && !battery.charging;
           setBatterySavingMode(battery.level < 0.2 && !battery.charging);
-          
+
           if (isLow && isSharing && !batteryToastShownRef.current) {
             toast.error('Battery low - reducing location updates', { id: 'battery-low' });
             batteryToastShownRef.current = true;
@@ -148,7 +153,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     const loadUserData = () => {
       try {
         const userRef = doc(db, 'users', userId);
-        
+
         unsubscribe = onSnapshot(userRef, async (docSnap) => {
           if (!docSnap.exists()) return;
 
@@ -165,7 +170,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             if (locationData.timestamp) {
               setLastUpdate(locationData.timestamp.toDate());
             }
-            
+
             // Auto resume tracking if it was left ON and not already watching/starting
             if (!watchIdRef.current && !isStartingRef.current) {
               startLocationSharing(false); // Pass false to suppress toast
@@ -230,7 +235,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
             lovedOnesData.push({
               id: contactId,
               whatsappNumber: contactData.whatsappNumber || '',
-              name: contactData.displayNumber || 'WhatsApp Contact',
+              name: contactData.name || emergencyContactMap[contactId]?.name || contactData.displayNumber || 'WhatsApp Contact',
               formattedNumber: formatPhoneForDisplay(contactData.whatsappNumber || ''),
               isAppUser: false,
               isActive: emergencyContactMap[contactId]?.isActive || false
@@ -290,42 +295,52 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
   };
 
-  // Send WhatsApp tracking link
-  const sendTrackingLink = async (lovedOne: LovedOne) => {
+  // Share tracking or invite link
+  const handleShareContact = async (lovedOne: LovedOne) => {
     try {
-      setSendingLinks(prev => [...prev, lovedOne.id]);
-
-      const token = generateToken();
-      const trackingLink = `${window.location.origin}/track/${userId}/${token}`;
-
-      const tokenRef = doc(db, 'trackingTokens', token);
-      await setDoc(tokenRef, {
-        userId,
-        whatsappNumber: lovedOne.whatsappNumber,
-        lovedOneId: lovedOne.id,
-        createdAt: Timestamp.now(),
-        expiresAt: Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
-        isValid: true
-      });
-
       const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
-      const message = `🚗 *Nomopoventures Live Tracking*\n\n` +
-        `${userName} is sharing their live location with you!\n\n` +
-        `📍 *Click to track live:* ${trackingLink}\n\n` +
-        `⏰ Link valid for 24 hours\n` +
-        `📍 Updates every 30 seconds\n` +
-        `🗺️ See real-time movement on map\n\n` +
-        `_Shared via Nomopoventures Safety Feature_`;
+      const refLink = `${window.location.origin}/login?ref=${userId}`;
+      let message = '';
+
+      if (isSharing) {
+        setSendingLinks(prev => [...prev, lovedOne.id]);
+
+        const token = generateToken();
+        const trackingLink = `${window.location.origin}/track/${userId}/${token}`;
+
+        const tokenRef = doc(db, 'trackingTokens', token);
+        await setDoc(tokenRef, {
+          userId,
+          whatsappNumber: lovedOne.whatsappNumber,
+          lovedOneId: lovedOne.id,
+          createdAt: Timestamp.now(),
+          expiresAt: Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
+          isValid: true
+        });
+
+        message = `🚗 *Nomo Cars Live Tracking*\n\n` +
+          `${userName} is sharing their live location with you!\n\n` +
+          `📍 *Click to track live:* ${trackingLink}\n\n` +
+          `⏰ Link valid for 24 hours\n` +
+          `📍 Updates every 30 seconds\n\n` +
+          `🎁 *Join Nomo Cars via my invite link to get VIP upgrades and more:* ${refLink}\n\n` +
+          `_Shared via Nomo Cars Safety Feature_`;
+
+        setSendingLinks(prev => prev.filter(id => id !== lovedOne.id));
+      } else {
+        message = `🚗 *Join me on Nomo Cars!*\n\n` +
+          `Hey! ${userName} wants you to join Nomo Cars, the premium transport hub.\n\n` +
+          `🎁 *Click my invite link to get VIP upgrades and exclusive benefits:* ${refLink}\n\n` +
+          `_Stay safe and travel in style!_`;
+      }
 
       const formattedNumber = formatPhoneForSearch(lovedOne.whatsappNumber);
       const whatsappUrl = `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message)}`;
 
       window.open(whatsappUrl, '_blank');
     } catch (error) {
-      console.error('Error sending tracking link:', error);
-      toast.error('Failed to send tracking link');
-    } finally {
-      setSendingLinks(prev => prev.filter(id => id !== lovedOne.id));
+      console.error('Error sharing link:', error);
+      toast.error('Failed to send link');
     }
   };
 
@@ -333,7 +348,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
   const sendLinksToAll = () => {
     lovedOnes.forEach(lovedOne => {
       if (!sendingLinks.includes(lovedOne.id)) {
-        sendTrackingLink(lovedOne);
+        handleShareContact(lovedOne);
       }
     });
   };
@@ -559,17 +574,65 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
     }
   };
 
-  const addLovedOne = async (whatsappNumber: string) => {
+  const addLovedOne = async (whatsappNumber: string, contactName: string) => {
+    if (isAddingRef.current) return;
+
+    if (!contactName.trim()) {
+      toast.error('Please enter the contact name');
+      return;
+    }
+
     const cleanedNumber = whatsappNumber.replace(/\D/g, '');
     if (cleanedNumber.length < 10 || cleanedNumber.length > 15) {
       toast.error('Please enter a valid phone number (10-15 digits)');
       return;
     }
 
+    isAddingRef.current = true;
     setAddingLovedOne(true);
 
     try {
       const formattedNumber = formatPhoneForSearch(whatsappNumber);
+
+      // Verify directly against latest Firestore data before performing any write
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const dbEmergencyContacts = userData.emergencyContact || [];
+        const duplicate = dbEmergencyContacts.find((ec: any) => {
+          const existingCleaned = ec.phoneNumber.replace(/\D/g, '');
+          const newCleaned = formattedNumber.replace(/\D/g, '');
+          return existingCleaned === newCleaned;
+        });
+
+        if (duplicate) {
+          toast.error(
+            `This number is already saved as "${duplicate.name}" (${formatPhoneForDisplay(duplicate.phoneNumber)})`,
+            { duration: 5000 }
+          );
+          setNewLovedOneNumber('');
+          setNewLovedOneName('');
+          setShowAddContactForm(false);
+          return;
+        }
+      }
+
+      // Check for duplicate phone number in existing local contacts state just to be safe
+      const existingContact = lovedOnes.find(lo => {
+        const existingCleaned = lo.whatsappNumber.replace(/\D/g, '');
+        const newCleaned = formattedNumber.replace(/\D/g, '');
+        return existingCleaned === newCleaned;
+      });
+
+      if (existingContact) {
+        toast.error(
+          `This number is already saved as "${existingContact.name}" (${existingContact.formattedNumber})`,
+          { duration: 5000 }
+        );
+        return;
+      }
+
       const usersRef = collection(db, 'users');
       const possibleFormats = [
         formattedNumber,
@@ -601,6 +664,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         await setDoc(contactRef, {
           whatsappNumber: formattedNumber,
           displayNumber: formatPhoneForDisplay(whatsappNumber),
+          name: contactName.trim(),
           createdAt: Timestamp.now(),
           isWhatsAppOnly: true,
           addedBy: userId
@@ -608,12 +672,15 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
       }
 
       if (lovedOnes.some(lo => lo.id === lovedOneId)) {
-        toast.success('Contact already added');
+        const existing = lovedOnes.find(lo => lo.id === lovedOneId);
+        toast.error(
+          `This number is already saved as "${existing?.name}" (${existing?.formattedNumber})`,
+          { duration: 5000 }
+        );
         return;
       }
 
-      const userRef = doc(db, 'users', userId);
-      const displayName = isAppUser ? (lovedOneData.name || formatPhoneForDisplay(whatsappNumber)) : formatPhoneForDisplay(whatsappNumber);
+      const displayName = contactName.trim() || (isAppUser ? (lovedOneData.name || formatPhoneForDisplay(whatsappNumber)) : formatPhoneForDisplay(whatsappNumber));
 
       const emergencyContactObj = {
         phoneNumber: formattedNumber,
@@ -637,23 +704,31 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         });
       }
 
-      setLovedOnes(prev => [...prev, {
-        id: lovedOneId,
-        whatsappNumber: formattedNumber,
-        name: displayName,
-        formattedNumber: formatPhoneForDisplay(whatsappNumber),
-        isAppUser,
-        isActive: lovedOnes.length === 0
-      }]);
+      setLovedOnes(prev => {
+        if (prev.some(lo => lo.id === lovedOneId)) {
+          return prev;
+        }
+        return [...prev, {
+          id: lovedOneId,
+          whatsappNumber: formattedNumber,
+          name: displayName,
+          formattedNumber: formatPhoneForDisplay(whatsappNumber),
+          isAppUser,
+          isActive: prev.length === 0
+        }];
+      });
 
       setNewLovedOneNumber('');
-      toast.success(`${formatPhoneForDisplay(whatsappNumber)} added to emergency contacts`);
+      setNewLovedOneName('');
+      setShowAddContactForm(false);
+      toast.success(`${displayName} (${formatPhoneForDisplay(whatsappNumber)}) added to emergency contacts`);
 
     } catch (error) {
       console.error('Error adding loved one:', error);
       toast.error('Failed to add contact');
     } finally {
       setAddingLovedOne(false);
+      isAddingRef.current = false;
     }
   };
 
@@ -846,7 +921,7 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
           disabled={loading}
           className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all flex items-center justify-center gap-2 ${isSharing
             ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'
-            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-900/20 active:scale-[0.98]'
+            : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md shadow-green-900/20 active:scale-[0.98]'
             }`}
         >
           {loading ? (
@@ -885,37 +960,91 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
 
         {/* Emergency Contacts Management */}
         <div className="pt-1">
-          <div className="flex gap-1.5 mb-2">
-            <input
-              type="tel"
-              placeholder="080..."
-              value={newLovedOneNumber}
-              onChange={(e) => setNewLovedOneNumber(e.target.value)}
-              className="flex-1 px-2.5 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs placeholder:text-gray-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-            />
-            <button
-              onClick={() => addLovedOne(newLovedOneNumber)}
-              disabled={addingLovedOne || !newLovedOneNumber}
-              className="px-3 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center shrink-0"
-            >
-              {addingLovedOne ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Add'}
-            </button>
-          </div>
+          {/* Add Contacts Toggle Button */}
+          <button
+            onClick={() => setShowAddContactForm(!showAddContactForm)}
+            className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.1em] transition-all flex items-center justify-center gap-2 mb-2 ${showAddContactForm
+              ? 'bg-gray-100 text-gray-600 border border-gray-200'
+              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-900/20 hover:shadow-lg active:scale-[0.98]'
+              }`}
+          >
+            {showAddContactForm ? (
+              <>
+                <FaTimes size={9} />
+                Close
+              </>
+            ) : (
+              <>
+                <FaAddressBook size={9} />
+                Add Contacts
+              </>
+            )}
+          </button>
+
+          {/* Dropdown Form */}
+          <AnimatePresence>
+            {showAddContactForm && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl mb-2 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Contact Name *"
+                    value={newLovedOneName}
+                    onChange={(e) => setNewLovedOneName(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs placeholder:text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    required
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone Number (080...) *"
+                    value={newLovedOneNumber}
+                    onChange={(e) => setNewLovedOneNumber(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs placeholder:text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    required
+                  />
+                  <button
+                    onClick={() => addLovedOne(newLovedOneNumber, newLovedOneName)}
+                    disabled={addingLovedOne || !newLovedOneNumber.trim() || !newLovedOneName.trim()}
+                    className="w-full py-2 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    {addingLovedOne ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <FaPlus size={8} />
+                        Save Contact
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {lovedOnes.length > 0 && (
             <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
               {lovedOnes.map((lovedOne) => (
                 <div key={lovedOne.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${lovedOne.isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'} group`}>
-                  <div className="flex items-center gap-1.5 flex-1">
-                    <div className="w-5 h-5 rounded flex items-center justify-center bg-blue-100 text-blue-600">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div className="w-5 h-5 rounded flex items-center justify-center bg-blue-100 text-blue-600 shrink-0">
                       <FaUser size={8} />
                     </div>
                     <div className="leading-none flex-1 min-w-0">
-                      <p className="text-[9px] font-black text-gray-800 tracking-tight">{lovedOne.name}</p>
-                      <p className="text-[7px] text-gray-400 font-bold uppercase">{lovedOne.formattedNumber}</p>
+                      <div className="flex items-baseline gap-1 flex-wrap">
+                        <span className="text-[11px] font-black text-gray-900 tracking-tight truncate">{lovedOne.name}</span>
+                        {lovedOne.name !== lovedOne.formattedNumber && (
+                          <span className="text-[9px] font-bold text-gray-500">({lovedOne.formattedNumber})</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => setActiveContact(lovedOne.id)}
                       className={`px-2 py-1 rounded transition-all text-[8px] font-black uppercase tracking-widest ${lovedOne.isActive ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-green-100 hover:text-green-600'}`}
@@ -923,20 +1052,19 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
                     >
                       {lovedOne.isActive ? '✓ Active' : 'Select'}
                     </button>
-                    {isSharing && (
-                      <button
-                        onClick={() => sendTrackingLink(lovedOne)}
-                        className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors hidden md:block"
-                        title="Send Link"
-                      >
-                        <FaShareAlt size={8} />
-                      </button>
-                    )}
                     <button
-                      onClick={() => removeLovedOne(lovedOne.id)}
-                      className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors hidden md:block"
+                      onClick={() => handleShareContact(lovedOne)}
+                      className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                      title={isSharing ? "Send Tracking & Invite Link" : "Send Invite Link"}
                     >
-                      <FaTimes size={8} />
+                      <FaShareAlt size={8} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm({ show: true, contact: lovedOne })}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      title="Delete contact"
+                    >
+                      <FaTrashAlt size={8} />
                     </button>
                   </div>
                 </div>
@@ -993,6 +1121,54 @@ export default function CustomerLocationToggle({ userId, tripId }: CustomerLocat
         onRetry={startLocationSharing}
         errorType={gpsErrorType}
       />
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm.show && deleteConfirm.contact && (
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="max-w-xs w-full bg-white rounded-2xl p-6 text-center shadow-2xl"
+            >
+              <div className="w-14 h-14 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FaTrashAlt className="text-xl" />
+              </div>
+              <h3 className="text-base font-black text-gray-900 mb-1 uppercase tracking-tight">Delete Contact?</h3>
+              <p className="text-xs text-gray-500 font-medium mb-1">
+                Remove <span className="font-black text-gray-700">{deleteConfirm.contact.name}</span> from your emergency contacts?
+              </p>
+              <p className="text-[10px] text-gray-400 font-bold mb-5">
+                {deleteConfirm.contact.formattedNumber}
+              </p>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={async () => {
+                    if (!deleteConfirm.contact) return;
+                    setDeleting(true);
+                    await removeLovedOne(deleteConfirm.contact.id);
+                    setDeleting(false);
+                    setDeleteConfirm({ show: false, contact: null });
+                  }}
+                  disabled={deleting}
+                  className="w-full py-3 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-900/20 active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  {deleting ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm({ show: false, contact: null })}
+                  className="w-full py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
