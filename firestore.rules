@@ -54,7 +54,7 @@ service cloud.firestore {
         'loadOnceAllowed', 'loadOnceUsedDate', 'loadBlockedUntil',
         'contactedDrivers', 'hiredCars', 'lastBookedCarId', 'carSwitchCount', 'tripHistory',
         'dateOfBirth', 'age', 'idNumber', 'idPhotoURL', 'country', 'address',
-        'comments', 'ticketTransactions', 'justJoined', 'driverJoinedDate', 'ticket', 'ticketStatus'
+        'comments', 'ticketTransactions', 'newDriverConfig', 'justJoined', 'driverJoinedDate', 'ticket', 'ticketStatus'
       ];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
     }

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, updateDoc, serverTimestamp, deleteField } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp, deleteField, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import LoadingRound from "@/components/re-useable-loading";
 import { FaTimes, FaCamera, FaMapMarkerAlt, FaUser } from "react-icons/fa";
@@ -136,6 +136,17 @@ export default function DriverRegisterPageUi() {
         driverJoinedDate: serverTimestamp(),
         ticket: [initialTicket],
         ticketStatus: "trial",
+        hasUnreadNotifications: true,
+        notifications: arrayUnion({
+          id: `driver-reg-${Date.now()}`,
+          type: "driver_registration",
+          title: "🎉 Driver Registration Successful!",
+          message: `Welcome to Nomo Cars Driver, ${firstName}! Your driver profile is ready and you have been granted a 2-month free trial.`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          actionUrl: null,
+          actionLabel: null
+        })
       });
 
       setMessage("✅ Registration successful! Enjoy 2 months free.");
