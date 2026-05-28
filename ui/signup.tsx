@@ -232,7 +232,7 @@ export default function SignUpUi() {
   const isDriver = signupType === "driver";
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 relative ${isDriver ? "bg-gray-900" : "bg-gray-50"}`}>
+    <div className={`min-h-screen flex items-center justify-center p-4 md:p-8 relative ${isDriver ? "bg-gray-900" : "bg-gray-50"}`}>
       {/* Driver BG effect */}
       {isDriver && (
         <>
