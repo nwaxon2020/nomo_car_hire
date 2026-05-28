@@ -176,8 +176,8 @@ export default function SignUpUi() {
 
         <div className="relative z-10 max-w-4xl w-full">
           <div className="text-center mb-10">
-            <h1 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter drop-shadow-lg mb-2">Choose Your Preference</h1>
-            <p className="text-gray-300 font-bold tracking-widest uppercase text-xs md:text-sm">How would you like to join Nomo Cars?</p>
+            <h1 className="text-lg md:text-3xl font-black text-white uppercase tracking-tighter drop-shadow-lg mb-2">Choose Your Preference</h1>
+            <p className="text-gray-300 font-semibold md:font-bold tracking-widest uppercase text-xs md:text-sm">How would you like to join Nomo Cars?</p>
             <p className="mt-4 text-xs md:text-sm text-gray-400 max-w-2xl mx-auto font-medium">
               {siteConfig?.signupDescription || "Welcome to Nomo Cars! Whether you're looking for premium, comfortable rides across the city or you want to join our exclusive fleet to earn on your own schedule, your journey starts here."}
             </p>
@@ -187,9 +187,9 @@ export default function SignUpUi() {
             {/* Passenger Card */}
             <div
               onClick={() => router.push(`/signup?type=passenger${referralShortId ? '&ref=' + referralShortId : ''}`)}
-              className="bg-white/10 border border-white/20 rounded md:rounded-xl hover:bg-white/20 hover:scale-105 transition-all cursor-pointer flex-1 flex flex-col items-center text-center group shadow-2xl overflow-hidden relative"
+              className="bg-white/10 border border-white/20 rounded-lg md:rounded-xl hover:bg-white/20 hover:scale-105 transition-all cursor-pointer flex-1 flex flex-col items-center text-center group shadow-2xl overflow-hidden relative"
             >
-              <div className="w-full h-32 mb-6 rounded-2xl overflow-hidden shadow-lg group-hover:scale-105 transition-transform">
+              <div className="w-full h-32 mb-6 overflow-hidden shadow-lg group-hover:scale-105 transition-transform">
                 <img
                   src={siteConfig?.passengerCardImage || "https://static-content.regulaforensics.com/Customer_stories/UBER/UBER-560x417.webp"}
                   alt="Passenger"
@@ -203,7 +203,7 @@ export default function SignUpUi() {
             {/* Driver Card */}
             <div
               onClick={() => router.push(`/signup?type=driver${referralShortId ? '&ref=' + referralShortId : ''}`)}
-              className="bg-white/10 border border-white/20 rounded md:rounded-xl hover:bg-white/20 hover:scale-105 transition-all cursor-pointer flex-1 flex flex-col items-center text-center group shadow-2xl overflow-hidden relative"
+              className="bg-white/10 border border-white/20 rounded-lg md:rounded-xl hover:bg-white/20 hover:scale-105 transition-all cursor-pointer flex-1 flex flex-col items-center text-center group shadow-2xl overflow-hidden relative"
             >
               <div className="w-full h-32 mb-6 overflow-hidden shadow-lg group-hover:scale-105 transition-transform">
                 <img
