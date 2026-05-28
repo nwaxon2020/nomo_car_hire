@@ -152,7 +152,7 @@ export default function SignUpUi() {
       if (authResult.success) {
         setMessage(`✅ ${authResult.userExists ? "Welcome back!" : "Account created successfully!"}`);
         setGoogleLoading(false);
-        const redirectUrl = signupType === "driver" ? "/user/register-as-driver" : "/";
+        const redirectUrl = signupType === "driver" ? "/user/driver-register" : "/";
         setTimeout(() => router.push(redirectUrl), 1500);
       } else {
         setMessage(`❌ ${authResult.message}`);
