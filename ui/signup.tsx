@@ -250,7 +250,7 @@ export default function SignUpUi() {
         </button>
       </div>
 
-      <div className={`relative z-10 shadow-2xl rounded-2xl p-8 max-w-md w-full border ${isDriver ? "bg-gray-900/80 border-amber-500/30 backdrop-blur-md" : "bg-white border-gray-100"}`}>
+      <div className={`relative z-10 shadow-2xl rounded-2xl p-4 md:p-8 max-w-md w-full border ${isDriver ? "bg-gray-900/80 border-amber-500/30 backdrop-blur-md" : "bg-white border-gray-100"}`}>
 
         {/* Step indicator for drivers */}
         {isDriver && (
