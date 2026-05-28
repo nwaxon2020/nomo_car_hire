@@ -178,7 +178,7 @@ export default function SignUpUi() {
           <div className="text-center mb-10">
             <h1 className="text-lg md:text-3xl font-black text-white uppercase tracking-tighter drop-shadow-lg mb-2">Choose Your Preference</h1>
             <p className="text-gray-300 font-semibold md:font-bold tracking-widest uppercase text-xs md:text-sm">How would you like to join Nomo Cars?</p>
-            <p className="mt-4 text-xs md:text-sm text-gray-400 max-w-2xl mx-auto font-medium">
+            <p className="mt-4 text-[11px] md:text-sm text-gray-400 max-w-2xl mx-auto font-medium">
               {siteConfig?.signupDescription || "Welcome to Nomo Cars! Whether you're looking for premium, comfortable rides across the city or you want to join our exclusive fleet to earn on your own schedule, your journey starts here."}
             </p>
           </div>
