@@ -170,7 +170,7 @@ export default function SignUpUi() {
         {/* Background Image & Overlay */}
         <div
           className="absolute inset-0 bg-gray-900 bg-cover bg-center opacity-40"
-          style={{ backgroundImage: `url('${heroBg || "https://firebasestorage.googleapis.com/v0/b/carhire-75566.firebasestorage.app/o/cms%2Fhome%2Fhero_1774467408342?alt=media&token=cf4a4ac1-243f-4d00-b070-0b8bb00529c2" || "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070"}')` }}
+          style={{ backgroundImage: `url('${heroBg || "/home_bg.jpg" || "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070"}')` }}
         />
         <div className="absolute inset-0 bg-black/80" />
 
