@@ -19,6 +19,7 @@ import {
 import toast from 'react-hot-toast';
 
 import { triggerNotification } from "@/lib/notifications";
+import { useAdminRole, verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 interface Reply {
   text: string;
@@ -406,21 +407,14 @@ const AdminComplaintsUi = () => {
   const [disabledUserIds, setDisabledUserIds] = useState<Set<string>>(new Set());
   const [confirmToggle, setConfirmToggle] = useState<{ id: string; name: string; currentStatus: boolean; complaintId: string } | null>(null);
 
-  const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_KEY;
-  const MASTER_PASS_CODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE;
+  const { isCEO } = useAdminRole();
 
   useEffect(() => {
     let unsubscribeSnap: (() => void) | undefined;
     let unsubDisabled: (() => void) | undefined;
 
     const checkAdminAccess = async (uid: string) => {
-      if (uid === ADMIN_UID) return true;
       try {
-        const userSnap = await getDoc(doc(db, "users", uid));
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          if (data.admin === true || data.isAdmin === true) return true;
-        }
         const staffSnap = await getDoc(doc(db, "adminStaffs", uid));
         return staffSnap.exists();
       } catch (e) {
@@ -466,7 +460,7 @@ const AdminComplaintsUi = () => {
       if (unsubscribeSnap) unsubscribeSnap();
       if (unsubDisabled) unsubDisabled();
     };
-  }, [ADMIN_UID]);
+  }, []);
 
   // --- handleSendReply ---
   const handleSendReply = async (id: string) => {
@@ -526,7 +520,8 @@ const AdminComplaintsUi = () => {
 
 
   const handleArchive = async () => {
-    if (enteredPassCode !== MASTER_PASS_CODE) {
+    const isValid = await verifyAdminPasscode(enteredPassCode);
+    if (!isValid) {
       toast.error("Invalid Authorization Code");
       setEnteredPassCode('');
       return;
@@ -680,7 +675,7 @@ const AdminComplaintsUi = () => {
                     loadingId={loadingId}
                     onToggle={(data: any) => setConfirmToggle({ ...data, complaintId: c.id })}
                     isDisabled={disabledUserIds.has(tId)}
-                    isCEO={auth.currentUser?.uid === ADMIN_UID}
+                    isCEO={isCEO}
                   />
                 );
               })}

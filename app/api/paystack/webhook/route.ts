@@ -34,6 +34,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'ignored', message: 'Missing metadata' });
     }
 
+    // ── IDEMPOTENCY CHECK ──────────────────────────────────────────────────
+    // Paystack can retry webhooks. Don't process the same reference twice.
+    const existingTxn = await adminDb
+      .collection('transactions')
+      .where('reference', '==', reference)
+      .limit(1)
+      .get();
+
+    if (!existingTxn.empty) {
+      return NextResponse.json({ status: 'ignored', message: 'Already processed' });
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     try {
       const userRef = adminDb.collection('users').doc(userId);
 

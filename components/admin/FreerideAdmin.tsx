@@ -31,6 +31,7 @@ import {
   FiLock
 } from 'react-icons/fi';
 import { toast } from "react-hot-toast";
+import { useAdminRole, verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 interface FreerideConfig {
   driverThreshold: number;
@@ -79,9 +80,7 @@ export default function FreerideAdmin() {
   const [passcodeEntry, setPasscodeEntry] = useState("");
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
-  const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_KEY;
-  const MASTER_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE; // 332332
-  const isCEO = auth.currentUser?.uid === ADMIN_UID;
+  const { isCEO } = useAdminRole();
 
   // Fetch Config
   useEffect(() => {
@@ -206,7 +205,8 @@ export default function FreerideAdmin() {
   };
 
   const handleUnmarkPaid = async () => {
-    if (passcodeEntry !== MASTER_PASSCODE) {
+    const isValid = await verifyAdminPasscode(passcodeEntry);
+    if (!isValid) {
       toast.error("Invalid Administrative Passcode");
       setPasscodeEntry("");
       return;

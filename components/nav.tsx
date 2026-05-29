@@ -15,6 +15,7 @@ export default function Nav() {
   const [user, setUser] = useState<any>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isStaff, setIsStaff] = useState(false);
+  const [isCEOUser, setIsCEOUser] = useState(false);
   const [cmsLogo, setCmsLogo] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function Nav() {
 
             const staffDoc = await getDoc(doc(db, "adminStaffs", authUser.uid));
             setIsStaff(staffDoc.exists());
+            setIsCEOUser(staffDoc.exists() && staffDoc.data()?.isCEO === true);
           } else {
             setUser(authUser);
             setProfileImage(authUser.photoURL || null);
@@ -99,7 +101,6 @@ export default function Nav() {
   };
 
   const isPrivileged =
-    user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY ||
     user?.isAdmin === true ||
     isStaff === true;
 
@@ -215,7 +216,7 @@ export default function Nav() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
-                      {user.uid === process.env.NEXT_PUBLIC_ADMIN_KEY ? 'Chief Executive' : (isPrivileged ? 'Administrator' : 'Authorized Member')}
+                      {isCEOUser ? 'Chief Executive' : (isPrivileged ? 'Administrator' : 'Authorized Member')}
                     </p>
                     <p className="text-white font-bold text-sm truncate">{getUserDisplayName()}</p>
                     <p className="text-gray-400 text-xs truncate">{user.email}</p>

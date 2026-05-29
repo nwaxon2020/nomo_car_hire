@@ -9,6 +9,7 @@ import { toast } from "react-hot-toast";
 import LoadingRound from "@/components/re-useable-loading";
 import { triggerNotification } from "@/lib/notifications";
 import ManualTransportCardForm from "./ManualTransportCardForm";
+import { useAdminRole, verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 export default function ManageTransport() {
     const [companies, setCompanies] = useState<any[]>([]);
@@ -24,8 +25,7 @@ export default function ManageTransport() {
     const [showDeleteTripId, setShowDeleteTripId] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const user = auth.currentUser;
-    const isCEO = user?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY;
+    const { isCEO } = useAdminRole();
 
     useEffect(() => {
         const q = collection(db, "transportCompanies");
@@ -76,7 +76,8 @@ export default function ManageTransport() {
             toast.error(`Only CEO can ${showPasskeyModal.action} companies`);
             return;
         }
-        if (passkey !== process.env.NEXT_PUBLIC_ADMIN_PASS_CODE) {
+        const isValid = await verifyAdminPasscode(passkey);
+        if (!isValid) {
             toast.error("Invalid Admin Passcode");
             return;
         }

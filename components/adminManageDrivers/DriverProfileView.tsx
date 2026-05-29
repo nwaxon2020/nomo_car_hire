@@ -7,6 +7,7 @@ import { toast } from "react-hot-toast";
 import { FaTimes, FaPaperPlane, FaFlag, FaChevronLeft, FaChevronRight, FaInfoCircle, FaChevronDown, FaExclamationTriangle, FaLock } from "react-icons/fa";
 
 import { triggerNotification } from "@/lib/notifications";
+import { verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 export default function DriverProfileView({ driver: initialDriver, onClose }: any) {
   const [driver, setDriver] = useState(initialDriver);
@@ -26,7 +27,6 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   const [passcodeEntry, setPasscodeEntry] = useState("");
   const [adminAction, setAdminAction] = useState<{ type: string, label: string } | null>(null);
 
-  const PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE2;
 
   const presetReasons = [
     "Customer Complaint", "Reckless Driving", "Vehicle Condition Issues",
@@ -112,7 +112,8 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   };
 
   const handlePasscodeSubmit = async () => {
-    if (passcodeEntry !== PASSCODE) {
+    const isValid = await verifyAdminPasscode(passcodeEntry, 'secondary');
+    if (!isValid) {
       setPasscodeEntry("");
       return toast.error("Invalid Passcode");
     }

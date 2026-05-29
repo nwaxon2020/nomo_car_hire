@@ -6,6 +6,7 @@ import { collection, getDocs, setDoc, doc, onSnapshot, deleteDoc, updateDoc, arr
 import { FiSearch, FiPlus, FiX, FiNavigation, FiUsers, FiShield, FiTrash2, FiActivity, FiLock, FiEdit3, FiCheck } from 'react-icons/fi';
 import Link from "next/link";
 import toast from 'react-hot-toast';
+import { useAdminRole, verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 export default function AddStaffPageUi() {
   const [users, setUsers] = useState<any[]>([]);
@@ -21,8 +22,7 @@ export default function AddStaffPageUi() {
   const [routes, setRoutes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isCEO = auth.currentUser?.uid === process.env.NEXT_PUBLIC_ADMIN_KEY;
-  const MASTER_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE;
+  const { isCEO } = useAdminRole();
 
   useEffect(() => {
     if (!isCEO) {
@@ -87,7 +87,8 @@ export default function AddStaffPageUi() {
   };
 
   const finalizePermissions = async () => {
-    if (passcode !== MASTER_PASSCODE) return toast.error("Invalid Passcode");
+    const isValid = await verifyAdminPasscode(passcode);
+    if (!isValid) return toast.error("Invalid Passcode");
     try {
       const targetId = selectedUser.id || selectedUser.uid;
 
@@ -112,7 +113,8 @@ export default function AddStaffPageUi() {
   };
 
   const revokeAccess = async () => {
-    if (passcode !== MASTER_PASSCODE) return toast.error("Invalid Passcode");
+    const isValid = await verifyAdminPasscode(passcode);
+    if (!isValid) return toast.error("Invalid Passcode");
     try {
       await deleteDoc(doc(db, "adminStaffs", showDeleteConfirm!));
       await updateDoc(doc(db, "users", showDeleteConfirm!), { isAdmin: false });

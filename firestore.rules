@@ -37,19 +37,21 @@ service cloud.firestore {
     }
 
     function isValidProfileUpdate() {
+      // ⚠️ SECURITY: isDriver, isAdmin, isDisabled, verified are NOT here.
+      // Only admins/Cloud Functions can set those fields (see rule below).
       let allowedFields = [
         'location', 'isLocationActive', 'locationLastUpdated', 'locationSharedAt',
         'lastLocationUpdate', 'searchableLocations',
         'emergencyContact', 'lovedOnes', 'whatsappLovedOnes',
-        'firstName', 'lastName', 'fullName', 'phoneNumber', 'city', 'state', 
-        'whatsappPreferred', 'profileImage', 'fcmToken', 'updatedAt', 
+        'firstName', 'lastName', 'fullName', 'phoneNumber', 'city', 'state',
+        'whatsappPreferred', 'profileImage', 'fcmToken', 'updatedAt',
         'lastActive', 'notificationEnabled', 'notifications', 'hasUnreadNotifications',
         'unreadChats', 'preferences', 'email', 'authType', 'isEmailVerified',
-        'rating', 'totalTrips', 'earnings', 'isDriver', 'vip', 'bidsUsed', 'lastBidReset',
-        'vehicleLog', 'bookingVehicleId', 'bookingVehicleLastUpdated', 'bookingVehicleDate', 'verified',
+        'rating', 'totalTrips', 'earnings', 'vip', 'bidsUsed', 'lastBidReset',
+        'vehicleLog', 'bookingVehicleId', 'bookingVehicleLastUpdated', 'bookingVehicleDate',
         'hasCompany', 'ownedCompanies',
         'customersCarried', 'customersCarriedMonth',
-        'trustScore', 'trustCancels', 'trustLastReset', 'trustExhaustedAt', 
+        'trustScore', 'trustCancels', 'trustLastReset', 'trustExhaustedAt',
         'driverTrustScore', 'driverTrustCancels', 'driverTrustExhaustedAt', 'driverLoadBlockedUntil',
         'loadOnceAllowed', 'loadOnceUsedDate', 'loadBlockedUntil',
         'contactedDrivers', 'hiredCars', 'lastBookedCarId', 'carSwitchCount', 'tripHistory',
@@ -76,39 +78,52 @@ service cloud.firestore {
       // Create: only the owner can create their own account document
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && isNotDisabled() && (
-        // 1. Own profile fields (includes searchableLocations, customersCarried etc.)
+        // 1. Own profile fields
         (request.auth.uid == userId && isValidProfileUpdate()) ||
 
         // 2. Anyone authenticated can sync unread chat badge to another user
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadChats'])) ||
 
-        // 3. Any authenticated user can push a notification or booking alert to a driver
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifications', 'hasUnreadNotifications'])) ||
+        // 3. Authenticated users can push booking notifications to drivers ONLY
+        (request.auth.uid != userId &&
+         get(/databases/$(database)/documents/users/$(userId)).data.isDriver == true &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifications', 'hasUnreadNotifications'])) ||
 
         // 4. Drivers can update passenger count / monthly tracking on their own profile
         (request.auth.uid == userId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customersCarried', 'customersCarriedMonth'])) ||
 
         // 5. Review logic: any authenticated user can rate a driver
-        (request.auth.uid != userId && 
+        (request.auth.uid != userId &&
          get(/databases/$(database)/documents/users/$(userId)).data.isDriver == true &&
          isValidReviewUpdate()) ||
 
-        // 6. Referral reward updates (admin or automated)
+        // 6. Referral reward updates — admin only (moved to Cloud Function)
         (isAnyAdmin() && (
-          isReferralRewardUpdate() || 
+          isReferralRewardUpdate() ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fareReceived', 'fareReceivedAt', 'referralPoints'])
         )) ||
 
         // 7. Driver Managers can verify/unverify accounts
-        (hasPermission('/admin/manage-driver') && 
+        (hasPermission('/admin/manage-driver') &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verified'])) ||
 
-        // 8. Cross-user trip history syncing (when trips are marked completed)
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tripHistory'])) ||
+        // 8. Trip history: only the user themselves OR admins can write it
+        (request.auth.uid == userId &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tripHistory'])) ||
+        (isAnyAdmin() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tripHistory'])) ||
 
         // 9. CEO has full autonomy
-        isCEO()
+        isCEO() ||
+
+        // 10. ADMIN-ONLY: sensitive flag writes (isDriver, isAdmin, isDisabled, verified)
+        // These can ONLY be set by admins or via Cloud Functions (Admin SDK bypasses rules)
+        (isAnyAdmin() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['isDriver', 'isAdmin', 'isDisabled', 'verified',
+                     'ticket', 'ticketStatus', 'newDriverConfig',
+                     'justJoined', 'driverJoinedDate']))
       );
       allow delete: if isCEO();
     }
