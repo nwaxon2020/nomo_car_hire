@@ -11,6 +11,7 @@ import { Toaster } from "react-hot-toast";
 import GlobalDriverListener from "@/components/GlobalDriverListener";
 import PWAInstallBanner from "@/components/PWA/PWAInstallBanner";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import I18nProvider from "@/components/I18nProvider";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -100,22 +101,24 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <body className="antialiased">
-        {/* Global Toasts */}
-        <Toaster position="top-center" reverseOrder={false} />
+        <I18nProvider>
+          {/* Global Toasts */}
+          <Toaster position="top-center" reverseOrder={false} />
 
-        {/* PWA: Register service worker */}
-        <ServiceWorkerRegistrar />
+          {/* PWA: Register service worker */}
+          <ServiceWorkerRegistrar />
 
-        {/* PWA: Install banner (shown on every page, 15s, once per install) */}
-        <PWAInstallBanner />
+          {/* PWA: Install banner (shown on every page, 15s, once per install) */}
+          <PWAInstallBanner />
 
-        {/* Driver Auto-Redirects for New Rides */}
-        <GlobalDriverListener />
+          {/* Driver Auto-Redirects for New Rides */}
+          <GlobalDriverListener />
 
-        <Nav />
-        <hr className="text-white" />
-        <main>{children}</main>
-        <Footer />
+          <Nav />
+          <hr className="text-white" />
+          <main>{children}</main>
+          <Footer />
+        </I18nProvider>
       </body>
     </html>
   );

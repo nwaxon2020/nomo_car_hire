@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import Image from "next/image";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { motion } from "framer-motion";
@@ -44,48 +45,48 @@ import BookingGrid from "@/components/mobilityBookings/BookingGrid";
 import DriverDetailsModal from "@/components/mobilityBookings/DriverDetailsModal";
 import MyVehiclesSelector from "@/components/mobilityBookings/MyVehiclesSelector";
 
-const SubtleDriverNotice = () => (
+const SubtleDriverNotice = ({ t }: { t: any }) => (
     <div className="mb-2 p-2 bg-gray-900 border border-gray-800 rounded-xl flex items-center gap-3">
         <div className="bg-emerald-600 p-1.5 rounded-lg text-white shadow-lg">
             <FaCar size={12} />
         </div>
         <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Fleet Active</p>
-            <p className="text-[10px] font-medium text-gray-400">Tap a vehicle below to set your active booking car.</p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{t('bookings.fleetActive')}</p>
+            <p className="text-[10px] font-medium text-gray-400">{t('bookings.tapVehicleNotice')}</p>
         </div>
     </div>
 );
 
 // Negotiation Notice ///////////////////////////////////////////////////////////
-const NegotiationNotice = () => (
+const NegotiationNotice = ({ t }: { t: any }) => (
     <div className="mt-4 p-3 bg-blue-50 border border-blue-100 flex items-center gap-2 shadow-sm">
         <div className="bg-blue-600 px-2 py-1 rounded-xl text-white shadow-md shrink-0">
             <FaInfoCircle size={14} />
         </div>
         <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-900">Fair Negotiation Policy</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-900">{t('bookings.fairNegotiationPolicy')}</p>
             <p className="text-[11px] font-medium text-gray-600 leading-tight">
-                Bookings are negotiations between drivers and customers. Please ensure a proper agreement on fare and terms is reached before starting your trip.
+                {t('bookings.fairNegotiationMessage')}
             </p>
         </div>
     </div>
 );
 
-const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: string }) => (
+const ActiveBookingBanner = ({ type, targetPath, t }: { type: string, targetPath: string, t: any }) => (
     <div className="max-w-md mx-auto mt-10 p-8 bg-white border border-gray-100 rounded-[2.5rem] shadow-2xl text-center animate-in fade-in zoom-in duration-500">
         <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
             <FaCar className="text-amber-500 text-3xl" />
         </div>
-        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-2">Active Booking Found</h2>
+        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-2">{t('bookings.activeBookingFound')}</h2>
         <p className="text-gray-500 text-sm font-medium mb-8 leading-relaxed px-4">
-            You currently have an active {type} booking. Please complete or cancel it before starting a new search.
+            {t('bookings.activeBookingMessage', { type })}
         </p>
         <button
             onClick={() => window.location.href = targetPath}
             className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
         >
             <FaMapMarkerAlt size={14} />
-            Return to Active Booking
+            {t('bookings.returnToActiveBooking')}
         </button>
     </div>
 );
@@ -97,6 +98,9 @@ const ActiveBookingBanner = ({ type, targetPath }: { type: string, targetPath: s
 
 
 export default function BookingUi() {
+    // Get translation function
+    const { t } = useTranslation()
+    
     // activate for parameters
     const searchParams = useSearchParams()
 
@@ -997,7 +1001,7 @@ export default function BookingUi() {
             console.log(`[Bookings] Fetched ${newDriversWithVehicles.length} drivers on this page.`);
         } catch (err) {
             console.error("Error fetching data:", err);
-            setError("Failed to load drivers and vehicles. Please try again.");
+            setError(t('bookings.failedToLoadDrivers'));
         } finally {
             setLoading(false);
             setIsLoadingMore(false);
@@ -1401,7 +1405,7 @@ export default function BookingUi() {
             setShowDeleteConfirm({ show: false, comment: null })
             setReviewMessage({
                 type: "error",
-                text: "Failed to delete review. Please try again."
+                text: t('reviews.failedToDeleteReview')
             })
 
             // Clear error message after 5 seconds
@@ -1424,7 +1428,7 @@ export default function BookingUi() {
         if (!selectedDriver || !currentUser) {
             setReviewMessage({
                 type: "error",
-                text: "Please sign in to post a review."
+                text: t('reviews.pleaseSignIn')
             })
             return
         }
@@ -1432,7 +1436,7 @@ export default function BookingUi() {
         if (hasUserReviewed) {
             setReviewMessage({
                 type: "error",
-                text: "You have already reviewed this driver."
+                text: t('reviews.alreadyReviewed')
             })
             return
         }
@@ -1440,7 +1444,7 @@ export default function BookingUi() {
         if (!reviewForm.rating || reviewForm.rating < 1 || reviewForm.rating > 5) {
             setReviewMessage({
                 type: "error",
-                text: "Please select a valid rating (1-5 stars)."
+                text: t('reviews.invalidRating')
             })
             return
         }
@@ -1448,7 +1452,7 @@ export default function BookingUi() {
         if (!reviewForm.comment || reviewForm.comment.trim().length === 0) {
             setReviewMessage({
                 type: "error",
-                text: "Please write a comment for your review."
+                text: t('reviews.writeComment')
             })
             return
         }
@@ -1569,7 +1573,7 @@ export default function BookingUi() {
 
             setReviewMessage({
                 type: "success",
-                text: "✓ Review posted successfully!"
+                text: t('reviews.reviewPostedSuccess')
             })
 
             setTimeout(() => {
@@ -1580,7 +1584,7 @@ export default function BookingUi() {
             console.error("Error posting review:", error)
             setReviewMessage({
                 type: "error",
-                text: `Failed to post review: ${error instanceof Error ? error.message : "Please try again."}`
+                text: `${t('common.failed')}: ${error instanceof Error ? error.message : t('common.error')}`
             })
             setTimeout(() => {
                 setReviewMessage({ type: "", text: "" })
@@ -2015,13 +2019,13 @@ export default function BookingUi() {
                 "/user/mobility/bookings"
             );
 
-            toast.success("Booking request sent!");
+            toast.success(t('bookings.bookingRequestSent'));
             setShowDestinationOverlay(false);
             setDestinationInput("");
             setTempBookingData(null);
         } catch (error) {
             console.error('Error creating booking offer:', error);
-            toast.error("Failed to send booking request");
+            toast.error(t('bookings.failedToSendBookingRequest'));
         }
     };
 
@@ -2750,10 +2754,10 @@ export default function BookingUi() {
                     {viewMode === 'customer' ? (
                         <>
                             {hasActiveLoadSeat ? (
-                                <ActiveBookingBanner type="Load" targetPath="/user/mobility/load-booking" />
+                                <ActiveBookingBanner type="Load" targetPath="/user/mobility/load-booking" t={t} />
                             ) : (
                                 <>
-                                    <NegotiationNotice />
+                                    <NegotiationNotice t={t} />
                                     <QuickViewHistory
                                         quickViewHistory={quickViewHistory}
                                         driverInfo={driverInfo}
@@ -2797,7 +2801,7 @@ export default function BookingUi() {
                                                     className="px-8 py-3 bg-gray-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-black transition-all shadow-xl hover:scale-105 active:scale-95 border border-gray-700 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
                                                 >
                                                     {isLoadingMore && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                                                    {isLoadingMore ? 'Loading...' : 'Load More Drivers'}
+                                                    {isLoadingMore ? t('common.loading') : t('bookings.loadMoreDrivers')}
                                                 </button>
                                             </div>
                                         )}
@@ -2807,7 +2811,7 @@ export default function BookingUi() {
                         </>
                     ) : (
                         <div className="relative">
-                            <NegotiationNotice />
+                            <NegotiationNotice t={t} />
                             {/* Incoming Offer Switch Logic */}
                             {incomingOffer ? (
                                 <div className="p-4 flex justify-center items-center animate-in fade-in zoom-in duration-500">
@@ -2823,22 +2827,22 @@ export default function BookingUi() {
                                                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                                     <FaTimesCircle className="text-red-500 text-2xl" />
                                                 </div>
-                                                <h3 className="text-lg font-black text-red-900 uppercase">Request Cancelled</h3>
-                                                <p className="text-red-700/70 mt-1 text-xs sm:text-sm">The customer cancelled this request at the last minute.</p>
+                                                <h3 className="text-lg font-black text-red-900 uppercase">{t('offers.requestCancelled')}</h3>
+                                                <p className="text-red-700/70 mt-1 text-xs sm:text-sm">{t('offers.customerCancelledRequest')}</p>
                                             </div>
                                         </div>
                                     ) : incomingOffer.status === 'accepted' ? (
                                         <div className="max-w-lg mx-auto w-full px-2 sm:px-4">
                                             <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl overflow-hidden">
                                                 <div className="bg-emerald-500 py-2.5 text-center">
-                                                    <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Active Trip Signal Connected</p>
+                                                    <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">{t('offers.activeTripSignalConnected')}</p>
                                                 </div>
                                                 <div className="p-6 md:p-8 text-center">
                                                     <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                                         <FaCar className="text-emerald-500 text-xl" />
                                                     </div>
-                                                    <h3 className="text-xl font-black text-gray-900 mb-1">Trip with {incomingOffer.customerName}</h3>
-                                                    <p className="text-gray-500 text-[10px] sm:text-xs mb-6 font-medium">Map tracking is active. You can minimize this view to see your other requests.</p>
+                                                    <h3 className="text-xl font-black text-gray-900 mb-1">{t('offers.activeTrip', { name: incomingOffer.customerName })}</h3>
+                                                    <p className="text-gray-500 text-[10px] sm:text-xs mb-6 font-medium">{t('offers.mapTrackingActive')}</p>
 
                                                     <div className="flex flex-col gap-3">
                                                         <div className="flex gap-3">
@@ -2846,7 +2850,7 @@ export default function BookingUi() {
                                                                 onClick={() => setAcceptanceMap(true)}
                                                                 className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg transition-all"
                                                             >
-                                                                Open Map
+                                                                {t('offers.openMap')}
                                                             </button>
                                                             <button
                                                                 onClick={() => {
@@ -2858,7 +2862,7 @@ export default function BookingUi() {
                                                                             incomingOffer.destination
                                                                         );
                                                                     } else {
-                                                                        toast.error("Trip details incomplete");
+                                                                        toast.error(t('bookings.tripDetailsIncomplete'));
                                                                     }
                                                                 }}
                                                                 disabled={isStartingTrip}
@@ -2867,7 +2871,7 @@ export default function BookingUi() {
                                                                 {isStartingTrip ? (
                                                                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                                                 ) : (
-                                                                    <><FaCar size={10} /> Start Trip</>
+                                                                    <><FaCar size={10} /> {t('offers.startTrip')}</>
                                                                 )}
                                                             </button>
                                                         </div>
@@ -2875,7 +2879,7 @@ export default function BookingUi() {
                                                             onClick={() => setShowCancelWarning(true)} // Used as Cancel here
                                                             className="w-full py-3.5 bg-gray-50 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all"
                                                         >
-                                                            Terminate
+                                                            {t('offers.terminate')}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -2904,16 +2908,16 @@ export default function BookingUi() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 mb-2 drop-shadow-sm">New Booking Offer</p>
+                                                <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 mb-2 drop-shadow-sm">{t('offers.newBookingOffer')}</p>
                                                 <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2 leading-tight tracking-tighter">
-                                                    {incomingOffer.customerName} <span className="text-amber-500 flex flex-col sm:inline">wants to book you!</span>
+                                                    {incomingOffer.customerName} <span className="text-amber-500 flex flex-col sm:inline">{t('offers.wantsToBookYou')}</span>
                                                 </h3>
-                                                <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">Accept request from {incomingOffer.customerName} to see the location.</p>
+                                                <p className="text-gray-500 text-xs sm:text-sm mb-4 font-medium">{t('offers.acceptRequestToSeeLocation', { name: incomingOffer.customerName })}</p>
 
                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId) && (
                                                     <div className="bg-amber-50 rounded-xl p-3 mb-4 border border-amber-200 shadow-inner flex items-center justify-center gap-3 w-full">
                                                         <div className="text-center">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 mb-0.5">Target Vehicle</p>
+                                                            <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 mb-0.5">{t('offers.targetVehicle')}</p>
                                                             <p className="font-bold text-gray-900 text-xs">
                                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carName}{" "}
                                                                 {ownVehicles.find(v => v.id === incomingOffer.vehicleId)?.carModel}
@@ -2930,7 +2934,7 @@ export default function BookingUi() {
                                                                 <FaMapMarkerAlt className="text-white" size={14} />
                                                             </div>
                                                             <div className="text-left">
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-0.5">Customer&apos;s Destination</p>
+                                                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-0.5">{t('offers.customersDestination')}</p>
                                                                 <p className="font-bold text-gray-900 text-sm leading-tight">{incomingOffer.destination}</p>
                                                             </div>
                                                         </div>
@@ -2942,7 +2946,7 @@ export default function BookingUi() {
                                                         onClick={() => handleRejectOffer(incomingOffer)}
                                                         className="flex-1 py-3 sm:py-4 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 font-black tracking-widest uppercase rounded-xl transition-all text-[10px] sm:text-xs"
                                                     >
-                                                        Reject
+                                                        {t('common.reject')}
                                                     </button>
                                                     <button
                                                         onClick={() => handleAcceptOffer(incomingOffer)}
@@ -2952,7 +2956,7 @@ export default function BookingUi() {
                                                             : "bg-gray-900 hover:bg-black text-white shadow-xl"
                                                             }`}
                                                     >
-                                                        {isAcceptingOffer ? "Wait..." : "Accept"}
+                                                        {isAcceptingOffer ? t('offers.wait') : t('common.accept')}
                                                     </button>
                                                 </div>
                                             </div>
@@ -2964,11 +2968,11 @@ export default function BookingUi() {
                                     {ownVehicles.length > 0 ? (
                                         <div className="p-3 md:p-5 space-y-6">
                                             <div className="flex gap-2 items-center justify-between px-2">
-                                                <h2 className="text-lg md:text-xl font-black text-emerald-700 uppercase tracking-tight">Your Active Fleet</h2>
-                                                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{ownVehicles.length} Vehicles</span>
+                                                <h2 className="text-lg md:text-xl font-black text-emerald-700 uppercase tracking-tight">{t('bookings.yourActiveFleet')}</h2>
+                                                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{ownVehicles.length} {t('bookings.vehicles')}</span>
                                             </div>
 
-                                            <SubtleDriverNotice />
+                                            <SubtleDriverNotice t={t} />
 
                                             <MyVehiclesSelector
                                                 vehicles={ownVehicles}
@@ -2979,7 +2983,7 @@ export default function BookingUi() {
                                     ) : (
                                         <div className="text-center py-20 bg-gray-50 rounded-[2.5rem] border border-dashed border-gray-200">
                                             <FaCar className="text-5xl text-gray-200 mx-auto mb-4" />
-                                            <p className="text-gray-400 font-medium">No vehicles registered to your account.</p>
+                                            <p className="text-gray-400 font-medium">{t('bookings.noVehiclesRegistered')}</p>
                                         </div>
                                     )}
                                 </>

@@ -1,0 +1,54 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "failed": "Falló",
+    "success": "Éxito",
+    "error": "Error",
+    "cancel": "Cancelar",
+    "accept": "Aceptar",
+    "reject": "Rechazar",
+    "close": "Cerrar",
+    "submit": "Enviar"
+  },
+  "bookings": {
+    "activeBookingFound": "Reserva Activa Encontrada",
+    "activeBookingMessage": "Actualmente tiene una reserva {{type}} activa. Por favor, complétela o cancélela antes de comenzar una nueva búsqueda.",
+    "returnToActiveBooking": "Volver a Reserva Activa",
+    "fleetActive": "Flota Activa",
+    "tapVehicleNotice": "Toque un vehículo a continuación para establecer su automóvil de reserva activa.",
+    "fairNegotiationPolicy": "Política de Negociación Justa",
+    "fairNegotiationMessage": "Las reservas son negociaciones entre conductores y clientes. Asegúrese de que se haya llegado a un acuerdo adecuado sobre la tarifa y los términos antes de iniciar su viaje.",
+    "failedToLoadDrivers": "Error al cargar conductores y vehículos. Por favor, inténtelo de nuevo.",
+    "loadMoreDrivers": "Cargar Más Conductores",
+    "bookingRequestSent": "¡Solicitud de reserva enviada!",
+    "failedToSendBookingRequest": "Error al enviar la solicitud de reserva",
+    "tripDetailsIncomplete": "Detalles del viaje incompletos",
+    "noVehiclesRegistered": "No hay vehículos registrados en su cuenta.",
+    "yourActiveFleet": "Su Flota Activa",
+    "vehicles": "Vehículos"
+  },
+  "reviews": {
+    "pleaseSignIn": "Por favor, inicie sesión para publicar una reseña.",
+    "alreadyReviewed": "Ya ha reseñado a este conductor.",
+    "invalidRating": "Por favor, seleccione una calificación válida (estrellas 1-5).",
+    "writeComment": "Por favor, escriba un comentario para su reseña.",
+    "reviewPostedSuccess": "✓ ¡Reseña publicada con éxito!",
+    "failedToDeleteReview": "Error al eliminar la reseña. Por favor, inténtelo de nuevo."
+  },
+  "offers": {
+    "newBookingOffer": "Nueva Solicitud de Reserva",
+    "wantsToBookYou": "¡quiere reservarte!",
+    "acceptRequestToSeeLocation": "Acepte la solicitud de {{name}} para ver la ubicación.",
+    "targetVehicle": "Vehículo Objetivo",
+    "customersDestination": "Destino del Cliente",
+    "activeTrip": "Viaje con {{name}}",
+    "activeTripSignalConnected": "Señal de Viaje Activa Conectada",
+    "mapTrackingActive": "El seguimiento en el mapa está activo. Puede minimizar esta vista para ver sus otras solicitudes.",
+    "openMap": "Abrir Mapa",
+    "startTrip": "Iniciar Viaje",
+    "terminate": "Terminar",
+    "wait": "Espere...",
+    "requestCancelled": "Solicitud Cancelada",
+    "customerCancelledRequest": "El cliente canceló esta solicitud en el último momento."
+  }
+}

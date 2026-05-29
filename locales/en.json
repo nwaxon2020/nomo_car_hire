@@ -1,0 +1,54 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "failed": "Failed",
+    "success": "Success",
+    "error": "Error",
+    "cancel": "Cancel",
+    "accept": "Accept",
+    "reject": "Reject",
+    "close": "Close",
+    "submit": "Submit"
+  },
+  "bookings": {
+    "activeBookingFound": "Active Booking Found",
+    "activeBookingMessage": "You currently have an active {{type}} booking. Please complete or cancel it before starting a new search.",
+    "returnToActiveBooking": "Return to Active Booking",
+    "fleetActive": "Fleet Active",
+    "tapVehicleNotice": "Tap a vehicle below to set your active booking car.",
+    "fairNegotiationPolicy": "Fair Negotiation Policy",
+    "fairNegotiationMessage": "Bookings are negotiations between drivers and customers. Please ensure a proper agreement on fare and terms is reached before starting your trip.",
+    "failedToLoadDrivers": "Failed to load drivers and vehicles. Please try again.",
+    "loadMoreDrivers": "Load More Drivers",
+    "bookingRequestSent": "Booking request sent!",
+    "failedToSendBookingRequest": "Failed to send booking request",
+    "tripDetailsIncomplete": "Trip details incomplete",
+    "noVehiclesRegistered": "No vehicles registered to your account.",
+    "yourActiveFleet": "Your Active Fleet",
+    "vehicles": "Vehicles"
+  },
+  "reviews": {
+    "pleaseSignIn": "Please sign in to post a review.",
+    "alreadyReviewed": "You have already reviewed this driver.",
+    "invalidRating": "Please select a valid rating (1-5 stars).",
+    "writeComment": "Please write a comment for your review.",
+    "reviewPostedSuccess": "✓ Review posted successfully!",
+    "failedToDeleteReview": "Failed to delete review. Please try again."
+  },
+  "offers": {
+    "newBookingOffer": "New Booking Offer",
+    "wantsToBookYou": "wants to book you!",
+    "acceptRequestToSeeLocation": "Accept request from {{name}} to see the location.",
+    "targetVehicle": "Target Vehicle",
+    "customersDestination": "Customer's Destination",
+    "activeTrip": "Trip with {{name}}",
+    "activeTripSignalConnected": "Active Trip Signal Connected",
+    "mapTrackingActive": "Map tracking is active. You can minimize this view to see your other requests.",
+    "openMap": "Open Map",
+    "startTrip": "Start Trip",
+    "terminate": "Terminate",
+    "wait": "Wait...",
+    "requestCancelled": "Request Cancelled",
+    "customerCancelledRequest": "The customer cancelled this request at the last minute."
+  }
+}
