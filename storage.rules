@@ -1,13 +1,105 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // ── HELPERS ───────────────────────────────────────────────────────────────
+
+    function isCEO() {
+      return request.auth != null && request.auth.uid == "oto7WgugASOkcA4oBl6OB6C39Ww1";
+    }
+
+    function isAdmin() {
+      return request.auth != null && (
+        isCEO() ||
+        firestore.exists(/databases/(default)/documents/adminStaffs/$(request.auth.uid))
+      );
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Allowed image content types
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Allowed document content types: PDF, Word (.doc, .docx)
+    function isDocument() {
+      return request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/msword'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    // Allowed video content types
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+
+    function isAllowedFileType() {
+      return isImage() || isDocument() || isVideo();
+    }
+
+    // ── USER PROFILE FILES ────────────────────────────────────────────────────
+    // e.g. profile pictures, ID photos — stored under users/{userId}/
+    match /users/{userId}/{allPaths=**} {
+      // Public read for profile pictures
+      allow read: if true;
+
+      // Only the owner can create/update their own files (images or documents, max 10MB)
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && isAllowedFileType()
+        && request.resource.size < 10 * 1024 * 1024;
+
+      // Owner can delete their own files; admins can delete for moderation
+      allow delete: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── CV / JOB APPLICATION FILES ────────────────────────────────────────────
+    // e.g. CVs uploaded on the joinUs / employment application page
+    match /cvs/{userId}/{allPaths=**} {
+      // Only admins can read CVs
+      allow read: if isAdmin();
+
+      // Any signed-in user can upload a CV (PDF or Word only, max 5MB)
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && isDocument()
+        && request.resource.size < 5 * 1024 * 1024;
+
+      // Owner can delete their own CV; admins can delete too
+      allow delete: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── TRANSPORT HUB / COMPANY DOCUMENTS ─────────────────────────────────────
+    // e.g. company registration docs
+    match /transportCompanies/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && isAllowedFileType()
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // ── ADMIN / SITE CONTENT FILES ─────────────────────────────────────────────
+    // e.g. banner images, about-page photos managed by admin
+    match /admin/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── FALLBACK ───────────────────────────────────────────────────────────────
+    // CEO can always read/write any other path; others cannot
     match /{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin()
+        && isAllowedFileType()
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
     }
   }
 }
