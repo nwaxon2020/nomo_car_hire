@@ -49,7 +49,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     const [files, setFiles] = useState<Record<string, File | null>>({
         front: null, side: null, back: null, interior: null,
-        license: null, ownership: null, insurance: null
+        license: null, ownership: null, insurance: null, roadworthiness: null
     });
 
     const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -82,7 +82,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         });
         setFiles({
             front: null, side: null, back: null, interior: null,
-            license: null, ownership: null, insurance: null
+            license: null, ownership: null, insurance: null, roadworthiness: null
         });
         setPreviews({});
         setActiveTab('details');
@@ -121,7 +121,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const requiredDocs = ['license', 'ownership', 'insurance'];
+        const requiredDocs = ['license', 'ownership', 'insurance', 'roadworthiness'];
         const docsValid = editingVehicle || requiredDocs.every(d => files[d] || previews[d]);
 
         if (!docsValid) {
@@ -263,10 +263,11 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
                     {activeTab === 'documents' && (
                         <div className="space-y-4 animate-in fade-in duration-300">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 <VehicleImageUpload label="License *" type="license" onFileChange={handleFileChange} preview={previews.license} />
                                 <VehicleImageUpload label="Ownership *" type="ownership" onFileChange={handleFileChange} preview={previews.ownership} />
                                 <VehicleImageUpload label="Insurance *" type="insurance" onFileChange={handleFileChange} preview={previews.insurance} />
+                                <VehicleImageUpload label="Roadworthiness *" type="roadworthiness" onFileChange={handleFileChange} preview={previews.roadworthiness} />
                             </div>
                         </div>
                     )}

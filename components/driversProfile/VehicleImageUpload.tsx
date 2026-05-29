@@ -4,8 +4,8 @@ import { toast } from 'react-hot-toast';
 
 interface VehicleImageUploadProps {
     label: string;
-    // Expanded to include the 3 new document types
-    type: 'front' | 'side' | 'back' | 'interior' | 'license' | 'ownership' | 'insurance';
+    // Expanded to include the 4 new document types
+    type: 'front' | 'side' | 'back' | 'interior' | 'license' | 'ownership' | 'insurance' | 'roadworthiness';
     existingImage?: string;
     onFileChange: (type: string, file: File | null) => void;
     required?: boolean;
