@@ -54,6 +54,17 @@ export async function POST(req: Request) {
         const ticketType = otherMetadata.ticketType || 'daily';
         const price = amount / 100;
         
+        // AMOUNT VALIDATION FOR TICKETS
+        const pricingSnap = await adminDb.collection('adminfinance').doc('pricing').get();
+        if (pricingSnap.exists) {
+          const pricingData = pricingSnap.data();
+          const expectedPrice = Number(pricingData?.tickets?.[ticketType]?.price);
+          if (expectedPrice && price < expectedPrice) {
+            console.error(`Spoofing detected: Ticket ${ticketType} requires ₦${expectedPrice}, but paid ₦${price}`);
+            return NextResponse.json({ status: 'error', message: 'Invalid payment amount for ticket' }, { status: 400 });
+          }
+        }
+        
         await userRef.update({
           tickets: FieldValue.arrayUnion({
             type: ticketType,
@@ -66,6 +77,15 @@ export async function POST(req: Request) {
       } else if (type === 'vip') {
         const vipLevel = Number(otherMetadata.vipLevel) || 1;
         const price = amount / 100;
+
+        // AMOUNT VALIDATION FOR VIP
+        const VIP_PRICES: Record<number, number> = { 1: 5000, 2: 7500, 3: 11000, 4: 15000, 5: 20000 };
+        const expectedPrice = VIP_PRICES[vipLevel];
+        
+        if (!expectedPrice || price < expectedPrice) {
+          console.error(`Spoofing detected: VIP level ${vipLevel} requires ₦${expectedPrice}, but paid ₦${price}`);
+          return NextResponse.json({ status: 'error', message: 'Invalid payment amount for VIP' }, { status: 400 });
+        }
 
         await userRef.update({
           vipLevel: vipLevel,
