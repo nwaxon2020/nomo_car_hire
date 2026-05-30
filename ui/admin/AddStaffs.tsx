@@ -133,7 +133,7 @@ export default function AddStaffPageUi() {
     setIsProcessing(true);
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error("No user");
+      if (!user) throw new Error("Please sign in again.");
       const token = await user.getIdToken();
 
       const res = await fetch("/api/admin/revoke-staff", {
@@ -142,15 +142,22 @@ export default function AddStaffPageUi() {
         body: JSON.stringify({ targetUid: id, action: "delete-passcode" }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("System is currently syncing. Please refresh and try again.");
+      }
+
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to delete passcode");
+        throw new Error(data.error || "Failed to delete passcode.");
       }
 
       toast.success("Passcode Deleted");
       setPasscodeToDelete(null);
     } catch (e: any) {
-      toast.error(e.message || "Failed to delete passcode");
+      toast.error(e.message || "Something went wrong. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -161,7 +168,7 @@ export default function AddStaffPageUi() {
     const isValid = await verifyAdminPasscode(passcode, "any");
     if (!isValid) {
       setIsProcessing(false);
-      return toast.error("Invalid Passcode");
+      return toast.error("Invalid passcode. Please try again.");
     }
     try {
       const targetId = selectedUser.id || selectedUser.uid;
@@ -182,7 +189,7 @@ export default function AddStaffPageUi() {
       toast.success(isEditing ? "Updated" : "Promoted");
       setShowConfirm(false); setSelectedUser(null); setIsEditing(false); setPasscode(""); setRoutes([]);
     } catch (e) {
-      toast.error("Process failed");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -193,11 +200,11 @@ export default function AddStaffPageUi() {
     const isValid = await verifyAdminPasscode(passcode, "any");
     if (!isValid) {
       setIsProcessing(false);
-      return toast.error("Invalid Passcode");
+      return toast.error("Invalid passcode. Please try again.");
     }
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error("No user");
+      if (!user) throw new Error("Please sign in again.");
       const token = await user.getIdToken();
 
       const res = await fetch("/api/admin/revoke-staff", {
@@ -206,15 +213,22 @@ export default function AddStaffPageUi() {
         body: JSON.stringify({ targetUid: showDeleteConfirm, action: "revoke-staff" }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("System is currently syncing. Please refresh the page and try again.");
+      }
+
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to revoke access");
+        throw new Error(data.error || "Failed to revoke access.");
       }
 
       toast.success("Access Revoked");
       setShowDeleteConfirm(null); setPasscode("");
     } catch (e: any) {
-      toast.error(e.message || "Revocation failed");
+      toast.error(e.message || "Something went wrong. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -529,8 +543,9 @@ export default function AddStaffPageUi() {
                 autoFocus
               />
               <div className="flex gap-2">
-                <button onClick={() => { setShowConfirm(false); setShowDeleteConfirm(null); setPasscode(""); }} className="flex-1 p-4 border rounded-md text-[9px] font-black uppercase text-gray-400">Cancel</button>
-                <button disabled={isProcessing} onClick={showDeleteConfirm ? revokeAccess : finalizePermissions} className={`flex-1 p-4 text-white rounded-md text-[9px] font-black uppercase tracking-widest ${showDeleteConfirm ? 'bg-red-600' : 'bg-blue-600'} ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <button disabled={isProcessing} onClick={() => { setShowConfirm(false); setShowDeleteConfirm(null); setPasscode(""); }} className={`flex-1 p-4 border rounded-md text-[9px] font-black uppercase text-gray-400 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>Cancel</button>
+                <button disabled={isProcessing} onClick={showDeleteConfirm ? revokeAccess : finalizePermissions} className={`flex-1 p-4 text-white rounded-md text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${showDeleteConfirm ? 'bg-red-600' : 'bg-blue-600'} ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isProcessing && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isProcessing ? "Processing..." : (showDeleteConfirm ? "Confirm Revoke" : "Confirm Authorize")}
                 </button>
               </div>
@@ -555,14 +570,15 @@ export default function AddStaffPageUi() {
                 autoFocus
               />
               <div className="flex gap-2">
-                <button onClick={() => { setPasscodeToDelete(null); setDeletePasscodeEntry(""); }} className="flex-1 p-4 border rounded-md text-[9px] font-black uppercase text-gray-400">Cancel</button>
+                <button disabled={isProcessing} onClick={() => { setPasscodeToDelete(null); setDeletePasscodeEntry(""); }} className={`flex-1 p-4 border rounded-md text-[9px] font-black uppercase text-gray-400 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>Cancel</button>
                 <button disabled={isProcessing} onClick={() => {
                   if (deletePasscodeEntry === passcodeToDelete.passcode) {
                     handleDeletePasscode(passcodeToDelete.id);
                   } else {
-                    toast.error("Incorrect Passcode");
+                    toast.error("Incorrect passcode. Please try again.");
                   }
-                }} className={`flex-1 p-4 text-white rounded-md text-[9px] font-black uppercase tracking-widest bg-red-600 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                }} className={`flex-1 p-4 text-white rounded-md text-[9px] font-black uppercase tracking-widest bg-red-600 flex items-center justify-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isProcessing && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {isProcessing ? "Processing..." : "Confirm Delete"}
                 </button>
               </div>
