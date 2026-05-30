@@ -15,6 +15,7 @@ import { FiNavigation } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 export default function EmploymentAdminUi() {
   const [apps, setApps] = useState<any[]>([]);
@@ -30,7 +31,6 @@ export default function EmploymentAdminUi() {
   const [deleting, setDeleting] = useState(false);
 
   const ADMIN_UID = "thuvYp857sfRGgFuswyyhAUxgYr1";
-  const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PIN;
 
   useEffect(() => {
     let unsubscribe: () => void;
@@ -110,7 +110,8 @@ export default function EmploymentAdminUi() {
   };
 
   const confirmDeletion = async () => {
-    if (passcode !== ADMIN_PASSCODE) return toast.error("Invalid Admin Passcode");
+    const isValid = await verifyAdminPasscode(passcode, "/admin/applicants");
+    if (!isValid) return toast.error("Invalid Admin Passcode");
     if (!selectedAppId) return;
 
     setDeleting(true);

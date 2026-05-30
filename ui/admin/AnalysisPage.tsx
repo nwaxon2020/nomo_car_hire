@@ -29,6 +29,7 @@ import {
 } from "react-icons/fi";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
+import { verifyAdminPasscode } from '@/lib/hooks/useAdminRole';
 
 /* ─────────────────────────── TYPES ─────────────────────────── */
 
@@ -71,7 +72,6 @@ export default function AnalysisPageUi() {
   const [isResetting, setIsResetting] = useState(false);
 
   const CEO_ID = "thuvYp857sfRGgFuswyyhAUxgYr1";
-  const MASTER_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE;
   const isCEO = auth.currentUser?.uid === CEO_ID;
 
   useEffect(() => {
@@ -222,7 +222,8 @@ export default function AnalysisPageUi() {
   }, [isCEO]);
 
   const handleReset = async () => {
-    if (passcode !== MASTER_PASSCODE) {
+    const isValid = await verifyAdminPasscode(passcode, "/admin/analysis");
+    if (!isValid) {
       toast.error("Security Violation: Invalid CEO Passcode");
       return;
     }

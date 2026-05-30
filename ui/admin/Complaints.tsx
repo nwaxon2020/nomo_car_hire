@@ -520,7 +520,7 @@ const AdminComplaintsUi = () => {
 
 
   const handleArchive = async () => {
-    const isValid = await verifyAdminPasscode(enteredPassCode);
+    const isValid = await verifyAdminPasscode(enteredPassCode, "/admin/complaints");
     if (!isValid) {
       toast.error("Invalid Authorization Code");
       setEnteredPassCode('');

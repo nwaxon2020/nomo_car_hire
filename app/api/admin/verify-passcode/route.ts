@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authAdmin } from '@/lib/firebaseAdmin';
+import { authAdmin, adminDb } from '@/lib/firebaseAdmin';
 
 /**
  * POST /api/admin/verify-passcode
  * Validates the admin passcode on the server.
- * Passcodes are now stored in server-only env vars (no NEXT_PUBLIC).
+ * Passcodes are fetched from Firestore collection "adminPasscodes".
  * 
- * Body: { passcode: string, action: 'primary' | 'secondary' }
- * Auth: Bearer {idToken} — must be a valid admin
+ * Body: { passcode: string, action: string (which is the route path) }
+ * Auth: Bearer {idToken} — must be a valid admin/CEO
  */
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valid: false, error: 'Invalid token' }, { status: 401 });
   }
 
-  // Only CEO can use passcode actions
+  // Only CEO can use passcode actions, unless we allow specific staff later. For now, checking CEO.
   if (uid !== process.env.ADMIN_CEO_UID) {
     return NextResponse.json({ valid: false, error: 'CEO access only' }, { status: 403 });
   }
@@ -37,21 +37,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valid: false, error: 'Missing fields' }, { status: 400 });
   }
 
-  // Compare against server-side env vars
-  const primaryCode = process.env.ADMIN_PASS_CODE;
-  const secondaryCode = process.env.ADMIN_PASS_CODE2;
+  try {
+    const passcodesSnap = await adminDb.collection("adminPasscodes")
+      .where("passcode", "==", passcode)
+      .get();
+      
+    if (passcodesSnap.empty) {
+      await new Promise(r => setTimeout(r, 500));
+      return NextResponse.json({ valid: false, error: 'Invalid passcode' }, { status: 403 });
+    }
 
-  const isValid =
-    (action === 'primary' && passcode === primaryCode) ||
-    (action === 'secondary' && passcode === secondaryCode) ||
-    // Allow primary code for generic 'any' action
-    (action === 'any' && (passcode === primaryCode || passcode === secondaryCode));
+    let isAuthorizedForRoute = false;
 
-  if (!isValid) {
-    // Add a small delay to slow down brute-force attempts
-    await new Promise(r => setTimeout(r, 500));
-    return NextResponse.json({ valid: false, error: 'Invalid passcode' }, { status: 403 });
+    // Check if the route is authorized for this passcode
+    passcodesSnap.forEach(doc => {
+      const data = doc.data();
+      const routes = data.routes || [];
+      if (action === 'any' || routes.includes(action)) {
+        isAuthorizedForRoute = true;
+      }
+    });
+
+    if (!isAuthorizedForRoute) {
+      await new Promise(r => setTimeout(r, 500));
+      return NextResponse.json({ valid: false, error: 'Passcode not authorized for this route' }, { status: 403 });
+    }
+
+    return NextResponse.json({ valid: true });
+  } catch (err) {
+    console.error("Passcode verification error:", err);
+    return NextResponse.json({ valid: false, error: 'Server error' }, { status: 500 });
   }
-
-  return NextResponse.json({ valid: true });
 }

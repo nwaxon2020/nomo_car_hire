@@ -331,6 +331,7 @@ service cloud.firestore {
     match /adminStaffs/{staffId}         { allow read: if request.auth != null && (request.auth.uid == staffId || isCEO()); allow write: if isCEO(); }
     match /adminRoutes/{docId}           { allow read: if isAnyAdmin(); allow write: if isCEO(); }
     match /adminSettings/{docId}         { allow read: if request.auth != null; allow write: if isAnyAdmin(); }
+    match /adminPasscodes/{docId}        { allow read, write: if isCEO(); }
     match /employment_applications/{appId} { allow create: if true; allow read, write: if isAnyAdmin(); }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -112,7 +112,7 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
   };
 
   const handlePasscodeSubmit = async () => {
-    const isValid = await verifyAdminPasscode(passcodeEntry, 'secondary');
+    const isValid = await verifyAdminPasscode(passcodeEntry, '/admin/manage-driver');
     if (!isValid) {
       setPasscodeEntry("");
       return toast.error("Invalid Passcode");

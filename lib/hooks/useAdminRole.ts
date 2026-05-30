@@ -51,11 +51,11 @@ export function useAdminRole(): AdminRole {
 /**
  * verifyAdminPasscode
  * Sends the passcode to the server for verification.
- * Never compares against a client-side value.
+ * Validates against Firestore using routePath context.
  */
 export async function verifyAdminPasscode(
   passcode: string,
-  action: "primary" | "secondary" | "any" = "any"
+  action: string = "any"
 ): Promise<boolean> {
   try {
     const user = auth.currentUser;

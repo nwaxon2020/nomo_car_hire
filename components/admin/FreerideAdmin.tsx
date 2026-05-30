@@ -205,7 +205,7 @@ export default function FreerideAdmin() {
   };
 
   const handleUnmarkPaid = async () => {
-    const isValid = await verifyAdminPasscode(passcodeEntry);
+    const isValid = await verifyAdminPasscode(passcodeEntry, "/admin/freeride");
     if (!isValid) {
       toast.error("Invalid Administrative Passcode");
       setPasscodeEntry("");

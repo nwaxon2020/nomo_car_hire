@@ -76,11 +76,8 @@ export default function ManageTransport() {
             toast.error(`Only CEO can ${showPasskeyModal.action} companies`);
             return;
         }
-        const isValid = await verifyAdminPasscode(passkey);
-        if (!isValid) {
-            toast.error("Invalid Admin Passcode");
-            return;
-        }
+        const isValid = await verifyAdminPasscode(passkey, "/admin/manage-transport");
+        if (!isValid) return toast.error("Invalid Administrative Code");
 
         try {
             if (showPasskeyModal.action === 'unapprove') {
