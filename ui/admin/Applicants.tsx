@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { ref, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
-  FaEnvelope, FaPhone, FaFileDownload, FaUserCircle, FaSpinner,
+  FaEnvelope, FaPhone, FaWhatsapp, FaFileDownload, FaUserCircle, FaSpinner,
   FaCheckCircle, FaTrash, FaLock, FaEyeSlash,
 } from 'react-icons/fa';
 import { FiNavigation } from 'react-icons/fi';
@@ -202,6 +202,7 @@ export default function EmploymentAdminUi() {
                 <div className="flex gap-2">
                   <a href={`mailto:${app.email}`} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaEnvelope size={14} /></a>
                   <a href={`tel:${app.phone}`} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-green-600 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaPhone size={14} /></a>
+                  <a href={`https://wa.me/234${(app.phone || '').replace(/^0+/, '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center w-10 h-10"><FaWhatsapp size={16} /></a>
                 </div>
               </div>
 
