@@ -48,8 +48,9 @@ export default function Nav() {
             );
 
             const staffDoc = await getDoc(doc(db, "adminStaffs", authUser.uid));
-            setIsStaff(staffDoc.exists());
-            setIsCEOUser(staffDoc.exists() && staffDoc.data()?.isCEO === true);
+            const isHardcodedCEO = authUser.uid === "thuvYp857sfRGgFuswyyhAUxgYr1";
+            setIsStaff(staffDoc.exists() || isHardcodedCEO);
+            setIsCEOUser((staffDoc.exists() && staffDoc.data()?.isCEO === true) || isHardcodedCEO);
           } else {
             setUser(authUser);
             setProfileImage(authUser.photoURL || null);

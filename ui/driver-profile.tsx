@@ -492,10 +492,24 @@ export default function DriverProfilePage() {
         images.insurance ? uploadImage(images.insurance, `vehicleLog/${driverId}/${timestamp}_insurance_${images.insurance.name}`, "Insurance document") : Promise.resolve(null)
       ];
 
-      const results = await Promise.allSettled(uploadPromises)
-        .then((resultArr) => resultArr.map((result) => result.status === 'fulfilled' ? result.value : null));
+      const results = await Promise.allSettled(uploadPromises);
+      
+      let uploadErrors = 0;
+      const urls = results.map((result, index) => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          console.error(`Upload failed for index ${index}:`, result.reason);
+          uploadErrors++;
+          return null;
+        }
+      });
 
-      const [frontUrl, sideUrl, backUrl, interiorUrl, licenseUrl, ownershipUrl, insuranceUrl] = results;
+      if (uploadErrors > 0) {
+        toast.error(`${uploadErrors} image(s) failed to upload. They may be missing from your vehicle profile.`);
+      }
+
+      const [frontUrl, sideUrl, backUrl, interiorUrl, licenseUrl, ownershipUrl, insuranceUrl] = urls;
 
       const vehicleDoc = {
         driverId,

@@ -6,7 +6,7 @@ service firebase.storage {
     // ── HELPERS ───────────────────────────────────────────────────────────────
 
     function isCEO() {
-      return request.auth != null && request.auth.uid == "oto7WgugASOkcA4oBl6OB6C39Ww1";
+      return request.auth != null && request.auth.uid == "thuvYp857sfRGgFuswyyhAUxgYr1";
     }
 
     function isAdmin() {
@@ -47,13 +47,26 @@ service firebase.storage {
       // Public read for profile pictures
       allow read: if true;
 
-      // Only the owner can create/update their own files (images or documents, max 10MB)
+      // Owners can create/update their own files; admins and CEO can also create/update
+      // (useful for moderation or admin-managed uploads). Files must be allowed types and
+      // under the size limit.
       allow create, update: if isSignedIn()
-        && request.auth.uid == userId
+        && (request.auth.uid == userId || isAdmin() || isCEO())
         && isAllowedFileType()
         && request.resource.size < 10 * 1024 * 1024;
 
       // Owner can delete their own files; admins can delete for moderation
+      allow delete: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── PROFILE IMAGES ────────────────────────────────────────────────────────
+    match /profileImages/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin() || isCEO())
+        && isImage()
+        && request.resource.size < 5 * 1024 * 1024;
       allow delete: if isSignedIn()
         && (request.auth.uid == userId || isAdmin());
     }
@@ -83,6 +96,18 @@ service firebase.storage {
         && isAllowedFileType()
         && request.resource.size < 10 * 1024 * 1024;
       allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // ── VEHICLE LOG FILES ─────────────────────────────────────────────────────
+    // e.g. car images, insurance, license docs
+    match /vehicleLog/{driverId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && (request.auth.uid == driverId || isAdmin() || isCEO())
+        && isAllowedFileType()
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isSignedIn()
+        && (request.auth.uid == driverId || isAdmin());
     }
 
     // ── ADMIN / SITE CONTENT FILES ─────────────────────────────────────────────
