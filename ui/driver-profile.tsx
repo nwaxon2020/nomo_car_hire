@@ -517,22 +517,30 @@ export default function DriverProfilePage() {
         await updateDoc(doc(db, "vehicleLog", editingVehicle.id), vehicleDoc);
         toast.success("✅ Vehicle updated successfully!");
       } else {
-        const newDocRef = await addDoc(collection(db, "vehicleLog"), vehicleDoc);
+        // Use a batched write to ensure both the new vehicle and the user's vehicleLog
+        // are updated atomically. This reduces the chance of leaving an orphaned vehicle
+        // document if the user update fails.
+        const newDocRef = doc(collection(db, "vehicleLog"));
+        const batch = writeBatch(db);
+
+        batch.set(newDocRef, vehicleDoc);
+
+        const userRef = doc(db, "users", driverId);
+        batch.update(userRef, {
+          vehicleLog: arrayUnion(newDocRef.id),
+          newCarCount: increment(1),
+          justJoined: true,
+          updatedAt: Timestamp.now()
+        });
 
         try {
-          const userRef = doc(db, "users", driverId);
-          await updateDoc(userRef, {
-            vehicleLog: arrayUnion(newDocRef.id),
-            newCarCount: increment(1),
-            justJoined: true,
-            updatedAt: Timestamp.now()
-          });
+          await batch.commit();
+          toast.success("✅ Vehicle added successfully!");
         } catch (uErr: any) {
-          await deleteDoc(newDocRef);
-          throw new Error("Vehicle added but user record couldn't be updated.");
+          // Provide the underlying Firestore error message to help debugging
+          console.error("Failed to commit batch for new vehicle:", uErr);
+          throw new Error(`Vehicle added but user record couldn't be updated: ${uErr?.message || uErr}`);
         }
-
-        toast.success("✅ Vehicle added successfully!");
       }
 
       setShowVehicleForm(false);
