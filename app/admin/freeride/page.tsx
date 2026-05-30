@@ -11,7 +11,7 @@ import { db } from '@/lib/firebaseConfig';
 
 export default function FreeridePage() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
+  const CEO_ID = "thuvYp857sfRGgFuswyyhAUxgYr1";
 
   useEffect(() => {
     const checkAuth = async () => {

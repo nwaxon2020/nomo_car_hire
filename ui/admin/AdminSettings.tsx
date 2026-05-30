@@ -15,7 +15,7 @@ import MobilitySettings from '@/components/admin/adminSettings/MobilitySettings'
 export default function AdminSettingsPageUi() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
 
-  const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
+  const CEO_ID = "thuvYp857sfRGgFuswyyhAUxgYr1";
   const isCEO = auth.currentUser?.uid === CEO_ID;
 
   // Security Gate

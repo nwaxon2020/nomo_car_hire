@@ -70,7 +70,7 @@ export default function AnalysisPageUi() {
   const [passcode, setPasscode] = useState("");
   const [isResetting, setIsResetting] = useState(false);
 
-  const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
+  const CEO_ID = "thuvYp857sfRGgFuswyyhAUxgYr1";
   const MASTER_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASS_CODE;
   const isCEO = auth.currentUser?.uid === CEO_ID;
 

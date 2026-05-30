@@ -33,7 +33,7 @@ export default function AdminDashboardUi() {
     vipCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
   });
 
-  const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_KEY;
+  const CEO_ID = "thuvYp857sfRGgFuswyyhAUxgYr1";
   const isCEO = auth.currentUser?.uid === CEO_ID;
 
   useEffect(() => {

@@ -29,7 +29,7 @@ export default function EmploymentAdminUi() {
   const [passcode, setPasscode] = useState("");
   const [deleting, setDeleting] = useState(false);
 
-  const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_KEY;
+  const ADMIN_UID = "thuvYp857sfRGgFuswyyhAUxgYr1";
   const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PIN;
 
   useEffect(() => {
