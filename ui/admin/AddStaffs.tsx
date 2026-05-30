@@ -165,7 +165,7 @@ export default function AddStaffPageUi() {
 
   const finalizePermissions = async () => {
     setIsProcessing(true);
-    const isValid = await verifyAdminPasscode(passcode, "any");
+    const isValid = await verifyAdminPasscode(passcode, "/admin/add-staff");
     if (!isValid) {
       setIsProcessing(false);
       return toast.error("Invalid passcode. Please try again.");
@@ -197,7 +197,7 @@ export default function AddStaffPageUi() {
 
   const revokeAccess = async () => {
     setIsProcessing(true);
-    const isValid = await verifyAdminPasscode(passcode, "any");
+    const isValid = await verifyAdminPasscode(passcode, "/admin/add-staff");
     if (!isValid) {
       setIsProcessing(false);
       return toast.error("Invalid passcode. Please try again.");

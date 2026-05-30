@@ -4,13 +4,14 @@ import { useRouter } from 'next/navigation';
 import { db, storage } from '@/lib/firebaseConfig'; 
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
-import { FaUser, FaEnvelope, FaPhone, FaFileAlt, FaCloudUploadAlt, FaBriefcase } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaPhone, FaFileAlt, FaCloudUploadAlt, FaBriefcase, FaCheckCircle, FaTimes } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 export default function JoinTeamForm() {
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const router = useRouter();
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -57,8 +58,7 @@ export default function JoinTeamForm() {
       toast.success("Application submitted! We'll reach out soon.");
       (e.target as HTMLFormElement).reset();
       setFile(null);
-      
-      setTimeout(() => router.push('/'), 2000);
+      setShowSuccess(true);
       
     } catch (error: any) {
       console.error("Submission Error:", error);
@@ -140,6 +140,41 @@ export default function JoinTeamForm() {
           </button>
         </form>
       </div>
+
+      {/* Success Overlay */}
+      {showSuccess && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl relative animate-[scaleIn_0.3s_ease-out]">
+            <button
+              onClick={() => { setShowSuccess(false); router.push('/'); }}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all"
+            >
+              <FaTimes size={14} />
+            </button>
+
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+              <FaCheckCircle className="text-green-500 text-3xl" />
+            </div>
+
+            <h3 className="text-xl font-extrabold text-gray-900 mb-2">Application Submitted!</h3>
+            <p className="text-gray-500 text-sm leading-relaxed mb-6">
+              Thank you for your interest in joining Nomo Cars. We've received your application and will get back to you shortly.
+            </p>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+              <p className="text-blue-700 text-xs font-semibold">What happens next?</p>
+              <p className="text-blue-600 text-[11px] mt-1">Our team will review your application and reach out via email or phone within 3–5 business days.</p>
+            </div>
+
+            <button
+              onClick={() => { setShowSuccess(false); router.push('/'); }}
+              className="w-full py-3 bg-blue-700 text-white font-bold uppercase tracking-wider rounded-xl hover:bg-blue-800 transition-all text-sm"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
