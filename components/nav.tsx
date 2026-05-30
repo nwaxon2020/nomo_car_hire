@@ -177,7 +177,7 @@ export default function Nav() {
                           onClick={() => setAdminDropdownOpen(false)}
                           className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-bold"
                         >
-                          <FaUserShield size={16} /> Admin Panel
+                          <FaUserShield size={16} /> {isCEOUser ? "CEO Panel" : "Admin Panel"}
                         </Link>
                       )}
                       <button
@@ -230,7 +230,7 @@ export default function Nav() {
 
                 {isPrivileged && (
                   <Link href="/admin" className="my-2 md:my-0 flex items-center gap-3 text-blue-400 text-[11px] font-bold uppercase tracking-widest border-l-2 border-blue-500 pl-2" onClick={() => setMenuOpen(false)}>
-                    <FaUserShield size={18} /> Admin Panel
+                    <FaUserShield size={18} /> {isCEOUser ? "CEO Panel" : "Admin Panel"}
                   </Link>
                 )}
 

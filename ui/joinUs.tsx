@@ -34,7 +34,8 @@ export default function JoinTeamForm() {
       if (file) {
         const fileName = `${Date.now()}_${file.name}`;
         const fileRef = ref(storage, `cvs/${fileName}`);
-        await uploadBytes(fileRef, file);
+        const metadata = { contentType: file.type || 'application/pdf' };
+        await uploadBytes(fileRef, file, metadata);
         documentPath = `cvs/${fileName}`;
       }
 

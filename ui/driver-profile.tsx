@@ -457,7 +457,8 @@ export default function DriverProfilePage() {
   const uploadImage = async (file: File, path: string, label: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const sRef = storageRef(storage, path);
-      const task = uploadBytesResumable(sRef, file);
+      const metadata = { contentType: file.type || 'image/jpeg' };
+      const task = uploadBytesResumable(sRef, file, metadata);
 
       task.on('state_changed',
         () => { },

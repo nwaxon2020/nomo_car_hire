@@ -73,19 +73,15 @@ service firebase.storage {
 
     // ── CV / JOB APPLICATION FILES ────────────────────────────────────────────
     // e.g. CVs uploaded on the joinUs / employment application page
-    match /cvs/{userId}/{allPaths=**} {
+    match /cvs/{fileName} {
       // Only admins can read CVs
       allow read: if isAdmin();
 
-      // Any signed-in user can upload a CV (PDF or Word only, max 5MB)
-      allow create, update: if isSignedIn()
-        && request.auth.uid == userId
-        && isDocument()
+      // Anyone can upload a CV (PDF or Word only, max 5MB)
+      allow create: if isDocument()
         && request.resource.size < 5 * 1024 * 1024;
 
-      // Owner can delete their own CV; admins can delete too
-      allow delete: if isSignedIn()
-        && (request.auth.uid == userId || isAdmin());
+      allow update, delete: if isAdmin();
     }
 
     // ── TRANSPORT HUB / COMPANY DOCUMENTS ─────────────────────────────────────
