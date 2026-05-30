@@ -32,6 +32,7 @@ interface Vehicle {
         license?: string;
         ownership?: string;
         insurance?: string;
+        roadworthiness?: string;
     };
 }
 
