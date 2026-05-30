@@ -132,11 +132,25 @@ export default function AddStaffPageUi() {
   const handleDeletePasscode = async (id: string) => {
     setIsProcessing(true);
     try {
-      await deleteDoc(doc(db, "adminPasscodes", id));
+      const user = auth.currentUser;
+      if (!user) throw new Error("No user");
+      const token = await user.getIdToken();
+
+      const res = await fetch("/api/admin/revoke-staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ targetUid: id, action: "delete-passcode" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete passcode");
+      }
+
       toast.success("Passcode Deleted");
       setPasscodeToDelete(null);
-    } catch (e) {
-      toast.error("Failed to delete passcode");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete passcode");
     } finally {
       setIsProcessing(false);
     }
@@ -182,12 +196,25 @@ export default function AddStaffPageUi() {
       return toast.error("Invalid Passcode");
     }
     try {
-      await deleteDoc(doc(db, "adminStaffs", showDeleteConfirm!));
-      await updateDoc(doc(db, "users", showDeleteConfirm!), { isAdmin: false });
+      const user = auth.currentUser;
+      if (!user) throw new Error("No user");
+      const token = await user.getIdToken();
+
+      const res = await fetch("/api/admin/revoke-staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ targetUid: showDeleteConfirm, action: "revoke-staff" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to revoke access");
+      }
+
       toast.success("Access Revoked");
       setShowDeleteConfirm(null); setPasscode("");
-    } catch (e) {
-      toast.error("Revocation failed");
+    } catch (e: any) {
+      toast.error(e.message || "Revocation failed");
     } finally {
       setIsProcessing(false);
     }

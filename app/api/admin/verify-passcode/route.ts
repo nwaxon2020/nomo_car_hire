@@ -21,13 +21,26 @@ export async function POST(request: NextRequest) {
   try {
     const decoded = await authAdmin.verifyIdToken(token);
     uid = decoded.uid;
-  } catch {
+  } catch (err) {
+    console.error("[verify-passcode] Token verification failed:", err);
     return NextResponse.json({ valid: false, error: 'Invalid token' }, { status: 401 });
   }
 
-  // Only CEO can use passcode actions, unless we allow specific staff later. For now, checking CEO.
-  if (uid !== process.env.ADMIN_CEO_UID) {
-    return NextResponse.json({ valid: false, error: 'CEO access only' }, { status: 403 });
+  const CEO_UID = process.env.ADMIN_CEO_UID?.trim();
+  const isCEO = CEO_UID ? uid === CEO_UID : false;
+
+  let isAdmin = isCEO;
+
+  // If not CEO, check if they are in the adminStaffs collection
+  if (!isCEO) {
+    const staffSnap = await adminDb.collection('adminStaffs').doc(uid).get();
+    if (staffSnap.exists) {
+      isAdmin = true;
+    }
+  }
+
+  if (!isAdmin) {
+    return NextResponse.json({ valid: false, error: 'Admin access only' }, { status: 403 });
   }
 
   const body = await request.json();
@@ -37,32 +50,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valid: false, error: 'Missing fields' }, { status: 400 });
   }
 
+  const cleanPasscode = String(passcode).trim();
+  const cleanAction = String(action).trim();
+
+  console.log(`[verify-passcode] Attempt by UID: ${uid}, CEO: ${isCEO}, Admin: ${isAdmin}, action: ${cleanAction}`);
+
   try {
     const passcodesSnap = await adminDb.collection("adminPasscodes")
-      .where("passcode", "==", passcode)
+      .where("passcode", "==", cleanPasscode)
       .get();
       
     if (passcodesSnap.empty) {
+      console.log(`[verify-passcode] FAILED: Passcode not found in db. (Entered: ${cleanPasscode})`);
       await new Promise(r => setTimeout(r, 500));
       return NextResponse.json({ valid: false, error: 'Invalid passcode' }, { status: 403 });
     }
 
     let isAuthorizedForRoute = false;
+    let foundRoutes: string[] = [];
 
     // Check if the route is authorized for this passcode
     passcodesSnap.forEach(doc => {
       const data = doc.data();
       const routes = data.routes || [];
-      if (action === 'any' || routes.includes(action)) {
+      foundRoutes = [...foundRoutes, ...routes];
+      if (cleanAction === 'any' || routes.includes(cleanAction)) {
         isAuthorizedForRoute = true;
       }
     });
 
     if (!isAuthorizedForRoute) {
+      console.log(`[verify-passcode] FAILED: Passcode not authorized for route. Action: ${cleanAction}, Assigned routes: ${foundRoutes.join(',')}`);
       await new Promise(r => setTimeout(r, 500));
       return NextResponse.json({ valid: false, error: 'Passcode not authorized for this route' }, { status: 403 });
     }
 
+    console.log(`[verify-passcode] SUCCESS: Authorized`);
     return NextResponse.json({ valid: true });
   } catch (err) {
     console.error("Passcode verification error:", err);

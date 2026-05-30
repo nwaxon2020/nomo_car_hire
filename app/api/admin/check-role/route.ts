@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
     const uid = decoded.uid;
 
     // CEO check — server-side only env var (no NEXT_PUBLIC)
-    const isCEO = uid === process.env.ADMIN_CEO_UID;
+    const CEO_UID = process.env.ADMIN_CEO_UID?.trim();
+    const isCEO = CEO_UID ? uid === CEO_UID : false;
 
     if (isCEO) {
       return NextResponse.json({ isCEO: true, isAdmin: true, uid });
