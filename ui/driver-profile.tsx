@@ -490,7 +490,7 @@ export default function DriverProfilePage() {
         images.interior ? uploadImage(images.interior, `vehicleLog/${driverId}/${timestamp}_interior_${images.interior.name}`, "Interior view") : Promise.resolve(null),
         images.license ? uploadImage(images.license, `vehicleLog/${driverId}/${timestamp}_license_${images.license.name}`, "License document") : Promise.resolve(null),
         images.ownership ? uploadImage(images.ownership, `vehicleLog/${driverId}/${timestamp}_ownership_${images.ownership.name}`, "Ownership document") : Promise.resolve(null),
-        images.insurance ? uploadImage(images.insurance, `vehicleLog/${driverId}/${timestamp}_insurance_${images.insurance.name}`, "Insurance document") : Promise.resolve(null)
+        images.insurance ? uploadImage(images.insurance, `vehicleLog/${driverId}/${timestamp}_insurance_${images.insurance.name}`, "Insurance document") : Promise.resolve(null),
         images.roadworthiness ? uploadImage(images.roadworthiness, `vehicleLog/${driverId}/${timestamp}_roadworthiness_${images.roadworthiness.name}`, "Road Worthiness document") : Promise.resolve(null), 
       ];
 
