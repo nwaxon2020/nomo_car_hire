@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FiPlus, FiMinus, FiHelpCircle, FiCalendar, 
@@ -86,6 +86,8 @@ const FaqPageUi = () => {
     return <FiShield />;
   };
 
+
+
   return (
     <div className="bg-[#f8fafc] min-h-screen pt-8 pb-20 px-4 md:px-6">
       <div className="max-w-4xl mx-auto">
@@ -97,7 +99,7 @@ const FaqPageUi = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-3xl md:text-5xl font-black uppercase italic text-slate-900 tracking-tighter"
           >
-            Help <span className="text-blue-700">Center</span>
+            Frequently Asked <span className="text-blue-700">Questions</span>
           </motion.h1>
           <p className="text-slate-500 mt-4 text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.4em] max-w-2xl mx-auto leading-loose">
             {faqSubtitle}
@@ -185,6 +187,8 @@ const FaqPageUi = () => {
             <button onClick={() => setSearchQuery("")} className="text-blue-700 text-[10px] font-bold uppercase mt-2 hover:underline">Reset Search</button>
           </div>
         )}
+
+
 
         {/* --- SUPPORT CTA --- */}
         <div className="mt-20 p-10 bg-[#0a192f] rounded-lg text-center relative overflow-hidden shadow-2xl">

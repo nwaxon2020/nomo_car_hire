@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Download, X, Smartphone } from "lucide-react";
 
 const STORAGE_KEY = "nomo_pwa_installed";
+const SESSION_DISMISS_KEY = "nomo_pwa_install_dismissed_session";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -17,12 +18,20 @@ export default function PWAInstallBanner() {
   const [showBanner, setShowBanner] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [sessionDismissed, setSessionDismissed] = useState(false);
 
   useEffect(() => {
     // Check if already installed
     const alreadyInstalled = localStorage.getItem(STORAGE_KEY);
     if (alreadyInstalled === "true") {
       setIsInstalled(true);
+      return;
+    }
+
+    // Check if this session already dismissed the install banner
+    const dismissedSession = sessionStorage.getItem(SESSION_DISMISS_KEY) === "true";
+    if (dismissedSession) {
+      setSessionDismissed(true);
       return;
     }
 
@@ -35,6 +44,7 @@ export default function PWAInstallBanner() {
 
     // Listen for the browser install prompt event
     const handler = (e: Event) => {
+      if (sessionStorage.getItem(SESSION_DISMISS_KEY) === "true") return;
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowBanner(true);
@@ -60,6 +70,9 @@ export default function PWAInstallBanner() {
     if (outcome === "accepted") {
       localStorage.setItem(STORAGE_KEY, "true");
       setIsInstalled(true);
+    } else {
+      sessionStorage.setItem(SESSION_DISMISS_KEY, "true");
+      setSessionDismissed(true);
     }
 
     setDeferredPrompt(null);
@@ -68,11 +81,13 @@ export default function PWAInstallBanner() {
   };
 
   const handleDismiss = () => {
+    sessionStorage.setItem(SESSION_DISMISS_KEY, "true");
+    setSessionDismissed(true);
     setShowBanner(false);
   };
 
-  // Don't render anything if already installed or not triggered
-  if (isInstalled || !showBanner) return null;
+  // Don't render anything if already installed, dismissed this session, or not triggered
+  if (isInstalled || sessionDismissed || !showBanner) return null;
 
   return (
     <AnimatePresence>

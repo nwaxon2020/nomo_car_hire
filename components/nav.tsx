@@ -5,9 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import { auth, db } from "@/lib/firebaseConfig";
 import { signOut } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from "firebase/firestore";
-import { FiHeadphones, FiGrid, FiChevronUp, FiLogOut, FiLogIn, FiUser, FiChevronDown, FiMapPin } from "react-icons/fi";
+import { FiHeadphones, FiGrid, FiChevronUp, FiLogOut, FiLogIn, FiUser, FiChevronDown, FiMapPin, FiX, FiPlay } from "react-icons/fi";
 import { FaUsers, FaUserShield, FaHome } from "react-icons/fa";
 import { Navigation } from "lucide-react";
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -17,16 +18,84 @@ export default function Nav() {
   const [isStaff, setIsStaff] = useState(false);
   const [isCEOUser, setIsCEOUser] = useState(false);
   const [cmsLogo, setCmsLogo] = useState<any>(null);
+
+  const [helpDropdownOpen, setHelpDropdownOpen] = useState(false);
+  const [helpVideoUrl, setHelpVideoUrl] = useState("");
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const helpDropdownRef = useRef<HTMLDivElement>(null);
+  const helpDropdownRefMobile = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
 
   const hiddenPathPrefixes = ["/user", "/login", "/register"];
   const isHiddenRoute = hiddenPathPrefixes.some(prefix => pathname.startsWith(prefix));
 
+  const getYoutubeVideoId = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.includes('youtu.be')) return parsed.pathname.slice(1);
+      if (parsed.searchParams.has('v')) return parsed.searchParams.get('v');
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+      const embedIndex = pathParts.indexOf('embed');
+      if (embedIndex !== -1 && pathParts[embedIndex + 1]) return pathParts[embedIndex + 1];
+      const shortsIndex = pathParts.indexOf('shorts');
+      if (shortsIndex !== -1 && pathParts[shortsIndex + 1]) return pathParts[shortsIndex + 1];
+      return null;
+    } catch {
+      const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([A-Za-z0-9_-]{11})/);
+      return match?.[1] || null;
+    }
+  };
+
+  const getYoutubeEmbedUrl = (url: string) => {
+    const videoId = getYoutubeVideoId(url || '');
+    if (!videoId) return null;
+    return `https://www.youtube.com/embed/${videoId}?rel=0&autoplay=0&enablejsapi=1&modestbranding=1`;
+  };
+
+  const tutorialVideoEmbedUrl = getYoutubeEmbedUrl(helpVideoUrl);
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  const sendYouTubeCommand = (func: string) => {
+    if (!iframeRef.current?.contentWindow) return;
+    iframeRef.current.contentWindow.postMessage(
+      JSON.stringify({ event: 'command', func, args: [] }),
+      '*'
+    );
+  };
+
+  const handleTutorialPlay = () => {
+    if (!tutorialVideoEmbedUrl) return;
+    sendYouTubeCommand('playVideo');
+    setIsVideoPlaying(true);
+  };
+
+  const handleTutorialPause = () => {
+    if (!tutorialVideoEmbedUrl) return;
+    sendYouTubeCommand('pauseVideo');
+    setIsVideoPlaying(false);
+  };
+
+  const closeTutorialModal = () => {
+    handleTutorialPause();
+    setShowTutorialModal(false);
+    setIsVideoPlaying(false);
+  };
+
   useEffect(() => {
     const unsubCms = onSnapshot(doc(db, "cms", "brand"), (docSnap) => {
       if (docSnap.exists()) setCmsLogo(docSnap.data());
+    });
+
+    const unsubGeneral = onSnapshot(doc(db, "site_configs", "general"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setHelpVideoUrl(data.helpVideoUrl || '');
+      }
     });
 
     const unsub = auth.onAuthStateChanged(async (authUser) => {
@@ -72,12 +141,21 @@ export default function Nav() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setAdminDropdownOpen(false);
       }
+
+      const target = event.target as Node;
+      const clickedOutsideMobile = !helpDropdownRefMobile.current || !helpDropdownRefMobile.current.contains(target);
+      const clickedOutsideDesktop = !helpDropdownRef.current || !helpDropdownRef.current.contains(target);
+
+      if (clickedOutsideMobile && clickedOutsideDesktop) {
+        setHelpDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
       unsub();
       unsubCms();
+      unsubGeneral();
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
@@ -120,10 +198,22 @@ export default function Nav() {
         <div className="flex justify-between items-center gap-4 md:gap-12">
 
           {!isHiddenRoute && (
-            <Link href={"/contact"} className="md:hidden flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
-              <FiHeadphones size={20} />
-              <span className="text-[11px] font-bold uppercase tracking-widest">Contact</span>
-            </Link>
+            <div className="md:hidden relative" ref={helpDropdownRefMobile}>
+              <button onClick={() => setHelpDropdownOpen(!helpDropdownOpen)} className="flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
+                <FiHeadphones size={20} />
+                <span className="text-[11px] font-bold uppercase tracking-widest">Help</span>
+              </button>
+              {helpDropdownOpen && (
+                <div className="absolute right-[-10px] top-full mt-4 w-48 bg-white rounded-lg shadow-xl py-2 z-[60] border border-gray-100 flex flex-col items-start before:content-[''] before:absolute before:-top-2 before:right-4 before:border-8 before:border-transparent before:border-b-white">
+                  <Link href="/contact" onClick={() => setHelpDropdownOpen(false)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 font-bold">
+                    <FiHeadphones size={16} /> Contact Us
+                  </Link>
+                  <button onClick={() => { setShowTutorialModal(true); setHelpDropdownOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 font-bold text-left">
+                    <FiPlay size={16} /> Tutorial Video
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {!isHiddenRoute && (
@@ -142,10 +232,22 @@ export default function Nav() {
             <span className="text-[11px] font-bold uppercase tracking-widest">Join our team</span>
           </Link>
 
-          <Link href={"/contact"} className="hidden md:flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
-            <FiHeadphones size={20} />
-            <span className="text-[11px] font-bold uppercase tracking-widest">Contact</span>
-          </Link>
+          <div className="hidden md:flex items-center relative" ref={helpDropdownRef}>
+            <button onClick={() => setHelpDropdownOpen(!helpDropdownOpen)} className="flex items-center gap-2 text-white hover:text-yellow-400 transition-colors">
+              <FiHeadphones size={20} />
+              <span className="text-[11px] font-bold uppercase tracking-widest">Help <FiChevronDown className="inline" /></span>
+            </button>
+            {helpDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl py-2 z-[60] border border-gray-100 flex flex-col items-start">
+                <Link href="/contact" onClick={() => setHelpDropdownOpen(false)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-bold">
+                  <FiHeadphones size={16} /> Contact Us
+                </Link>
+                <button onClick={() => { setShowTutorialModal(true); setHelpDropdownOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-bold text-left">
+                  <FiPlay size={16} /> Tutorial Video
+                </button>
+              </div>
+            )}
+          </div>
 
           {!isHiddenRoute && (
             <div className="flex items-center gap-3 relative" ref={dropdownRef}>
@@ -267,6 +369,83 @@ export default function Nav() {
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {showTutorialModal && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-2 bg-black/85"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-3xl bg-white rounded-md md:rounded-xl overflow-y-auto shadow-2xl max-h-[90vh] flex flex-col"
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-200 shrink-0">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Tutorial Video</h2>
+                  <p className="text-slate-500 text-xs uppercase tracking-[0.24em] mt-1">Learn how to use the product with a short guide</p>
+                </div>
+                <button onClick={closeTutorialModal} className="text-slate-400 hover:text-slate-700 transition">
+                  <FiX size={20} />
+                </button>
+              </div>
+              <div className="bg-slate-950 shrink-0">
+                {tutorialVideoEmbedUrl ? (
+                  <div className="relative aspect-video">
+                    <iframe
+                      ref={iframeRef}
+                      title="Tutorial video"
+                      src={`${tutorialVideoEmbedUrl}&origin=${currentOrigin}`}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <div className="p-10 text-center text-slate-200">
+                    <p className="text-lg font-black">Tutorial video not configured.</p>
+                    <p className="mt-2 text-sm text-slate-400">Ask admin to add a YouTube tutorial link in the broadcast settings.</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 p-5 bg-slate-50 md:flex-row md:items-center justify-center relative shrink-0">
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={handleTutorialPlay}
+                    disabled={!tutorialVideoEmbedUrl}
+                    className="px-4 py-2 rounded-full bg-blue-700 text-white text-xs font-black uppercase tracking-widest transition disabled:opacity-50"
+                  >
+                    Play
+                  </button>
+                  <button
+                    onClick={handleTutorialPause}
+                    disabled={!tutorialVideoEmbedUrl}
+                    className="px-4 py-2 rounded-full bg-slate-300 text-slate-800 text-xs font-black uppercase tracking-widest transition disabled:opacity-50"
+                  >
+                    Pause
+                  </button>
+                  {helpVideoUrl && (
+                    <a
+                      href={helpVideoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-full border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition"
+                    >
+                      View on YouTube
+                    </a>
+                  )}
+                </div>
+                <p className="text-slate-500 text-[11px] uppercase tracking-[0.24em] text-center md:absolute md:right-5">{isVideoPlaying ? 'Playing' : 'Paused'}</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </nav>
   );
 }

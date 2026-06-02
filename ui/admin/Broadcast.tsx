@@ -1,8 +1,8 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { db, storage, auth } from "@/lib/firebaseConfig";
 import Link from "next/link";
-import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast } from "react-hot-toast";
 import { Send, Users, User, ShieldCheck, Image as ImageIcon, X, Eye, EyeOff, ArrowRight, } from "lucide-react";
@@ -17,6 +17,8 @@ export default function AdminBroadcast() {
     const [showPreview, setShowPreview] = useState(false);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const [youtubeVideoUrl, setYoutubeVideoUrl] = useState("");
+    const [videoSaving, setVideoSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const adminName = auth.currentUser?.displayName?.split(" ")[0] || "Admin";
@@ -26,6 +28,38 @@ export default function AdminBroadcast() {
         if (file) {
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    useEffect(() => {
+        const loadHelpVideoUrl = async () => {
+            try {
+                const configSnap = await getDoc(doc(db, "site_configs", "general"));
+                if (configSnap.exists()) {
+                    const data = configSnap.data();
+                    setYoutubeVideoUrl(data.helpVideoUrl || "");
+                }
+            } catch (error) {
+                console.error("Failed to load tutorial video url:", error);
+            }
+        };
+        loadHelpVideoUrl();
+    }, []);
+
+    const saveYoutubeVideoUrl = async () => {
+        if (!youtubeVideoUrl.trim()) {
+            return toast.error("Please enter a YouTube video URL");
+        }
+
+        setVideoSaving(true);
+        try {
+            await setDoc(doc(db, "site_configs", "general"), { helpVideoUrl: youtubeVideoUrl.trim() }, { merge: true });
+            toast.success("Tutorial video URL saved");
+        } catch (error) {
+            console.error("Failed to save tutorial video url:", error);
+            toast.error("Could not save tutorial video URL");
+        } finally {
+            setVideoSaving(false);
         }
     };
 
@@ -209,7 +243,34 @@ export default function AdminBroadcast() {
                     </div>
                 </div>
             </section>
+
             <WelcomeNoteSection />
+
+            <section className="bg-white rounded-xl shadow-xl border border-slate-200 md:p-6 p-4 max-w-5xl mx-auto">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                    <div>
+                        <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Help Center Tutorial</h2>
+                        <p className="text-slate-500 text-xs uppercase tracking-widest mt-1">This YouTube video will play for customers in the Help Center.</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                    <input
+                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm outline-blue-100"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={youtubeVideoUrl}
+                        onChange={e => setYoutubeVideoUrl(e.target.value)}
+                    />
+                    <div className="flex justify-end">
+                        <button
+                            onClick={saveYoutubeVideoUrl}
+                            disabled={videoSaving}
+                            className="px-5 py-3 bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition disabled:opacity-60"
+                        >
+                            {videoSaving ? "Saving..." : "Save video URL"}
+                        </button>
+                    </div>
+                </div>
+            </section>
         </div>
     );
 }
