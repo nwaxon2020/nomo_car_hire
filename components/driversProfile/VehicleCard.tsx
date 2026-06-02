@@ -32,6 +32,7 @@ interface Vehicle {
         license?: string;
         ownership?: string;
         insurance?: string;
+        roadworthiness?: string;
     };
 }
 
@@ -119,10 +120,11 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
         { url: vehicle.images.license, label: 'Vehicle License' },
         { url: vehicle.images.ownership, label: 'Ownership Paper' },
         { url: vehicle.images.insurance, label: 'Insurance' },
+        { url: vehicle.images.roadworthiness, label: 'Road Worthiness' },
     ].filter(img => img.url);
 
     const firstDocIndex = allImages.findIndex(img => 
-        ['Vehicle License', 'Ownership Paper', 'Insurance'].includes(img.label)
+        ['Vehicle License', 'Ownership Paper', 'Insurance', 'Road Worthiness'].includes(img.label)
     );
 
     const nextImage = (e: React.MouseEvent) => {

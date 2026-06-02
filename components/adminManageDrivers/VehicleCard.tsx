@@ -15,7 +15,8 @@ export default function VehicleCard({ car }: any) {
   const paperImages = [
     { url: car.images?.license, label: "License" },
     { url: car.images?.ownership, label: "Ownership" },
-    { url: car.images?.insurance, label: "Insurance" }
+    { url: car.images?.insurance, label: "Insurance" },
+    { url: car.images?.roadworthiness, label: "Roadworthiness" }
   ].filter(img => img.url);
   const [paperIndex, setPaperIndex] = useState(0);
 

@@ -490,7 +490,8 @@ export default function DriverProfilePage() {
         images.interior ? uploadImage(images.interior, `vehicleLog/${driverId}/${timestamp}_interior_${images.interior.name}`, "Interior view") : Promise.resolve(null),
         images.license ? uploadImage(images.license, `vehicleLog/${driverId}/${timestamp}_license_${images.license.name}`, "License document") : Promise.resolve(null),
         images.ownership ? uploadImage(images.ownership, `vehicleLog/${driverId}/${timestamp}_ownership_${images.ownership.name}`, "Ownership document") : Promise.resolve(null),
-        images.insurance ? uploadImage(images.insurance, `vehicleLog/${driverId}/${timestamp}_insurance_${images.insurance.name}`, "Insurance document") : Promise.resolve(null)
+        images.insurance ? uploadImage(images.insurance, `vehicleLog/${driverId}/${timestamp}_insurance_${images.insurance.name}`, "Insurance document") : Promise.resolve(null),
+        images.roadworthiness ? uploadImage(images.roadworthiness, `vehicleLog/${driverId}/${timestamp}_roadworthiness_${images.roadworthiness.name}`, "Road Worthiness document") : Promise.resolve(null), 
       ];
 
       const results = await Promise.allSettled(uploadPromises);
@@ -510,7 +511,7 @@ export default function DriverProfilePage() {
         toast.error(`${uploadErrors} image(s) failed to upload. They may be missing from your vehicle profile.`);
       }
 
-      const [frontUrl, sideUrl, backUrl, interiorUrl, licenseUrl, ownershipUrl, insuranceUrl] = urls;
+      const [frontUrl, sideUrl, backUrl, interiorUrl, licenseUrl, ownershipUrl, insuranceUrl, roadworthinessUrl] = urls;
 
       const vehicleDoc = {
         driverId,
@@ -522,7 +523,8 @@ export default function DriverProfilePage() {
           interior: interiorUrl || editingVehicle?.images?.interior || "",
           license: licenseUrl || editingVehicle?.images?.license || "",
           ownership: ownershipUrl || editingVehicle?.images?.ownership || "",
-          insurance: insuranceUrl || editingVehicle?.images?.insurance || ""
+          insurance: insuranceUrl || editingVehicle?.images?.insurance || "",
+          roadworthiness: roadworthinessUrl || editingVehicle?.images?.roadworthiness || "",
         },
         createdAt: editingVehicle?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now(),
