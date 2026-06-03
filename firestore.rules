@@ -107,7 +107,7 @@ service cloud.firestore {
 
         // 7. Driver Managers can verify/unverify accounts
         (hasPermission('/admin/manage-driver') &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verified'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verified', 'flags'])) ||
 
         // 8. Trip history: only the user themselves OR admins can write it
         (request.auth.uid == userId &&

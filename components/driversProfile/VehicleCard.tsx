@@ -68,7 +68,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
             if (snap.exists()) {
                 const data = snap.data();
                 setIsBookingVehicle(data.bookingVehicleId === vehicle.id);
-                
+
                 if (data.bookingVehicleLastUpdated) {
                     const lastUpdated = data.bookingVehicleLastUpdated.toDate();
                     const today = new Date();
@@ -88,12 +88,12 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
 
     const handleSetBookingVehicle = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        
+
         if (isVehicleChangeLocked) {
-             toast.error("You can only change your active vehicle once per day. Try again tomorrow.");
-             return;
+            toast.error("You can only change your active vehicle once per day. Try again tomorrow.");
+            return;
         }
-        
+
         const auth = getAuth();
         const user = auth.currentUser;
         if (!user || !vehicle.id) return;
@@ -114,8 +114,8 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
 
     const allImages = [
         { url: vehicle.images.front, label: 'Front View' },
-        { url: vehicle.images.side, label: 'Side View' },
         { url: vehicle.images.back, label: 'Rear View' },
+        { url: vehicle.images.side, label: 'Side View' },
         { url: vehicle.images.interior, label: 'Interior' },
         { url: vehicle.images.license, label: 'Vehicle License' },
         { url: vehicle.images.ownership, label: 'Ownership Paper' },
@@ -123,7 +123,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
         { url: vehicle.images.roadworthiness, label: 'Road Worthiness' },
     ].filter(img => img.url);
 
-    const firstDocIndex = allImages.findIndex(img => 
+    const firstDocIndex = allImages.findIndex(img =>
         ['Vehicle License', 'Ownership Paper', 'Insurance', 'Road Worthiness'].includes(img.label)
     );
 
@@ -207,10 +207,10 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                     </div>
 
                     <button
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
+                        onClick={(e) => {
+                            e.stopPropagation();
                             if (firstDocIndex !== -1) {
-                                setLightboxIndex(firstDocIndex); 
+                                setLightboxIndex(firstDocIndex);
                             } else {
                                 setShowNoDocsOverlay(true);
                             }
@@ -224,20 +224,28 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                     {vehicle.description && (
                         <div className="mb-4">
                             <button
-                                onClick={() => setShowDescription(!showDescription)}
+                                onClick={() => setShowDescription(true)}
                                 className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase tracking-tighter hover:text-blue-800 transition-colors"
                             >
-                                {showDescription ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                {showDescription ? 'Hide Details' : 'View Description'}
+                                <FileText size={14} /> View Description
                             </button>
+                        </div>
+                    )}
 
-                            {showDescription && (
-                                <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-100 animate-in slide-in-from-top-1 duration-200">
-                                    <p className="text-[11px] text-slate-600 leading-relaxed italic">
-                                        "{vehicle.description}"
-                                    </p>
-                                </div>
-                            )}
+                    {/* Description Overlay */}
+                    {showDescription && (
+                        <div className="rounded-lg absolute inset-0 z-50 bg-white/95 backdrop-blur-md p-6 flex flex-col justify-center items-center text-center animate-in zoom-in-95 duration-200">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowDescription(false); }}
+                                className="absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                            <h3 className="font-black text-sm text-gray-900 mb-3 uppercase tracking-widest text-blue-600">Vehicle Description</h3>
+                            <div className="w-full h-[1px] bg-gray-200 mb-4"></div>
+                            <p className="text-sm text-gray-700 leading-relaxed italic overflow-y-auto w-full px-2" style={{ maxHeight: 'calc(100% - 80px)' }}>
+                                "{vehicle.description}"
+                            </p>
                         </div>
                     )}
 
@@ -265,13 +273,12 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                         <button
                             onClick={handleSetBookingVehicle}
                             disabled={settingBooking || isVehicleChangeLocked || !vehicle.isApproved}
-                            className={`w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm ${
-                                isBookingVehicle
+                            className={`w-full mb-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2 shadow-sm ${isBookingVehicle
                                     ? 'bg-emerald-500 border-emerald-400 text-white shadow-emerald-200'
                                     : isVehicleChangeLocked || !vehicle.isApproved
                                         ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                         : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
-                            }`}
+                                }`}
                         >
                             {(isVehicleChangeLocked || !vehicle.isApproved) && !isBookingVehicle ? <Clock size={14} /> : <Bookmark size={14} fill={isBookingVehicle ? 'white' : 'none'} />}
                             {!vehicle.isApproved ? 'Unapproved Vehicle' : settingBooking ? 'Updating...' : isBookingVehicle ? '✓ Booking Vehicle (Active)' : isVehicleChangeLocked ? 'Locked for Today' : 'Set as Booking Vehicle'}
@@ -331,8 +338,8 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
             {showNoDocsOverlay && (
                 <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm flex flex-col items-center text-center relative animate-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); setShowNoDocsOverlay(false); }} 
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowNoDocsOverlay(false); }}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
                         >
                             <X size={20} />
@@ -344,7 +351,7 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                         <p className="text-sm text-gray-500 mb-6 font-medium">
                             It looks like no legal documents have been submitted for this {vehicle.carName} yet.
                         </p>
-                        <button 
+                        <button
                             onClick={(e) => { e.stopPropagation(); setShowNoDocsOverlay(false); }}
                             className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-colors"
                         >

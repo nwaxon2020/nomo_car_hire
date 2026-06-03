@@ -102,13 +102,23 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
 
   // Logic Executions after Passcode
   const executeVerify = async () => {
-    await updateDoc(doc(db, "users", driver.id), { verified: true, flags: 0 });
-    toast.success("Driver Verified!");
+    try {
+      await updateDoc(doc(db, "users", driver.id), { verified: true, flags: 0 });
+      toast.success("Driver Verified!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to verify driver. Check permissions.");
+    }
   };
 
   const executeUnverify = async () => {
-    await updateDoc(doc(db, "users", driver.id), { verified: false });
-    toast.success("Driver status set to Unverified");
+    try {
+      await updateDoc(doc(db, "users", driver.id), { verified: false });
+      toast.success("Driver status set to Unverified");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to unverify driver. Check permissions.");
+    }
   };
 
   const handlePasscodeSubmit = async () => {
@@ -179,7 +189,8 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
     }
   };
 
-  const carImages = selectedCar ? Object.values(selectedCar.images || {}).filter((img): img is string => typeof img === 'string') : [];
+  const orderedKeys = ['front', 'back', 'side', 'interior', 'license', 'ownership', 'insurance', 'roadworthiness'];
+  const carImages = selectedCar ? orderedKeys.map(k => selectedCar.images?.[k]).filter((img): img is string => typeof img === 'string' && img !== "") : [];
   const nextImg = () => setCurrentImgIdx((prev) => (prev + 1) % carImages.length);
   const prevImg = () => setCurrentImgIdx((prev) => (prev - 1 + carImages.length) % carImages.length);
 
@@ -415,8 +426,8 @@ export default function DriverProfileView({ driver: initialDriver, onClose }: an
             <FaTimes size={24} />
           </button>
           <button onClick={prevImg} className="absolute left-8 text-white/50 hover:text-white z-[210]"><FaChevronLeft size={48} /></button>
-          <div className="relative max-w-5xl max-h-[80vh] overflow-hidden rounded-2xl">
-            <img src={carImages[currentImgIdx]} className="w-full h-full object-contain" alt="Full view" />
+          <div className="relative w-full max-w-5xl h-[80vh] flex items-center justify-center rounded-2xl">
+            <img src={carImages[currentImgIdx]} className="max-w-full max-h-full object-contain rounded-2xl" alt="Full view" />
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full text-white text-xs font-bold">
               {currentImgIdx + 1} / {carImages.length} • {selectedCar.carName}
             </div>

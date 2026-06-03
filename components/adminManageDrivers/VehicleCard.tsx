@@ -94,16 +94,20 @@ export default function VehicleCard({ car }: any) {
       <div className="relative h-55 w-full bg-gray-100">
         <img src={mainImage} alt={car.carName} className="w-full h-full object-cover" />
         <div className="absolute bottom-2 left-2 right-2 flex justify-center gap-1.5 bg-black/30 backdrop-blur-sm p-1 rounded-md">
-          {car.images && Object.entries(car.images).map(([key, url]: any) => (
-            <button
-              key={key}
-              onClick={() => setSelectedView(key)}
-              className={`w-8 h-8 rounded border-2 overflow-hidden transition-all ${selectedView === key ? "border-amber-400 scale-110" : "border-white/50 opacity-70"
-                }`}
-            >
-              <img src={url} className="w-full h-full object-cover" />
-            </button>
-          ))}
+          {car.images && ['front', 'back', 'side', 'interior', 'license', 'ownership', 'insurance', 'roadworthiness'].map((key) => {
+            const url = car.images[key];
+            if (!url) return null;
+            return (
+              <button
+                key={key}
+                onClick={() => setSelectedView(key)}
+                className={`w-8 h-8 rounded border-2 overflow-hidden transition-all ${selectedView === key ? "border-amber-400 scale-110" : "border-white/50 opacity-70"
+                  }`}
+              >
+                <img src={url} className="w-full h-full object-cover" />
+              </button>
+            );
+          })}
         </div>
       </div>
 
